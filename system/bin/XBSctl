@@ -1,0 +1,23 @@
+#!/system/bin/bash
+
+ctl_file="/data/local/tmp/xbs"
+
+print_help() {
+  cat << EOM
+  XtremeBS Controller Options:
+
+  start		enables power save mode manually.
+
+  stop		disables power save mode manually.
+
+  reload	reloads the config file.
+
+  pause		pauses the daemon.
+
+  resume	resumes the daemon or exits Safe Mode.
+
+  safe		Enters Safe Mode.
+EOM
+}
+
+[ -z "$1" ] || [ "$1" = "-h" ] || [ "$1" = "--help" ] && print_help || echo "$1" > "$ctl_file"
