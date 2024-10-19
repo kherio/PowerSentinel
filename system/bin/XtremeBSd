@@ -271,6 +271,8 @@ read_config() {
   # May need this later
 #  percent="$(dumpsys battery | grep level | cut -d' ' -f4)"
 
+  notif "Config Reloaded"
+
 }
 
 init() {
@@ -311,7 +313,8 @@ init() {
     elif [ "$trigger" = "auto" ]; then
       if [ "$(settings get global low_power)" = "1" ] && [ "$lock" = "0" ]; then
         enable_pwr_save
-      else
+      fi
+      if [ "$(settings get global low_power)" = "0" ] && [ "$lock" = "1" ]; then
         disable_pwr_save
       fi
     else
