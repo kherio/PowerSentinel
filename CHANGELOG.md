@@ -1,4 +1,8 @@
 
+### v0.0.3
+
+  - fixed a bug that prevented powersave from starting
+
 ### v0.0.2
 
   - minor improvements

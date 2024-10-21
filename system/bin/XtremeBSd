@@ -380,4 +380,6 @@ EOF
 
 fi
 
+lock="0"
+
 init
