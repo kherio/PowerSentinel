@@ -72,7 +72,7 @@ enable_pwr_save() {
 
   # Handle GMS
   if [ "$handle_gms" = "nice" ]; then
-    renice -n 19 com.google.android.gms
+    renice -n 19 "$(pgrep com.google.android.gms)"
   elif [ "$handle_gms" = "kill" ]; then
     pm disable com.google.android.gms
     am force-stop com.google.android.gms
@@ -81,9 +81,9 @@ enable_pwr_save() {
   fi
   # Handle processes
   if [ "$handle_proc" = "true" ]; then
-    for proc in $(cat "$proc_file"); do
-      renice -n 10 $(pgrep "$proc")
-    done
+    while read proc; do
+      renice -n 10 "$(pgrep $proc)"
+    done < "$proc_file"
   fi
   # Low RAM
   if [ "$low_ram" = "true" ]; then
@@ -125,7 +125,7 @@ disable_pwr_save() {
 
   # Handle GMS
   if [ "$handle_gms" = "nice" ]; then
-    renice -n 0 com.google.android.gms
+    renice -n 0 "$(pgrep com.google.android.gms)"
   elif [ "$handle_gms" = "kill" ]; then
     pm enable com.google.android.gms
   else
@@ -133,9 +133,9 @@ disable_pwr_save() {
   fi
   # Handle Processes
   if [ "$handle_proc" = "true" ]; then
-    for proc in $(cat "$proc_file"); do
-      renice -n 0 $(pgrep "$proc")
-    done
+    while read proc; do
+      renice -n 0 "$(pgrep $proc)"
+    done < "$proc_file"
   fi
   # Low RAM
   if [ "$low_ram" = "true" ]; then
@@ -271,7 +271,7 @@ read_config() {
   # May need this later
 #  percent="$(dumpsys battery | grep level | cut -d' ' -f4)"
 
-  notif "Config Reloaded"
+  notif "Config Loaded"
 
 }
 
@@ -282,7 +282,7 @@ init() {
     # Check for command
       cmd="$(cat $ctl_file)"
       echo > "$ctl_file"
-      case cmd in
+      case $cmd in
         reload)
           if [ "$lock" = "0" ]; then
             read_config
@@ -291,8 +291,30 @@ init() {
             read_config
             enable_pwr_save
           fi ;;
-        stop) [ "$lock" = "1" ] && disable_pwr_save ;;
-        start) [ "$lock" = "0" ] && enable_pwr_save ;;
+        stop)
+        if [ "$lock" = "1" ]; then
+          if [ "$tr_changed" = "true" ]; then
+            trigger="$old_trigger"
+            tr_changed="false"
+          else
+            old_trigger="$trigger"
+            trigger="manual"
+            tr_changed="true"
+          fi
+          disable_pwr_save
+        fi ;;
+        start)
+        if [ "$lock" = "0" ]; then
+          if [ "$tr_changed" = "true" ]; then
+            trigger="$old_trigger"
+            tr_changed="false"
+          else
+            old_trigger="$trigger"
+            trigger="manual"
+            tr_changed="true"
+          fi
+          enable_pwr_save
+        fi ;;
         pause)
           until [ "$resume" = "resume" ]; do
             sleep "$delay"
@@ -381,5 +403,5 @@ EOF
 fi
 
 lock="0"
-
+tr_changed="false"
 init
