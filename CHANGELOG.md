@@ -1,4 +1,8 @@
 
+### v1.0.1
+
+  - Add manual control
+
 ### v1.0.0
 
   - FIRST OFFICIAL RELEASE

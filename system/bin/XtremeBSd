@@ -293,25 +293,29 @@ init() {
           fi ;;
         stop)
         if [ "$lock" = "1" ]; then
-          if [ "$tr_changed" = "true" ]; then
-            trigger="$old_trigger"
-            tr_changed="false"
-          else
-            old_trigger="$trigger"
-            trigger="manual"
-            tr_changed="true"
+          if [ "$trigger" != "manual" ]; then
+            if [ "$tr_changed" = "true" ]; then
+              trigger="$old_trigger"
+              tr_changed="false"
+            else
+              old_trigger="$trigger"
+              trigger="manual"
+              tr_changed="true"
+            fi
           fi
           disable_pwr_save
         fi ;;
         start)
         if [ "$lock" = "0" ]; then
-          if [ "$tr_changed" = "true" ]; then
-            trigger="$old_trigger"
-            tr_changed="false"
-          else
-            old_trigger="$trigger"
-            trigger="manual"
-            tr_changed="true"
+          if [ "$trigger" != "manual" ]; then
+            if [ "$tr_changed" = "true" ]; then
+              trigger="$old_trigger"
+              tr_changed="false"
+            else
+              old_trigger="$trigger"
+              trigger="manual"
+              tr_changed="true"
+            fi
           fi
           enable_pwr_save
         fi ;;
@@ -355,7 +359,7 @@ init() {
 if [ ! -s "$config_file" ]; then
   cat << EOF > "$config_file"
 # trigger
-# auto|boot
+# auto|boot|manual
 trigger=auto
 
 # delay
@@ -378,7 +382,7 @@ handle_apps=nice
 # a path /sdcard/XtremeBS/apps.allow
 allowlist=/sdcard/XtremeBS/apps.allow
 
-# denylist (system apps (and processes if using nice))
+# denylist (system apps)
 # a path /sdcard/XtremeBS/apps.deny
 denylist=/sdcard/XtremeBS/apps.deny
 

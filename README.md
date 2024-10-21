@@ -45,6 +45,7 @@ Options:
 
 `trigger=auto` RECCOMMENDED/DEFAULT. This will trigger when Androids "Battery Saver" is toggled.
 
+`trigger=manual` For manual control using XBSctl
 
 ### delay
 
