@@ -1,4 +1,9 @@
 
+### v1.0.2
+
+  - make requested changes for MMAR
+  - configs are now located in `/data/local/tmp/XtremeBS/`
+
 ### v1.0.1
 
   - Add manual control

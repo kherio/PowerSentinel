@@ -1,5 +1,5 @@
 #!/system/bin/bash
-config_file="/sdcard/XtremeBS/XtremeBS.conf"
+config_file="/data/local/tmp/XtremeBS/XtremeBS.conf"
 declare -a hp_cpus
 declare -a lp_cpus
 declare -a lp_govs
@@ -157,6 +157,8 @@ read_config() {
   unset cpu_freqs
 
   # Read config
+  config_file=$(get_config "config_file")
+  config_file="${config_file:-/data/local/tmp/XtremeBS/XtremeBS.conf}"
 
   # delay in seconds
   delay=$(get_config "delay")
@@ -173,9 +175,9 @@ read_config() {
   handle_apps="${handle_apps:-false}"
 
   # allowlist (user apps)
-  # a path /sdcard/XtremeBS/apps.allow
+  # a path /data/local/tmp/XtremeBS/apps.allow
   allowlist=$(get_config "allowlist")
-  allowlist="${allowlist:-/sdcard/XtremeBS/apps.allow}"
+  allowlist="${allowlist:-/data/local/tmp/XtremeBS/apps.allow}"
 
   # sanity check. Not allow user to suspend
   # everything without an allowlist. Will make
@@ -184,9 +186,9 @@ read_config() {
   [ ! -s "$allowlist" ] && [ "$handle_apps" = "suspend" ] && handle_apps="false" && notif "Alert!\nYou MUST have an allowlist!\nWill not suspend apps without one!"
 
   # denylist (system apps)
-  # a path /sdcard/XtremeBS/apps.deny
+  # a path /data/local/tmp/XtremeBS/apps.deny
   denylist=$(get_config "denylist")
-  denylist="${denylist:-/sdcard/XtremeBS/apps.deny}"
+  denylist="${denylist:-/data/local/tmp/XtremeBS/apps.deny}"
 
   # handle_cores
   # auto|false|"cpu4 cpu5"
@@ -209,7 +211,7 @@ read_config() {
   handle_proc="${handle_proc:-false}"
 
   # proc_file
-  # a path /sdcard/XtremeBS/proc.list
+  # a path /data/local/tmp/XtremeBS/proc.list
   proc_file=$(get_config "proc_file")
   [ ! -s "$proc_file" ] && handle_proc="false"
 
@@ -354,7 +356,7 @@ init() {
 
 # START
 
-[ ! -d /sdcard/XtremeBS/ ] && mkdir /sdcard/XtremeBS/
+[ ! -d /data/local/tmp/XtremeBS/ ] && mkdir /data/local/tmp/XtremeBS/
 
 if [ ! -s "$config_file" ]; then
   cat << EOF > "$config_file"
@@ -379,12 +381,12 @@ disable_cores=false
 handle_apps=nice
 
 # allowlist (user apps)
-# a path /sdcard/XtremeBS/apps.allow
-allowlist=/sdcard/XtremeBS/apps.allow
+# a path /data/local/tmp/XtremeBS/apps.allow
+allowlist=/data/local/tmp/XtremeBS/apps.allow
 
 # denylist (system apps)
-# a path /sdcard/XtremeBS/apps.deny
-denylist=/sdcard/XtremeBS/apps.deny
+# a path /data/local/tmp/XtremeBS/apps.deny
+denylist=/data/local/tmp/XtremeBS/apps.deny
 
 # handle_gms
 # false|kill|nice
@@ -395,8 +397,8 @@ handle_gms=nice
 handle_proc=false
 
 # process list
-# a path /sdcard/XtremeBS/proc.list
-proc_file=/sdcard/XtremeBS/proc.list
+# a path /data/local/tmp/XtremeBS/proc.list
+proc_file=/data/local/tmp/XtremeBS/proc.list
 
 # low_ram
 # true|false

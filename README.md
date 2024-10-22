@@ -25,10 +25,10 @@ I am NOT responsible for any damages or data loss this software may cause. By us
 # Installation
 
 1. Install using Magisk Manager and reboot.
-2. Configure the options in the config file `/sdcard/XtremeBS/XtremeBS.conf`
+2. Configure the options in the config file `/data/local/tmp/XtremeBS/XtremeBS.conf`
 
 # Configuration
-After you reboot from installation, XtremeBS drops a premade config file in `/sdcard/XtremeBS/XtremeBS.conf`.
+After you reboot from installation, XtremeBS drops a premade config file in `/data/local/tmp/XtremeBS/XtremeBS.conf`.
 
 Every time you change the config, you must reboot or reload using `XBSctl reload`.
 
@@ -58,7 +58,7 @@ Default is 3.
 ### allowlist
 This takes a path to a file.
 
-Default is `allowlist=/sdcard/XtremeBS/apps.allow`
+Default is `allowlist=/data/local/tmp/XtremeBS/apps.allow`
 
 This file is not created, you must create it yourself and add **package** names to it, 1 per line.
 
@@ -81,7 +81,7 @@ If you fuck this up and dont add things to the allowlist for suspend mode, you w
 By design, handle_apps only deals with user installed apps and not system apps to maintain stability.
 If you so desire, you can use this denylist to deal with system apps.
 
-default is `denylist=/sdcard/XtremeBS/apps.deny`
+default is `denylist=/data/local/tmp/XtremeBS/apps.deny`
 
 You will have to create it to use it. It isnt mandatory.
 
@@ -144,7 +144,7 @@ Whether we should renice system daemons and processes. This is touchy. Whatever 
 ### proc_file
 This file is where you put the processes you want to use less CPU power on. Personally, i put netd and system_server in here. You dont have to give it full paths, but you might want to, just to be on the safe side. One process per line.
 
-`proc_file=/sdcard/XtremeBS/proc.list` DEFAULT
+`proc_file=/data/local/tmp/XtremeBS/proc.list` DEFAULT
 
 Here is an example of what my proc_file looks like:
 `/system/bin/netd
