@@ -5,28 +5,6 @@ declare -a lp_cpus
 declare -a lp_govs
 cpu_base_path="/sys/devices/system/cpu"
 
-auto_detect_cpus() {
-declare -a cpus
-declare -a cpu_freqs
-for cpu in $(ls "$cpu_base_path"/ | grep cpu[00-99]); do
-  cpus+=( "$cpu" )
-  cpu_freqs+=( "$(cat /sys/devices/system/cpu/$cpu/cpufreq/cpuinfo_max_freq)" )
-done
-
-for high_freq in $(echo "${cpu_freqs[@]}" | tr ' ' '\n' | uniq -u); do
-  for index in "${!cpu_freqs[@]}"; do
-    if [ "${cpu_freqs[$index]}" = "$high_freq" ]; then
-      hp_cpus+=( "${cpus[$index]}" )
-    else
-      if grep -q " powersave " "$cpu_base_path/${cpus[$index]}/cpufreq/scaling_available_governors"; then
-        lp_govs+=( "$(cat $cpu_base_path/${cpus[$index]}/cpufreq/scaling_governor)" )
-        lp_cpus+=( "${cpus[$index]}" )
-      fi
-    fi
-  done
-done
-}
-
 get_config() {
   grep "^$1=" "$config_file" | cut -d'=' -f2-
 }
@@ -35,22 +13,26 @@ notif() {
   su -lp 2000 -c "cmd notification post -S bigtext -t 'XtremeBS' 'STATUS' \"$1\"" >/dev/null
 }
 
+battery_prediction() {
+while true; do
+  if [ "$(cat /sys/class/power_supply/battery/charge_charger_state)" = "0" ]; then
+    old_lvl="$batt_lvl"
+    batt_lvl=$(dumpsys battery | grep level | cut -d':' -f2 | sed 's/ //g')
+    if [ "$old_lvl" ]; then
+      estimate="$(($old_lvl / ($old_lvl - $batt_lvl) ))"
+      su -lp 2000 -c "cmd notification post -S bigtext -t "XtremeBS" "BATTERY" \"Estimated Hours Left: $estimate\""
+    fi
+    sleep 1h
+  else
+    sleep "$delay"
+  fi
+done
+}
+
 enable_pwr_save() {
   lock="1"
   echo -n "Enabling XtremeBS"
   notif "Enabling XtremeBS..."
-  # Handle Cores
-  if [ "$handle_cores" != "false" ]; then
-    magic_remount_rw &>/dev/null
-    for cpu in ${hp_cpus[@]}; do
-      echo "0" > "$cpu_base_path/$cpu/online"
-    done
-    for cpu in ${lp_cpus[@]}; do
-      echo "powersave" > "$cpu_base_path/$cpu/cpufreq/scaling_governor"
-    done
-    magic_remount_ro &>/dev/null
-  fi
-
   # Handle Apps
   if [ "$handle_apps" != "false" ]; then
     for app in $(pm list packages -3 | cut -d: -f2- && [ -s "$denylist" ] && cat "$denylist"); do
@@ -90,6 +72,18 @@ enable_pwr_save() {
     resetprop -n ro.config.low_ram true
   fi
 
+  # Handle Cores
+  if [ "$handle_cores" != "false" ]; then
+    magic_remount_rw &>/dev/null
+    for cpu in ${hp_cpus[@]}; do
+      echo "0" > "$cpu_base_path/$cpu/online"
+    done
+    for cpu in ${lp_cpus[@]}; do
+      echo "powersave" > "$cpu_base_path/$cpu/cpufreq/scaling_governor"
+    done
+    magic_remount_ro &>/dev/null
+  fi
+
   echo " - [done]"
   notif "status: Enabled"
 }
@@ -97,6 +91,7 @@ enable_pwr_save() {
 disable_pwr_save() {
   echo -n "Disabling XtremeBS"
   notif "Disabling XtremeBS..."
+  # Handle Cores
   if [ "$handle_cores" != "false" ]; then
     magic_remount_rw &>/dev/null
     for cpu in ${hp_cpus[@]}; do
@@ -107,6 +102,7 @@ disable_pwr_save() {
     done
     magic_remount_ro &>/dev/null
   fi
+
   # Handle Apps
   if [ "$handle_apps" != "false" ]; then
     for app in $(pm list packages -3 | cut -d: -f2- && [ -s "$denylist" ] && cat "$denylist"); do
@@ -157,9 +153,6 @@ read_config() {
   unset cpu_freqs
 
   # Read config
-  config_file=$(get_config "config_file")
-  config_file="${config_file:-/data/local/tmp/XtremeBS/XtremeBS.conf}"
-
   # delay in seconds
   delay=$(get_config "delay")
   delay="${delay:-3}"
@@ -410,4 +403,5 @@ fi
 
 lock="0"
 tr_changed="false"
+battery_prediction &
 init

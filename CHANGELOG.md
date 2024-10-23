@@ -1,4 +1,11 @@
 
+### v1.0.3
+
+  - add battery time prediction
+  - removed undocumented function
+  - removed old function from pre-v0.0.1
+  - made app handling faster (still needs to be faster. WIP)
+
 ### v1.0.2
 
   - make requested changes for MMAR
