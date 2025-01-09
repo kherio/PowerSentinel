@@ -55,6 +55,16 @@ Default is 3.
 
 `delay=3`
 
+### keep_on_charge
+This is for if you wish to keep the powersaver on while charging
+added in v1.0.4
+This leads to faster charging speeds
+You only need to set this if you are using `trigger=auto`
+
+`keep_on_charge=true` Default
+ 
+`keep_on_charge=false`
+
 ### allowlist
 This takes a path to a file.
 
@@ -142,13 +152,24 @@ Whether we should renice system daemons and processes. This is touchy. Whatever 
 `handle_proc=true`
 
 ### proc_file
-This file is where you put the processes you want to use less CPU power on. Personally, i put netd and system_server in here. You dont have to give it full paths, but you might want to, just to be on the safe side. One process per line.
+This file is where you put the processes you want to use less CPU power on. Personally, i put netd and system_server in here. One process per line.
 
 `proc_file=/data/local/tmp/XtremeBS/proc.list` DEFAULT
 
 Here is an example of what my proc_file looks like:
-`/system/bin/netd
-system_server`
+`/system/bin/netd 19
+system_server 10`
+
+the nice numbers were added in v1.0.4
+
+#### A note on niceness
+The numbers beside the process names are nice levels 0 (normal) - 19 (very nice). If you choose to not give them a nice level, the nice level will be 10.
+If you dont know what "niceness" is, its pretty simple.
+The nicer a process is, the less CPU time it gets, like a line in a grocery store. a really nice program will let others by so they can get done first.
+When there are no more customers (processes) in line, then the nicer processes take their turn. the higher the niceness is, the more likely it will let the others go first.
+There are negative numbers too. Negative numbers are NOT NICE and will get CPU time first. if you have an app that is really important, you can assign a negative number to it.
+these range from -1 (politely aggressive) to -20 (hyper aggressive).
+you can use not nice numbers in here but i dont recommend it.
 
 If you want to find processes that use high cpu, you can use this command and it will sort the highest to the bottom. `su -c ps -eo "%cpu pid cmd" | sort -n -k1,1`
 

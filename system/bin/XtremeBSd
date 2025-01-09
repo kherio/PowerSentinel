@@ -13,19 +13,28 @@ notif() {
   su -lp 2000 -c "cmd notification post -S bigtext -t 'XtremeBS' 'STATUS' \"$1\"" >/dev/null
 }
 
+getstate() {
+  # screen|charging|force|deep
+  dumpsys deviceidle get "$1"
+}
+
 battery_prediction() {
 while true; do
-  if [ "$(cat /sys/class/power_supply/battery/charge_charger_state)" = "0" ]; then
-    old_lvl="$batt_lvl"
-    batt_lvl=$(dumpsys battery | grep level | cut -d':' -f2 | sed 's/ //g')
-    if [ "$old_lvl" ]; then
-      estimate="$(($old_lvl / ($old_lvl - $batt_lvl) ))"
-      su -lp 2000 -c "cmd notification post -S bigtext -t "XtremeBS" "BATTERY" \"Estimated Hours Left: $estimate\""
+  old_lvl="$batt_lvl"
+  batt_lvl=$(dumpsys battery | grep level | cut -d':' -f2 | sed 's/ //g')
+  if [ "$old_lvl" ]; then
+    if [ "$old_lvl" -gt "$batt_lvl" ]; then
+      diff="$(($old_lvl - $batt_lvl))"
+      estimate="$(echo $batt_lvl $diff | awk '{ printf("%02.2f\n", $1 / $2) }')"
+    elif [ "$old_lvl" -lt "$batt_lvl" ]; then
+      # est based on charge and old usage
+      estimate="$(echo $batt_lvl $diff | awk '{ printf("%02.2f\n", $1 / $2) }' )"
+    else
+      estimate="Infinite?"
     fi
-    sleep 1h
-  else
-    sleep "$delay"
+    su -lp 2000 -c "cmd notification post -S bigtext -t "XtremeBS" "BATTERY" \"Estimated Hours Left: $estimate\""
   fi
+  sleep 1h
 done
 }
 
@@ -52,7 +61,8 @@ enable_pwr_save() {
     done
   fi
 
-  # Handle GMS
+  # Handle GMS , this will be leaving soon.
+  # Not many need it, and proc_file can handle it
   if [ "$handle_gms" = "nice" ]; then
     renice -n 19 "$(pgrep com.google.android.gms)"
   elif [ "$handle_gms" = "kill" ]; then
@@ -63,9 +73,16 @@ enable_pwr_save() {
   fi
   # Handle processes
   if [ "$handle_proc" = "true" ]; then
-    while read proc; do
-      renice -n 10 "$(pgrep $proc)"
-    done < "$proc_file"
+    while [ "$lock" = "1" ]; do
+      while read proc nice; do
+        pid="$(pgrep $proc)"
+        [ ! "$nice" ] && nice="10"
+        if [ "$(cat /proc/$pid/stat | cut -d' ' -f19)" != "$nice" ]; then
+          renice -n "$nice" "$pid"
+        fi
+      done < "$proc_file"
+      sleep "$delay"
+    done &
   fi
   # Low RAM
   if [ "$low_ram" = "true" ]; then
@@ -161,6 +178,11 @@ read_config() {
   # auto|boot # <integer>
   trigger=$(get_config "trigger")
   [ -z "$trigger" ] && exit
+
+  # Keep state on charge
+  # true|false
+  keep_on_charge=$(get_config "keep_on_charge")
+  keep_on_charge="${keep_on_charge:-true}"
 
   # handle_apps
   # false|kill|nice|suspend
@@ -330,16 +352,20 @@ init() {
 
     # Check for trigger
     if [ "$trigger" = "boot" ]; then
-      enable_pwr_save
+      if [ "$lock" != "1" ]; then
+        enable_pwr_save
+      fi
     elif [ "$trigger" = "auto" ]; then
       if [ "$(settings get global low_power)" = "1" ] && [ "$lock" = "0" ]; then
         enable_pwr_save
       fi
       if [ "$(settings get global low_power)" = "0" ] && [ "$lock" = "1" ]; then
-        disable_pwr_save
+        if [ "$keep_on_charge" = "false" ] || [ "$(getstate charging)" = "false" ]; then
+            disable_pwr_save
+        fi
       fi
     else
-      : # Do nothing
+      : # Do nothing, its Manual here
     fi
 
     # Wait
@@ -360,6 +386,11 @@ trigger=auto
 # delay
 # time in seconds
 delay=3
+
+# keep_on_charge
+# true|false
+# keep powersave on while charging
+keep_on_charge=true
 
 # handle_cores
 # auto|false|"cpu4 cpu5"
@@ -403,5 +434,5 @@ fi
 
 lock="0"
 tr_changed="false"
-battery_prediction &
+#battery_prediction &
 init

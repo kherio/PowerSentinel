@@ -1,4 +1,15 @@
 
+### v1.0.4
+
+  - fix a bug where XtremeBS would continually enable when `trigger=boot` is set
+  - math changed in battery time prediction
+  - process handling now ensures that the
+  nice level doesnt get changed behind us
+  - proc_file will now take a nice level per process
+  if you dont change your file, nice is 10
+  nice levels are 0 (normal) - 19 (very nice)
+  - added `keep_on_charge` option, this leads to extremely fast charging speeds and is only needed if using `trigger=auto`
+
 ### v1.0.3
 
   - add battery time prediction
