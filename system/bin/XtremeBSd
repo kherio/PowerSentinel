@@ -233,7 +233,7 @@ read_config() {
   # set low_ram
   # true|false
   low_ram=$(get_config "low_ram")
-  low_ram="${low_ram:-true}"
+  low_ram="${low_ram:-false}"
 
   # Handle Disable Cores
   if [ "$disable_cores" = "false" ]; then
@@ -426,7 +426,7 @@ proc_file=/data/local/tmp/XtremeBS/proc.list
 
 # low_ram
 # true|false
-low_ram=true
+low_ram=false
 
 EOF
 
