@@ -172,6 +172,8 @@ these range from -1 (politely aggressive) to -20 (hyper aggressive).
 you can use not nice numbers in here but i dont recommend it.
 
 If you want to find processes that use high cpu, you can use this command and it will sort the highest to the bottom. `su -c ps -eo "%cpu pid cmd" | sort -n -k1,1`
+or if that doesnt work, you can use this one
+`su -c "ps -A -o PCY,PID,USER,%CPU,ARGS" | sort -k4 -nr`
 
 ### low_ram
 This sets the low_ram flag to true, so the system tries to use less and therefore save power.
