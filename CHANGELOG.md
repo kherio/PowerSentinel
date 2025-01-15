@@ -1,4 +1,7 @@
 
+### v1.0.5
+  - change low_ram default value to false
+
 ### v1.0.4
 
   - fix a bug where XtremeBS would continually enable when `trigger=boot` is set
