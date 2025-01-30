@@ -91,14 +91,18 @@ enable_pwr_save() {
 
   # Handle Cores
   if [ "$handle_cores" != "false" ]; then
-    magic_remount_rw &>/dev/null
+    if [ -d "/data/adb/modules" ]; then
+      magic_remount_rw &>/dev/null
+    fi
     for cpu in ${hp_cpus[@]}; do
       echo "0" > "$cpu_base_path/$cpu/online"
     done
     for cpu in ${lp_cpus[@]}; do
       echo "powersave" > "$cpu_base_path/$cpu/cpufreq/scaling_governor"
     done
-    magic_remount_ro &>/dev/null
+    if [ -d "/data/adb/modules" ]; then
+      magic_remount_ro &>/dev/null
+    fi
   fi
 
   echo " - [done]"
@@ -110,14 +114,18 @@ disable_pwr_save() {
   notif "Disabling XtremeBS..."
   # Handle Cores
   if [ "$handle_cores" != "false" ]; then
-    magic_remount_rw &>/dev/null
+    if [ -d "/data/adb/modules" ]; then
+      magic_remount_rw &>/dev/null
+    fi
     for cpu in ${hp_cpus[@]}; do
       echo "1" > "$cpu_base_path/$cpu/online"
     done
     for index in ${!lp_cpus[@]}; do
       echo "${lp_govs[$index]}" > "$cpu_base_path/${lp_cpus[$index]}/cpufreq/scaling_governor"
     done
-    magic_remount_ro &>/dev/null
+    if [ -d "/data/adb/modules" ]; then
+      magic_remount_ro &>/dev/null
+    fi
   fi
 
   # Handle Apps
@@ -394,7 +402,7 @@ keep_on_charge=true
 
 # handle_cores
 # auto|false|"cpu4 cpu5"
-handle_cores=auto
+handle_cores=false
 
 # disable_cores
 # false|auto|"cpu6 cpu7"
@@ -432,7 +440,32 @@ EOF
 
 fi
 
-lock="0"
+lock="0" # fix all the checks
 tr_changed="false"
+# battery prediction has a bug
+# that i dont want to fix rn
+# it is not needed for the module
+# to operate normally.
+# The bug is a negative number
+# when device has charged since
+# last poll. v3 will need it for
+# the auto config smart feature
+# If you saw this, you didnt see
+# this. v3 is a concept. It may
+# never reach production.
+# However, if you are interested,
+# and want to help v3 come to light
+# feel free to pm me on reddit so
+# we can collab. Just keep it hush-
+# hush. i dont want anyone to think
+# that its actually in the works.
 #battery_prediction &
-init
+
+# figure out if v1 or v2
+cfg_ver=$(get_config "version")
+if [ "$cfg_ver" = "2" ]; then
+  init_v2
+else
+  init # default to 1
+  # cuz v2 is opt-in only
+fi

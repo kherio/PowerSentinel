@@ -32,6 +32,9 @@ After you reboot from installation, XtremeBS drops a premade config file in `/da
 
 Every time you change the config, you must reboot or reload using `XBSctl reload`.
 
+As of v1.0.6 there is a webui available at http://127.0.0.1:8081 to make editing the config easier
+action.sh will launch it
+
 ## Config Options
 
 The config uses a simple `key=value` format

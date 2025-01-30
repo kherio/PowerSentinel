@@ -1,4 +1,9 @@
 
+### v1.0.6
+  - add webui for easy config
+  - attempt ksu and apatch support (no testing done, someone with these let me know if it works or not)
+  - Samsung devices should no longer have SystemUI crashes
+
 ### v1.0.5
   - change low_ram default value to false
 
