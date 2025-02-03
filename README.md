@@ -56,9 +56,12 @@ they look like this:
 
 handle_cores=false
 
+
 low_ram=false
 
+
 disable_cores=cpu4 cpu5 cpu6 cpu7
+
 
 }`
 
@@ -77,11 +80,15 @@ To define a custom event, you can just write it into the config like so, naming 
 
 handle_cores=auto
 
+
 handle_apps=false
+
 
 disable_cores=false
 
+
 handle_proc=true
+
 
 }`
 
