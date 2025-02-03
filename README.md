@@ -52,18 +52,15 @@ The v2 config, uses a different format.
 It replaces the `trigger` option with what i like to call "event blocks"
 they look like this:
 
-`low_power={
+`low_power={`
 
-handle_cores=false
+`handle_cores=false`
 
+`low_ram=false`
 
-low_ram=false
+`disable_cores=cpu4 cpu5 cpu6 cpu7`
 
-
-disable_cores=cpu4 cpu5 cpu6 cpu7
-
-
-}`
+`}`
 
 NOTE: the `low_power={` and `}` have their own line. THIS IS VERY IMPORTANT
 
@@ -75,22 +72,17 @@ you dont need this type of functionality.
 As an added bonus, this creates the ability to use Tasker profiles and set your own triggers to handle custom events.
 To define a custom event, you can just write it into the config like so, naming it whatever you wish.
 
-`start_at_midnight={
+`start_at_midnight={`
 
+`handle_cores=auto`
 
-handle_cores=auto
+`handle_apps=false`
 
+`disable_cores=false`
 
-handle_apps=false
+`handle_proc=true`
 
-
-disable_cores=false
-
-
-handle_proc=true
-
-
-}`
+`}`
 
 you may name it whatever you wish, as long as you only use alphanumeric characters, underscores, or dashes.
 No spaces
