@@ -1,9 +1,36 @@
 #!/system/bin/bash
 
-ctl_file="/data/local/tmp/xbs"
+conf="/data/local/tmp/XtremeBS/XtremeBS.conf"
 
-print_help() {
-  cat << EOM
+getconf() {
+  # change made here to set default
+  # if not set
+  opt=$(grep "^$1=" "$conf" | cut -d= -f2)
+  [ "$opt" != "" ] && echo "$opt" || echo "$2"
+}
+
+ctl_file=$(getconf ctl_file "/data/local/tmp/xbs")
+version=$(getconf version 1)
+
+
+print_help_v2() {
+cat << EOM
+  XtremeBS Controller Options:
+
+  start		starts the manual event or a custom event
+
+  stop		stops the manual event or a custom event
+
+  pause		pauses the XtremeBS daemon
+
+  resume	resumes the XtremeBS daemon or exits safe mode
+
+  safe		stops all events and enters safe mode
+EOM
+}
+
+print_help_v1() {
+cat << EOM
   XtremeBS Controller Options:
 
   start		enables power save mode manually.
@@ -20,4 +47,15 @@ print_help() {
 EOM
 }
 
-[ -z "$1" ] || [ "$1" = "-h" ] || [ "$1" = "--help" ] && print_help || echo "$1" > "$ctl_file"
+case $1 in
+  ''|'-h'|'--help')
+    if [ "$version" = 2 ]; then
+      print_help_v2
+    else
+      print_help_v1
+    fi
+    ;;
+  *)
+    echo "$@" > "$ctl_file"
+    ;;
+esac

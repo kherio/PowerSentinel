@@ -4,9 +4,9 @@ The main goal is to maximize battery life as much as possible while still remain
 
 Most of the options are safe, meaning 
 
-1. You dont have to worry about bricking or bootloops.
+1. You dont have to worry about bricking or hard bootloops.
 
-2. Some options may produce lag, late mesaages, or missed alarms. 
+2. Some options may produce lag, late mesaages, missed alarms, or SystemUI crashes. 
 
 You should probably start slow and activate 1 at a time with a little testing.
 
@@ -16,11 +16,14 @@ Everything has been built and tested on a Pixel 5 running ProtonAOSP.
 I am NOT responsible for any damages or data loss this software may cause. By using this software you accept the risks of using it.
 
 # What can this do?
-- It can kill, renice, or suspend apps
-- It can put CPU cores into powersave mode.
-- It can completely disable CPU cores.
-- It can disable Google Play Services(gms).
-- It can manage process priorities
+- kill, renice, or suspend apps.
+- put CPU cores into powersave mode.
+- completely disable CPU cores.
+- disable Google Play Services(gms).
+- manage process priorities.
+- force your device into doze mode.
+- completely disable WiFi
+- pretend the device has low ram
 
 # Installation
 
@@ -37,10 +40,51 @@ action.sh will launch it
 
 ## Config Options
 
-The config uses a simple `key=value` format
+The v1 config used a simple `key=value` format
+
+The v2 config, uses a different format.
+It replaces the `trigger` option with what i like to call "event blocks"
+they look like this:
+`low_power={
+handle_cores=false
+low_ram=false
+disable_cores=cpu4 cpu5 cpu6 cpu7
+}`
+
+NOTE: the `low_power={` and `}` have their own line. THIS IS VERY IMPORTANT
+
+This change adds more dynamicism to XtremeBS, making it much more powerful,
+and allows you to change the balance of perfomance and powersaving
+based on certain events. You may choose to stay on the v1 config if
+you dont need this type of functionality.
+
+As an added bonus, this creates the ability to use Tasker profiles and set your own triggers to handle custom events.
+To define a custom event, you can just write it into the config like so, naming it whatever you wish.
+`start_at_midnight={
+handle_cores=auto
+handle_apps=false
+disable_cores=false
+handle_proc=true
+}`
+
+you may name it whatever you wish, as long as you only use alphanumeric characters, underscores, or dashes.
+No spaces
+No $
+No =
+No { or }
+
+To enable or disable your custom event, you can just call it from a root shell, using XBSctl like so
+`XBSctl start start_at_midnight`
+
+Why events, DethByte64?
+What if i told you, that you could do certain things when your battery saver turned on and do a different thing when your screen turned off, or do other things when your device begins charging?
+Thats exactly what its for. Not to mention, you can use different allowlists with the `handle_apps` option per event, or literally any combination of config options per event.
+This allows for many more possibilities than just "on" or "off".
+
+Still too complex? Just think of events as profiles.
 
 ### trigger
-This option specifies when to trigger power saving.
+This option specifies when to trigger power saving and is only necessary when using the v1 config.
 
 Options:
 
@@ -146,7 +190,6 @@ This decides how to handle Google Play Services, which is a battery hog.
 `handle_gms=kill`
 WARNING! If you use this option, it will break google apps until you change the option. Also, YOU WILL FAIL SAFETYNET AND PLAY INTEGRITY. It just disables the package.
 
-
 ### handle_proc
 Whether we should renice system daemons and processes. This is touchy. Whatever you put in the proc_file, will be reniced with a value of 10. You might get messages late, you might miss alarms, who knows. Just be careful.
 
@@ -185,21 +228,42 @@ This sets the low_ram flag to true, so the system tries to use less and therefor
 
 `low_ram=false`
 
+### doze
+This enables Doze Mode (added in v2.0.0)
+
+`doze=false` DEFAULT
+
+`doze=light`
+
+`doze=deep`
+
+Doze may cause issues with alarms
+
+### kill_wifi
+This will disable the wifi radios (added in v2.0.0)
+Not even the switch in Settings will re-enable it
+
+`kill_wifi=false` DEFAULT
+
+`kill_wifi=true`
+
+You might be asking, "Why would anyone want to do this?" Well, WiFi is very power hungry and disabling it will save a ton of power.
+Dont worry, it will be re-enabled when your trigger gets called.
 
 ## XBSctl
 This is how you control the daemon. 
 
 commands are:
 
-`start` Starts XtremeBS
+`start` Starts XtremeBS or an event in v2
 
-`stop` Stops XtremeBS
+`stop` Stops XtremeBS or an event in v2
 
 `pause` Pauses trigger handling.
 
 `resume` Resumes trigger handling or gets out of safe mode.
 
-`reload` Reloads the config file. You must not be paused for this.
+`reload` Reloads the config file. Only needed for v1
 
 `safe` Safemode. If you mess up, use this. It stops XtremeBS and waits until you tell it to Resume, Then reloads the config.
 

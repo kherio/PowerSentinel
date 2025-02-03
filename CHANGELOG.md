@@ -1,4 +1,14 @@
 
+### v2.0.0
+  - Add event handling (different triggers, which makes the module dynamic)
+  - Added support for custom events
+  - Added support for Doze mode
+  - Added the ability to disable the wifi radios
+  - Added logging and log levels
+  - Added a migration function, this will automatically convert your original config into the v2 config. just put `version=2` in your config file and reboot
+  - Removed battery prediction, it was buggy and could use some work, it will be back in a later version.
+  - Optimized CPU core handling.
+
 ### v1.0.6
   - add webui for easy config
   - attempt ksu and apatch support (no testing done, someone with these let me know if it works or not)

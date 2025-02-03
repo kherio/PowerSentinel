@@ -1,47 +1,244 @@
-#!/system/bin/bash
-config_file="/data/local/tmp/XtremeBS/XtremeBS.conf"
+
+conf="/data/local/tmp/XtremeBS/XtremeBS.conf"
+declare -a user_events
+declare -a cpus
+declare -a cpu_freqs
 declare -a hp_cpus
 declare -a lp_cpus
 declare -a lp_govs
 cpu_base_path="/sys/devices/system/cpu"
 
-get_config() {
-  grep "^$1=" "$config_file" | cut -d'=' -f2-
+# Helpers and one time things
+
+getconf() {
+  # change made here to set default
+  # if not set
+  opt=$(grep "^$1=" "$conf" | cut -d= -f2)
+  [ "$opt" != "" ] && echo "$opt" || echo "$2"
+}
+
+is_device() {
+  # is device charging|screen|low_power
+  if [ "$1" != "low_power" ]; then
+    dumpsys deviceidle get $1
+  else
+    if [ $(settings get global low_power) = 1 ]; then
+      echo true
+    else
+      echo false
+    fi
+  fi
 }
 
 notif() {
   su -lp 2000 -c "cmd notification post -S bigtext -t 'XtremeBS' 'STATUS' \"$1\"" >/dev/null
 }
 
-getstate() {
-  # screen|charging|force|deep
-  dumpsys deviceidle get "$1"
+log_msg() {
+  case $1 in
+    1)
+      log_lvl="[INFO]" ;;
+    2)
+      log_lvl="[VERBOSE]" ;;
+    3)
+      log_lvl="[DEBUG]" ;;
+  esac
+  if [ "$log_level" -ge "$1" ]; then
+    echo "$(date +"%m-%d-%Y %H:%M:%S") $log_lvl $2" >> "$log_file"
+  fi
 }
 
-battery_prediction() {
-while true; do
-  old_lvl="$batt_lvl"
-  batt_lvl=$(dumpsys battery | grep level | cut -d':' -f2 | sed 's/ //g')
-  if [ "$old_lvl" ]; then
-    if [ "$old_lvl" -gt "$batt_lvl" ]; then
-      diff="$(($old_lvl - $batt_lvl))"
-      estimate="$(echo $batt_lvl $diff | awk '{ printf("%02.2f\n", $1 / $2) }')"
-    elif [ "$old_lvl" -lt "$batt_lvl" ]; then
-      # est based on charge and old usage
-      estimate="$(echo $batt_lvl $diff | awk '{ printf("%02.2f\n", $1 / $2) }' )"
-    else
-      estimate="Infinite?"
-    fi
-    su -lp 2000 -c "cmd notification post -S bigtext -t "XtremeBS" "BATTERY" \"Estimated Hours Left: $estimate\""
+migrate() {
+  log_msg 2 "It looks like version=2 was found in the config without a valid event block"
+  log_msg 1 "Migrating to v2 config"
+  # start with base conf values
+  # delay, version, log_file, log_level
+  echo "version=2" > "$conf-v2"
+  ctl_file=$(getconf ctl_file "")
+  if [ ! -z "$ctl_file" ]; then
+    echo "ctl_file=$ctl_file" "$conf-v2"
   fi
-  sleep 1h
-done
+  delay="$(getconf delay 3)"
+  echo "delay=$delay" >> "$conf-v2"
+  log_file="$(getconf log_file "$(dirname "$conf")/XtremeBS.log")"
+  echo "log_file=$log_file" >> "$conf-v2"
+  log_level="$(getconf log_level 1)"
+  echo "log_level=$log_level" >> "$conf-v2"
+  # newline for clarity
+  echo >> "$conf-v2"
+
+  # start with figuring out the trigger,
+  # then write values over.
+  event_blocks=("charging" "screen_off")
+  # events:
+  # charging, screen_off, boot,
+  # manual, low_power
+  trigger="$(getconf trigger auto)"
+  case "$trigger" in
+    auto)
+      event_blocks+=("manual" "boot")
+      # start event block
+      echo "low_power={" >> "$conf-v2"
+      # keep_on_charge can be used if
+      # you want the settings to persist
+      # when the device is plugged in
+      echo "keep_on_charge=$(getconf keep_on_charge true)" >> "$conf-v2"
+      ;;
+    boot)
+      event_blocks+=("low_power" "manual")
+      echo "boot={" >> "$conf-v2"
+      # quit is a new option that can only
+      # be used in a boot block. it exits the daemon
+      # after making changes to keep CPU cycles to a minimum
+      echo "quit=false" >> "$conf-v2"
+      ;;
+    manual)
+      event_blocks+=("boot" "low_power")
+      echo "on_start={" >> "$conf-v2"
+      ;;
+  esac
+
+  # copy values over
+  echo "handle_cores=$(getconf handle_cores false)" >> "$conf-v2"
+  echo "disable_cores=$(getconf disable_cores false)" >> "$conf-v2"
+  echo "handle_apps=$(getconf handle_apps false)" >> "$conf-v2"
+  echo "allowlist=$(getconf allowlist /sdcard/XtremeBS/apps.allow)" >> "$conf-v2"
+  echo "denylist=$(getconf denylist /sdcard/XtremeBS/apps.deny)" >> "$conf-v2"
+  echo "handle_gms=$(getconf handle_gms false)" >> "$conf-v2"
+  echo "handle_proc=$(getconf handle_proc false)" >> "$conf-v2"
+  echo "proc_file=$(getconf proc_file /sdcard/XtremeBS/proc.list)" >> "$conf-v2"
+  echo "low_ram=$(getconf low_ram false)" >> "$conf-v2"
+  echo "doze=$(getconf doze false)" >> "$conf-v2"
+  echo "kill_wifi=$(getconf kill_wifi false)" >> "$conf-v2"
+  echo "}" >> "$conf-v2"
+  echo >> "$conf-v2"
+
+  # write remaining event blocks
+  for event in ${event_blocks[@]}; do
+    echo -e "$event={\n}\n" >> "$conf-v2"
+  done
+
+  # remove the version string and make backup
+  sed -i '/^version=2/d' "$conf" # remove v2
+  mv "$conf" "$conf-v1"
+  # make new conf take effect
+  mv "$conf-v2" "$conf"
+  log_msg 1 "Migration complete!"
 }
+
+auto_map_cores() {
+  log_msg 2 "Auto-mapping CPU cores"
+  # high power cores
+  for cpu in $(ls "$cpu_base_path/" | grep cpu[00-99]); do
+    cpus+=( "$cpu" )
+    cpu_freqs+=( "$(cat $cpu_base_path/$cpu/cpufreq/cpuinfo_max_freq)" )
+  done
+  for high_freq in $(echo "${cpu_freqs[@]}" | tr ' ' '\n' | uniq -u); do
+    for index in "${!cpu_freqs[@]}"; do
+      if [ "${cpu_freqs[$index]}" = "$high_freq" ]; then
+        hp_cpus+=( "${cpus[$index]}" )
+      fi
+    done
+  done
+  log_msg 3 "High power cores: ${hp_cpus[@]}"
+  # Low Power Cores
+  for core in $(ls "$cpu_base_path/" | grep cpu[00-99]); do
+    match="false"
+    for hp_core in ${hp_cpus[@]}; do
+      [ "$core" = "$hp_core" ] && match="true"
+    done
+    if [ "$match" = "false" ] && grep -q " powersave " "$cpu_base_path/$core/cpufreq/scaling_available_governors"; then
+      lp_govs+=( "$(cat $cpu_base_path/$core/cpufreq/scaling_governor)" )
+      lp_default_govs[$core]="$(cat $cpu_base_path/$cpu/cpufreq/scaling_governor )"
+      lp_cpus+=( "$core" )
+    fi
+  done
+  log_msg 3 "Low power cores: ${lp_cpus[@]}"
+}
+
+# V1 read_config
+read_config() {
+  # Read config
+  # delay in seconds
+  delay=$(getconf delay 3)
+
+  # trigger
+  # auto|boot # <integer>
+  trigger=$(getconf trigger "")
+  [ -z "$trigger" ] && exit
+
+  # Keep state on charge
+  # true|false
+  keep_on_charge=$(getconf keep_on_charge true)
+
+  # handle_apps
+  # false|kill|nice|suspend
+  handle_apps=$(getconf handle_apps false)
+
+  # allowlist (user apps)
+  # a path /data/local/tmp/XtremeBS/apps.allow
+  allowlist=$(getconf "allowlist" "/data/local/tmp/XtremeBS/apps.allow")
+
+  # sanity check. Not allow user to suspend
+  # everything without an allowlist. Will make
+  # all apps unusable. Set handle_apps=false
+  # and notify user
+  [ ! -s "$allowlist" ] && [ "$handle_apps" = "suspend" ] && handle_apps="false" && notif "Alert!\nYou MUST have an allowlist!\nWill not suspend apps without one!"
+  # log error here
+
+  # denylist (system apps)
+  # a path /data/local/tmp/XtremeBS/apps.deny
+  denylist=$(getconf "denylist" "/data/local/tmp/XtremeBS/apps.deny")
+
+  # handle_cores
+  # auto|false|"cpu4 cpu5"
+  handle_cores=$(getconf "handle_cores" "false")
+
+  # disable_cores
+  # false|auto|"cpu6 cpu7"
+  disable_cores=$(getconf "disable_cores" "false")
+
+  # handle_gms
+  # false|kill|nice
+  handle_gms=$(getconf "handle_gms" false)
+
+  # handle_proc
+  # true|false
+  handle_proc=$(getconf "handle_proc" false)
+
+  # proc_file
+  # a path /data/local/tmp/XtremeBS/proc.list
+  proc_file=$(getconf "proc_file" "/data/local/tmp/XtremeBS/proc.list")
+  [ ! -s "$proc_file" ] && handle_proc="false"
+
+  # set low_ram
+  # true|false
+  low_ram=$(getconf "low_ram" false)
+
+  # set doze
+  # false|light|deep
+  doze=$(getconf doze false)
+
+  # kill_wifi
+  # true|false
+  kill_wifi=$(getconf kill_wifi false)
+
+  # May need this later
+#  percent="$(dumpsys battery | grep level | cut -d' ' -f4)"
+
+  notif "Config Loaded"
+}
+
+
+# Action stuff
 
 enable_pwr_save() {
-  lock="1"
-  echo -n "Enabling XtremeBS"
-  notif "Enabling XtremeBS..."
+  if [ "$version" != "2" ]; then
+    lock="1"
+    echo -n "Enabling XtremeBS"
+    notif "Enabling XtremeBS..."
+    log_msg 1 "Enabling XtremeBS"
+  fi
   # Handle Apps
   if [ "$handle_apps" != "false" ]; then
     for app in $(pm list packages -3 | cut -d: -f2- && [ -s "$denylist" ] && cat "$denylist"); do
@@ -50,11 +247,14 @@ enable_pwr_save() {
       fi
       if [ "$handle_apps" = "nice" ]; then
         for i in $(pgrep "$app"); do
+          log_msg 3 "Renicing $i"
           renice -n 19 "$i" &>/dev/null &
         done
       elif [ "$handle_apps" = "kill" ]; then
+        log_msg 3 "Stopping $app"
         am force-stop "$app" &>/dev/null &
       else
+        log_msg 3 "Suspending $app"
         am force-stop "$app" &>/dev/null &
         pm suspend "$app" &>/dev/null &
       fi
@@ -64,8 +264,10 @@ enable_pwr_save() {
   # Handle GMS , this will be leaving soon.
   # Not many need it, and proc_file can handle it
   if [ "$handle_gms" = "nice" ]; then
+    log_msg 3 "Renicing GMS"
     renice -n 19 "$(pgrep com.google.android.gms)"
   elif [ "$handle_gms" = "kill" ]; then
+    log_msg 3 "Disabling GMS"
     pm disable com.google.android.gms
     am force-stop com.google.android.gms
   else
@@ -78,6 +280,7 @@ enable_pwr_save() {
         pid="$(pgrep $proc)"
         [ ! "$nice" ] && nice="10"
         if [ "$(cat /proc/$pid/stat | cut -d' ' -f19)" != "$nice" ]; then
+          log_msg 3 "Renicing $proc to $nice"
           renice -n "$nice" "$pid"
         fi
       done < "$proc_file"
@@ -86,45 +289,144 @@ enable_pwr_save() {
   fi
   # Low RAM
   if [ "$low_ram" = "true" ]; then
+    log_msg 3 "Setting the low_ram flag"
     resetprop -n ro.config.low_ram true
   fi
 
+  # Handle WiFi
+  if [ "$kill_wifi" = "true" ]; then
+    log_msg 3 "Disabling WiFi"
+    busybox="$(find /data/adb/ -type f -name busybox)"
+    if [ -f "$busybox" ]; then
+      $busybox rfkill block wifi
+    else
+      log_msg 3 "Looks like you dont have busybox! Are you rooted? What happened?"
+    fi
+  fi
+
+  # Handle Doze
+  if [ "$doze" = "light" ]; then
+    log_msg 3 "Enabling $doze Doze mode"
+    dumpsys deviceidle force-idle light &>/dev/null
+  fi
+  if [ "$doze" = "deep" ]; then
+    log_msg 3 "Enabling $doze Doze mode"
+    dumpsys deviceidle force-idle deep &>/dev/null
+  fi
+
   # Handle Cores
-  if [ "$handle_cores" != "false" ]; then
+
+  if [ "$handle_cores" != "false" ] || [ "$disable_cores" != "false" ]; then
     if [ -d "/data/adb/modules" ]; then
+      # magisk mount read-write
       magic_remount_rw &>/dev/null
     fi
-    for cpu in ${hp_cpus[@]}; do
-      echo "0" > "$cpu_base_path/$cpu/online"
-    done
-    for cpu in ${lp_cpus[@]}; do
-      echo "powersave" > "$cpu_base_path/$cpu/cpufreq/scaling_governor"
-    done
+    if [ "$disable_cores" = "auto" ]; then
+      for cpu in ${hp_cpus[@]}; do
+        log_msg 3 "Disabling $cpu"
+        echo "0" > "$cpu_base_path/$cpu/online"
+      done
+    else
+      # manual
+      for core in $disable_cores; do
+        if [ -d "$cpu_base_path/$core" ]; then
+          log_msg 3 "Disabling $core"
+          echo "0" > "$cpu_base_path/$core/online"
+        fi
+      done
+    fi
+    if [ "$handle_cores" = "auto" ]; then
+      for cpu in ${lp_cpus[@]}; do
+        log_msg 3 "Setting powersave on $cpu"
+        echo "powersave" > "$cpu_base_path/$cpu/cpufreq/scaling_governor"
+      done
+    else
+      # manual
+      for core in $handle_cores; do
+        [ -d "$cpu_base_path/$core/" ] && \
+        grep -q " powersave " "$cpu_base_path/$core/cpufreq/scaling_available_governors" && \
+        log_msg 3 "Setting powersave on $core" && \
+        echo "powersave" > "$cpu_base_path/$cpu/cpufreq/scaling_governor"
+      done
+    fi
     if [ -d "/data/adb/modules" ]; then
+      # magisk mount read-only
       magic_remount_ro &>/dev/null
     fi
   fi
 
-  echo " - [done]"
-  notif "status: Enabled"
+  if [ "$version" != "2" ]; then
+    echo " - [done]"
+    notif "status: Enabled"
+    log_msg 1 "Enabled XtremeBS"
+  fi
 }
 
 disable_pwr_save() {
-  echo -n "Disabling XtremeBS"
-  notif "Disabling XtremeBS..."
+  if [ "$version" != "2" ]; then
+    echo -n "Disabling XtremeBS"
+    notif "Disabling XtremeBS..."
+    log_msg 1 "Disabling XtremeBS"
+  fi
   # Handle Cores
-  if [ "$handle_cores" != "false" ]; then
+
+  if [ "$handle_cores" != "false" ] || [ "$disable_cores" != "false" ]; then
     if [ -d "/data/adb/modules" ]; then
+      # magisk mount read-write
       magic_remount_rw &>/dev/null
     fi
-    for cpu in ${hp_cpus[@]}; do
-      echo "1" > "$cpu_base_path/$cpu/online"
-    done
-    for index in ${!lp_cpus[@]}; do
-      echo "${lp_govs[$index]}" > "$cpu_base_path/${lp_cpus[$index]}/cpufreq/scaling_governor"
-    done
+    if [ "$disable_cores" = "auto" ]; then
+      for cpu in ${hp_cpus[@]}; do
+        log_msg 3 "Enabling $cpu"
+        echo "1" > "$cpu_base_path/$cpu/online"
+      done
+    else
+      # the user manually set it
+      for cpu in $disable_cores; do
+        if [ -d "$cpu_base_path/$cpu/" ]; then
+          log_msg 3 "Enabling $cpu"
+          echo "1" > "$cpu_base_path/$cpu/online"
+        fi
+      done
+    fi
+    if [ "$handle_cores" = "auto" ]; then
+      for index in ${!lp_cpus[@]}; do
+        # TBH, i have no fucking clue
+        # what i did here but its
+        # magical and it works
+        # so, i will just leave it.
+        log_msg 3 "Resetting ${lp_cpus[$index]}"
+        echo "${lp_govs[$index]}" > "$cpu_base_path/${lp_cpus[$index]}/cpufreq/scaling_governor"
+      done
+    else
+      # the user manually set it
+      for cpu in $handle_cores; do
+        if [ -d "$cpu_base_path/$cpu/" ]; then
+          log_msg 3 "Resetting $cpu"
+          echo "${lp_default_govs[$cpu]}" > "$cpu_base_path/$cpu/cpufreq/scaling_governor"
+        fi
+      done
+    fi
     if [ -d "/data/adb/modules" ]; then
+      # magisk mount read-only
       magic_remount_ro &>/dev/null
+    fi
+  fi
+
+  # Handle Doze
+  if [ "$doze" != "false" ]; then
+    log_msg 3 "Disabling Doze mode"
+    dumpsys deviceidle unforce &>/dev/null
+  fi
+
+  # Handle WiFi
+  if [ "$kill_wifi" = "true" ]; then
+    log_msg 3 "Enabling WiFi"
+    busybox="$(find /data/adb/ -type f -name busybox)"
+    if [ -f "$busybox" ]; then
+      $busybox rfkill unblock wifi
+    else
+      log_msg 3 "Where is your busybox? WTF happened?"
     fi
   fi
 
@@ -136,9 +438,11 @@ disable_pwr_save() {
       fi
       if [ "$handle_apps" = "nice" ]; then
         for i in $(pgrep "$app"); do
+          log_msg 3 "Resetting the nice level for $app"
           renice -n 0 "$i" &>/dev/null &
         done
       else
+        log_msg 3 "Unsuspending $app"
         pm unsuspend "$app" &>/dev/null &
       fi
     done
@@ -146,162 +450,359 @@ disable_pwr_save() {
 
   # Handle GMS
   if [ "$handle_gms" = "nice" ]; then
+    log_msg 3 "Resetting the nice level for GMS"
     renice -n 0 "$(pgrep com.google.android.gms)"
   elif [ "$handle_gms" = "kill" ]; then
+    log_msg 3 "Enabling GMS"
     pm enable com.google.android.gms
   else
     : # Do nothing
   fi
   # Handle Processes
   if [ "$handle_proc" = "true" ]; then
-    while read proc; do
+    while read proc nice; do
+      log_msg 3 "Resetting the nice level for $proc"
       renice -n 0 "$(pgrep $proc)"
     done < "$proc_file"
   fi
   # Low RAM
   if [ "$low_ram" = "true" ]; then
+    log_msg 3 "Setting low_ram to false"
     resetprop -n ro.config.low_ram false
   fi
 
-  lock="0"
-  echo " - [done]"
-  notif "status: Disabled"
+  if [ "$version" != "2" ]; then
+    lock="0"
+    echo " - [done]"
+    notif "status: Disabled"
+    log_msg 1 "Disabled XtremeBS"
+  fi
 }
 
+# Event stuff for V2
 
-read_config() {
-  # unset arrays
-  unset cpus
-  unset lp_cpus
-  unset hp_cpus
-  unset lp_govs
-  unset cpu_freqs
+lock_unlock_event() {
+  event="$1"
+  flag="$2"
 
-  # Read config
-  # delay in seconds
-  delay=$(get_config "delay")
-  delay="${delay:-3}"
+  # i want this function gone
+  # it is complex to understand and
+  # we can use user_events array
+  # but i want user_events renamed to
+  # active_events for clarity
+  # check how safe mode does this to
+  # get an idea of how easy it is.
+  # a plan for v2.1.0
+  # some code for that
+  # please finish it
+#  for event in ${!active_events[@]}; do
+#    if [ "${active_events[$event]}" = "low_power" ]; then
+#      return 1
+#    fi
+#  done
 
-  # trigger
-  # auto|boot # <integer>
-  trigger=$(get_config "trigger")
-  [ -z "$trigger" ] && exit
+  # This function checks to see if we are
+  # trying to lock or unlock a locked or unlocked event
+  # if the flag is already set, its a no-no.
+  case $event in
+    low_power)
+      if [ "$low_power_lock" != "$flag" ]; then
+        low_power_lock="$flag"
+      else
+        return 1
+      fi ;;
+    screen_off)
+      if [ "$screen_off_lock" != "$flag" ]; then
+        screen_off_lock="$flag"
+      else
+        return 1
+      fi ;;
+    charging)
+      if [ "$charging_lock" != "$flag" ]; then
+        charging_lock="$flag"
+      else
+        return 1
+      fi ;;
+    # if else, we can check somewhere else
+  esac
+  return 0
+}
 
-  # Keep state on charge
-  # true|false
-  keep_on_charge=$(get_config "keep_on_charge")
-  keep_on_charge="${keep_on_charge:-true}"
+handle_event() {
+  event="$1"
+  flag="$2"
 
-  # handle_apps
-  # false|kill|nice|suspend
-  handle_apps=$(get_config "handle_apps")
-  handle_apps="${handle_apps:-false}"
+  if [ "$flag" = 1 ]; then # we are trying to enable
+    # check to see if its unlocked
+    lock_unlock_event "$event" "$flag"
+    if [ $? != 0 ]; then
+      # if the event was locked(enabled),
+      # we tried to enable it again
+      log_msg 2 "$event was triggered but it is currently enabled"
+      return 1
+    fi
+  fi
 
-  # allowlist (user apps)
-  # a path /data/local/tmp/XtremeBS/apps.allow
-  allowlist=$(get_config "allowlist")
-  allowlist="${allowlist:-/data/local/tmp/XtremeBS/apps.allow}"
+  # set everything to false
+  quit=false
+  handle_cores=false
+  disable_cores=false
+  handle_apps=false
+  allowlist=null
+  denylist=null
+  handle_proc=false
+  proc_file=null
+  handle_gms=false
+  low_ram=false
+  doze=false
+  kill_wifi=false
 
-  # sanity check. Not allow user to suspend
-  # everything without an allowlist. Will make
-  # all apps unusable. Set handle_apps=false
-  # and notify user
-  [ ! -s "$allowlist" ] && [ "$handle_apps" = "suspend" ] && handle_apps="false" && notif "Alert!\nYou MUST have an allowlist!\nWill not suspend apps without one!"
+  log_msg 3 "Parsing the config for $event event"
 
-  # denylist (system apps)
-  # a path /data/local/tmp/XtremeBS/apps.deny
-  denylist=$(get_config "denylist")
-  denylist="${denylist:-/data/local/tmp/XtremeBS/apps.deny}"
+  # parse config of event
+  line=''
+  while read line; do
+    [ "$line" = "$event={" ] && continue
+    [ "$line" = "}" ] && break
+    key=$(echo "$line" | cut -d= -f1)
+    val=$(echo "$line" | cut -d= -f2-)
+    case $key in
+      keep_on_charge)
+        if [ "$val" = "true" ] && \
+        [ "$flag" = "0" ] && \
+        [ "$event" != "charging" ] && \
+        [ "$charging" = "true" ]; then
+          log_msg 1 "$event has keep_on_charge set. We are keeping the settings until unplugged"
+          return 0
+        fi ;;
+      quit)
+        if [ "$val" = "true" ] && \
+        [ "$event" = "boot" ]; then
+          quit=true
+        fi ;;
+      handle_cores)
+        if [ "$val" != "false" ]; then
+          handle_cores="$val"
+        fi ;;
+      disable_cores)
+        if [ "$val" != "false" ]; then
+          disable_cores="$val"
+        fi ;;
+      handle_apps)
+        if [ "$val" != "false" ]; then
+          handle_apps="$val"
+        fi ;;
+      allowlist)
+        if [ -f "$val" ]; then
+          allowlist="$val"
+        fi ;;
+      denylist)
+        if [ -f "$val" ]; then
+          denylist="$val"
+        fi ;;
+      handle_proc)
+        if [ "$val" != "false" ]; then
+          handle_proc="$val"
+        fi ;;
+      proc_file)
+        if [ -f "$val" ]; then
+          proc_file="$val"
+        fi ;;
+      handle_gms)
+        if [ "$val" != "false" ]; then
+          handle_gms="$val"
+        fi ;;
+      low_ram)
+        if [ "$val" = "true" ]; then
+          low_ram="true"
+        fi ;;
+      doze)
+        if [ "$val" != "false" ]; then
+          doze="$val"
+        fi ;;
+      kill_wifi)
+        if [ "$val" = "true" ]; then
+          kill_wifi="true"
+        fi;;
+    esac
+  done < <(grep -A99 "$event={" "$conf")
 
-  # handle_cores
-  # auto|false|"cpu4 cpu5"
-  handle_cores=$(get_config "handle_cores")
-  handle_cores="${handle_cores:-false}"
+  # perform sanity checks to prevent the user from killing themself
+  if [ "$handle_apps" != "false" ] && [ "$allowlist" = "null" ]; then
+    handle_apps=false
+  fi
+  if [ "$handle_proc" != "false" ] && [ "$proc_file" = "null" ]; then
+    handle_proc="false"
+  fi
 
-  # disable_cores
-  # false|auto|"cpu6 cpu7"
-  disable_cores=$(get_config "disable_cores")
-  disable_cores="${disable_cores:-false}"
+  # perform action using the old way
+  # instead of a massive refactor which
+  # is probably coming in a later update
+  if [ "$flag" = 0 ]; then
+    log_msg 1 "Undoing actions for $event"
+    disable_pwr_save
+    # unlock event lock
+    lock_unlock_event "$event" "$flag"
+    log_msg 1 "Actions for $event undone"
+  else
+    log_msg 1 "Performing actions for $event event"
+    enable_pwr_save
+    log_msg 1 "Actions for $event completed"
+    if [ "$event" = "boot" ] && \
+    [ "$quit" = "true" ]; then
+      log_msg 1 "Boot event has the quit option set. Killing the daemon."
+      exit 0
+    fi
+  fi
+  active_events="boot "
+  if [ "$charging_lock" = 1 ]; then
+    active_events+="charging "
+  fi
+  if [ "$screen_off_lock" = 1 ]; then
+    active_events+="screen_off "
+  fi
+  if [ "$low_power_lock" = 1 ]; then
+    active_events+="low_power "
+  fi
+  for i in ${user_events[@]}; do
+    active_events+="$i"
+  done
+  notif "Active Events: $active_events"
+}
 
-  # handle_gms
-  # false|kill|nice
-  handle_gms=$(get_config "handle_gms")
-  handle_gms="${handle_gms:-false}"
+init_v2() {
 
-  # handle_proc
-  # true|false
-  handle_proc=$(get_config "handle_proc")
-  handle_proc="${handle_proc:-false}"
+handle_event boot 1
 
-  # proc_file
-  # a path /data/local/tmp/XtremeBS/proc.list
-  proc_file=$(get_config "proc_file")
-  [ ! -s "$proc_file" ] && handle_proc="false"
+while true; do
 
-  # set low_ram
-  # true|false
-  low_ram=$(get_config "low_ram")
-  low_ram="${low_ram:-false}"
+  # Check for command
+  cmd="$(cat $ctl_file)"
+  cmd_event=$(echo "$cmd" | cut -d' ' -f2)
+  cmd=$(echo "$cmd" | cut -d' ' -f1)
+  echo > "$ctl_file"
+  case $cmd in
+    reload)
+      # reload is for top level config opts
+      log_msg 2 "The reload command was received but v2 is dynamic"
+      ;;
+    start)
+      if [ "$cmd_event" = "" ]; then
+        log_msg 1 "The start command was received. Starting manual event"
+        handle_event manual 1
+      else
+        log_msg 1 "The start command was received. Attempting to start $cmd_event"
+        user_events+=( "$cmd_event" )
+        handle_event "$cmd_event" 1
+      fi
+      ;;
+    stop)
+      if [ "$cmd_event" = "" ]; then
+        log_msg 1 "The stop command was received. Stopping manual event"
+        handle_event manual 0
+      else
+        log_msg 1 "The stop command was received. Attempting to start $cmd_event"
+        for event in ${!user_events[@]}; do
+          if [ "${user_events[$event]}" = "$cmd_event" ]; then
+            handle_event "${user_events[$event]}" 0
+            unset "${user_events[$event]}"
+          fi
+        done
+      fi
+      ;;
+    pause)
+      until [ "$resume" = "resume" ]; do
+        sleep "$delay"
+        resume="$(cat $ctl_file)"
+      done ;;
+    safe)
+      log_msg 1 "Entered Safe Mode"
+      # check locks here. if is 1, undo.
+      if [ "$charging_lock" = 1 ]; then
+        handle_event charging 0
+      fi
+      if [ "$screen_off_lock" = 1 ]; then
+        handle_event screen_off 0
+      fi
+      if [ "$low_power_lock" = 1 ]; then
+        handle_event low_power 0
+      fi
+      for event in ${!user_events[@]}; do
+        handle_event "${user_events[$event]}" 0
+        unset "${user_events[$event]}"
+      done
+      handle_event boot 0
+      # i think this will work.
+      # not tested due to lazyness
+      for pkg in $(pm list packages | cut -d: -f2-); do
+        pm unsuspend "$pkg"
+      done
+      notif "Safe Mode is Active"
+      until [ "$ready" = "resume" ]; do
+        ready="$(cat $ctl_file)"
+      done && handle_event boot 1
+      log_msg 1 "Resume command received. Safe Mode Exited."
+      ;;
+    *)
+      :
+      ;;
+  esac
 
-  # Handle Disable Cores
-  if [ "$disable_cores" = "false" ]; then
-    : # Do nothing
-  elif [ "$disable_cores" = "auto" ]; then
-    # Handle Auto
-    declare -a cpus
-    declare -a cpu_freqs
-    for cpu in $(ls "$cpu_base_path/" | grep cpu[00-99]); do
-      cpus+=( "$cpu" )
-      cpu_freqs+=( "$(cat $cpu_base_path/$cpu/cpufreq/cpuinfo_max_freq)" )
-    done
-    for high_freq in $(echo "${cpu_freqs[@]}" | tr ' ' '\n' | uniq -u); do
-      for index in "${!cpu_freqs[@]}"; do
-        if [ "${cpu_freqs[$index]}" = "$high_freq" ]; then
-          hp_cpus+=( "${cpus[$index]}" )
+  # check charging state
+  charging=$(is_device charging)
+  if [ "$was_charging" != "" ]; then
+    if [ "$charging" != "$was_charging" ]; then
+      log_msg 2 "Charging event was triggered"
+      if [ "$charging" = "true" ]; then
+        if [ "$charging_lock" = 0 ]; then
+          handle_event charging 1
         fi
-      done
-    done
-  else
-    # Handle Manual
-    for core in $disable_cores; do
-      [ -d "$cpu_base_path/$core" ] && hp_cpus+=( "$core" )
-    done
-  fi
-
-  # Handle powersave on cores
-  if [ "$handle_cores" = "false" ]; then
-    : # Do nothing
-  elif [ "$handle_cores" = "auto" ]; then
-    # Handle Auto
-    for core in $(ls "$cpu_base_path/" | grep cpu[00-99]); do
-      match="false"
-      for hp_core in ${hp_cpus[@]}; do
-        [ "$core" = "$hp_core" ] && match="true"
-      done
-      if [ "$match" = "false" ] && grep -q " powersave " "$cpu_base_path/$core/cpufreq/scaling_available_governors"; then
-        lp_govs+=( "$(cat $cpu_base_path/$core/cpufreq/scaling_governor)" )
-        lp_cpus+=( "$core" )
+      else
+        handle_event charging 0
       fi
-    done
-  else
-    # Handle Manual
-    for core in $handle_cores; do
-      if [ -d "$cpu_base_path/$core" ] && grep -q " powersave " "$cpu_base_path/$core/cpufreq/scaling_available_governors"; then
-        lp_govs+=( "$(cat $cpu_base_path/$core/cpufreq/scaling_governor)" )
-        lp_cpus+=( "$core" )
-      fi
-    done
+    fi
   fi
+  was_charging="$charging"
 
-  # May need this later
-#  percent="$(dumpsys battery | grep level | cut -d' ' -f4)"
+  # check low_power state
+  low_power=$(is_device low_power)
+  if [ "$was_low_power" != "" ]; then
+    if [ "$low_power" != "$was_low_power" ]; then
+      log_msg 2 "Low Power event was triggered"
+      if [ "$low_power" = "true" ]; then
+        if [ "$low_power_lock" = 0 ]; then
+          handle_event low_power 1
+        fi
+      else
+        handle_event low_power 0
+      fi
+    fi
+  fi
+  was_low_power="$low_power"
 
-  notif "Config Loaded"
+  # check screen change
+  screen_on=$(is_device screen)
+  if [ "$was_screen_on" != "" ]; then
+    if [ "$screen_on" != "$was_screen_on" ]; then
+      log_msg 2 "Screen change was detected"
+      # here we invert because we only want to
+      # do something if the screen is off
+      if [ "$screen_on" = "false" ]; then
+        if [ "$screen_off_lock" = 0 ]; then
+          handle_event screen_off 1
+        fi
+      else
+        handle_event screen_off 0
+      fi
+    fi
+  fi
+  was_screen_on="$screen_on"
 
+  sleep "$delay"
+done
 }
 
-init() {
-  ctl_file="/data/local/tmp/xbs"
+init_v1() {
   read_config
   while true; do
     # Check for command
@@ -309,53 +810,80 @@ init() {
       echo > "$ctl_file"
       case $cmd in
         reload)
+          log_msg 1 "Reload command received"
           if [ "$lock" = "0" ]; then
             read_config
           else
             disable_pwr_save
             read_config
             enable_pwr_save
-          fi ;;
+          fi
+          log_msg 1 "Config reloaded"
+          ;;
         stop)
-        if [ "$lock" = "1" ]; then
-          if [ "$trigger" != "manual" ]; then
-            if [ "$tr_changed" = "true" ]; then
-              trigger="$old_trigger"
-              tr_changed="false"
-            else
-              old_trigger="$trigger"
-              trigger="manual"
-              tr_changed="true"
+          log_msg 1 "Stop command received"
+          if [ "$lock" = "1" ]; then
+            if [ "$trigger" != "manual" ]; then
+              if [ "$tr_changed" = "true" ]; then
+                trigger="$old_trigger"
+                tr_changed="false"
+              else
+                old_trigger="$trigger"
+                trigger="manual"
+                tr_changed="true"
+              fi
             fi
+            disable_pwr_save
           fi
-          disable_pwr_save
-        fi ;;
+          log_msg 1 "Stopped XtremeBS"
+          ;;
         start)
-        if [ "$lock" = "0" ]; then
-          if [ "$trigger" != "manual" ]; then
-            if [ "$tr_changed" = "true" ]; then
-              trigger="$old_trigger"
-              tr_changed="false"
-            else
-              old_trigger="$trigger"
-              trigger="manual"
-              tr_changed="true"
+          log_msg 1 "Start command received"
+          if [ "$lock" = "0" ]; then
+            if [ "$trigger" != "manual" ]; then
+              if [ "$tr_changed" = "true" ]; then
+                trigger="$old_trigger"
+                tr_changed="false"
+              else
+                old_trigger="$trigger"
+                trigger="manual"
+                tr_changed="true"
+              fi
             fi
+            enable_pwr_save
           fi
-          enable_pwr_save
-        fi ;;
+          log_msg 1 "Started XtremeBS"
+          ;;
         pause)
+          log_msg 1 "Pause command received"
           until [ "$resume" = "resume" ]; do
             sleep "$delay"
             resume="$(cat $ctl_file)"
-          done ;;
+          done
+          log_msg 1 "Resume command received"
+          ;;
         safe)
+          log_msg 1 "Entering Safe Mode"
           disable_pwr_save
+          # enhance safemode here
+          # unsuspend all apps here
+          # in the event every app
+          # got suspended
+          #
+          # i think this will work.
+          # not tested due to lazyness
+          for pkg in $(pm list packages | cut -d: -f2-); do
+            pm unsuspend "$pkg"
+          done
           notif "Safe Mode is Active"
           until [ "$ready" = "resume" ]; do
             ready="$(cat $ctl_file)"
-          done && read_config ;;
-        *) : ;;
+          done && read_config
+          log_msg 1 "Resume command received. Safe Mode Exited. Config Reloaded"
+          ;;
+        *)
+          :
+          ;;
       esac
 
     # Check for trigger
@@ -379,17 +907,29 @@ init() {
     # Wait
     sleep "$delay"
   done
+
 }
 
 # START
 
+# setup config (v1 is default... for now...)
+
 [ ! -d /data/local/tmp/XtremeBS/ ] && mkdir /data/local/tmp/XtremeBS/
 
-if [ ! -s "$config_file" ]; then
-  cat << EOF > "$config_file"
+if [ ! -s "$conf" ]; then
+  cat << EOF > "$conf"
 # trigger
 # auto|boot|manual
 trigger=auto
+
+# this will make version 2 the default (Mwahahahahaha)
+version=2
+
+# log file
+log_file=/sdcard/XtremeBS.log
+
+# log level
+log_level=1
 
 # delay
 # time in seconds
@@ -410,7 +950,7 @@ disable_cores=false
 
 # handle_apps
 # false|kill|nice|suspend
-handle_apps=nice
+handle_apps=false
 
 # allowlist (user apps)
 # a path /data/local/tmp/XtremeBS/apps.allow
@@ -422,7 +962,7 @@ denylist=/data/local/tmp/XtremeBS/apps.deny
 
 # handle_gms
 # false|kill|nice
-handle_gms=nice
+handle_gms=false
 
 # handle_proc
 # true|false
@@ -436,36 +976,52 @@ proc_file=/data/local/tmp/XtremeBS/proc.list
 # true|false
 low_ram=false
 
+# doze
+# false|light|deep
+doze=false
+
+#kill_wifi
+# true|false
+kill_wifi=false
+
 EOF
 
 fi
 
-lock="0" # fix all the checks
-tr_changed="false"
-# battery prediction has a bug
-# that i dont want to fix rn
-# it is not needed for the module
-# to operate normally.
-# The bug is a negative number
-# when device has charged since
-# last poll. v3 will need it for
-# the auto config smart feature
-# If you saw this, you didnt see
-# this. v3 is a concept. It may
-# never reach production.
-# However, if you are interested,
-# and want to help v3 come to light
-# feel free to pm me on reddit so
-# we can collab. Just keep it hush-
-# hush. i dont want anyone to think
-# that its actually in the works.
-#battery_prediction &
+# check for migration
+version="$(getconf version 1)" # if version is not set, it is 1
+# check for a user wanting to switch to v2
+if [ "$(grep ".*={" "$conf" | head -n 1)" == "" ] && [ "$version" = "2" ]; then
+  migrate
+fi
 
-# figure out if v1 or v2
-cfg_ver=$(get_config "version")
-if [ "$cfg_ver" = "2" ]; then
+# setup logging
+log_file=$(getconf log_file "/sdcard/XtremeBS.log")
+log_level=$(getconf log_level 3) # set debug by default
+
+# set ctl_file
+ctl_file=$(getconf ctl_file "/data/local/tmp/xbs")
+
+delay=$(getconf delay 3)
+
+# auto map cores in case we need them
+auto_map_cores
+
+# check version and init
+if [ "$version" = 2 ]; then
+  # set locks lol
+  low_power_lock=0
+  charging_lock=0
+  screen_off_lock=0
+  log_msg 1 "Starting XtremeBS"
   init_v2
 else
-  init # default to 1
-  # cuz v2 is opt-in only
+  log_msg 1 "Starting XtremeBS in compatibility mode"
+  log_msg 1 "You should consider migrating to v2 of the config"
+  log_msg 1 "You can migrate by putting version=2 in your config"
+
+  lock="0" # fix all the checks v1
+  tr_changed="false" # v1 trigger changed
+
+  init_v1
 fi
