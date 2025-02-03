@@ -12,6 +12,12 @@ You should probably start slow and activate 1 at a time with a little testing.
 
 Everything has been built and tested on a Pixel 5 running ProtonAOSP.
 
+# Supported Root Managers
+- Magisk
+- KernelSU Next (Thank you NanKill)
+
+Probably KSU and APatch. I would love confirmation on these.
+
 # Disclaimer
 I am NOT responsible for any damages or data loss this software may cause. By using this software you accept the risks of using it.
 
