@@ -1,6 +1,6 @@
-
+#!/system/bin/bash
 conf="/data/local/tmp/XtremeBS/XtremeBS.conf"
-declare -a user_events
+declare -a active_events
 declare -a cpus
 declare -a cpu_freqs
 declare -a hp_cpus
@@ -140,7 +140,11 @@ auto_map_cores() {
       fi
     done
   done
-  log_msg 3 "High power cores: ${hp_cpus[@]}"
+  for i in ${!hp_cpus[@]}; do
+    tmp_var+="${hp_cpus[$i]} "
+  done
+  log_msg 3 "High power cores: $tmp_var"
+  unset tmp_var
   # Low Power Cores
   for core in $(ls "$cpu_base_path/" | grep cpu[00-99]); do
     match="false"
@@ -153,7 +157,65 @@ auto_map_cores() {
       lp_cpus+=( "$core" )
     fi
   done
-  log_msg 3 "Low power cores: ${lp_cpus[@]}"
+    for i in ${!lp_cpus[@]}; do
+    tmp_var+="${lp_cpus[$i]} "
+  done
+  log_msg 3 "Low power cores: $tmp_var"
+  unset tmp_var
+}
+
+
+update_status() {
+  status_file="/data/local/tmp/XtremeBS/XtremeBS.status"
+  echo -n > "$status_file"
+  # CPU Map
+  for i in ${!cpus[@]}; do
+    core="${cpus[$i]}"
+    core_list+=( "$core" )
+    #is it in powersave
+    core="${core_list[$i]}"
+    if [ "$(cat $cpu_base_path/$core/cpufreq/scaling_governor)" = "powersave" ]; then
+      tmp_var="powersave"
+    fi
+    # is it disabled
+    if [ "$(cat $cpu_base_path/$core/online)" = "0" ]; then
+      tmp_var="offline"
+    fi
+    core_status+=( "${tmp_var:-online}" )
+    unset tmp_var
+  done
+
+  # wifi
+  busybox="$(find /data/adb/ -type f -name busybox)"
+  if [ -f "$busybox" ]; then
+    wifi=$($busybox rfkill list wifi | grep "Soft" | cut -d' ' -f3)
+    if [ "$wifi" = "yes" ]; then
+      wifi="disabled"
+    else
+      wifi="enabled"
+    fi
+  else
+    log_msg 3 "Looks like you dont have busybox! Are you rooted? What happened?"
+  fi
+
+  # Doze
+  light="$(dumpsys deviceidle get light)"
+  deep="$(dumpsys deviceidle get deep)"
+  if [ "$light" = "IDLE" ]; then
+    doze="light"
+  fi
+  if [ "$deep" = "IDLE" ]; then
+    doze="deep"
+  fi
+  doze="${doze:-inactive}"
+
+  for i in ${!core_list[@]}; do
+    echo "${core_list[$i]}: ${core_status[$i]}" >> "$status_file"
+  done
+  unset core_list core_status
+  echo "Low RAM: $(getprop ro.config.low_ram)" >> "$status_file"
+  echo "WiFi: $wifi" >> "$status_file"
+  echo "Doze: $doze" >> "$status_file"
 }
 
 # V1 read_config
@@ -360,6 +422,8 @@ enable_pwr_save() {
     notif "status: Enabled"
     log_msg 1 "Enabled XtremeBS"
   fi
+
+  update_status
 }
 
 disable_pwr_save() {
@@ -477,54 +541,19 @@ disable_pwr_save() {
     notif "status: Disabled"
     log_msg 1 "Disabled XtremeBS"
   fi
+
+  update_status
 }
 
 # Event stuff for V2
 
-lock_unlock_event() {
+is_event_locked() {
   event="$1"
-  flag="$2"
-
-  # i want this function gone
-  # it is complex to understand and
-  # we can use user_events array
-  # but i want user_events renamed to
-  # active_events for clarity
-  # check how safe mode does this to
-  # get an idea of how easy it is.
-  # a plan for v2.1.0
-  # some code for that
-  # please finish it
-#  for event in ${!active_events[@]}; do
-#    if [ "${active_events[$event]}" = "low_power" ]; then
-#      return 1
-#    fi
-#  done
-
-  # This function checks to see if we are
-  # trying to lock or unlock a locked or unlocked event
-  # if the flag is already set, its a no-no.
-  case $event in
-    low_power)
-      if [ "$low_power_lock" != "$flag" ]; then
-        low_power_lock="$flag"
-      else
-        return 1
-      fi ;;
-    screen_off)
-      if [ "$screen_off_lock" != "$flag" ]; then
-        screen_off_lock="$flag"
-      else
-        return 1
-      fi ;;
-    charging)
-      if [ "$charging_lock" != "$flag" ]; then
-        charging_lock="$flag"
-      else
-        return 1
-      fi ;;
-    # if else, we can check somewhere else
-  esac
+  for i in ${!active_events[@]}; do
+    if [ "${active_events[$i]}" = "$event" ]; then
+      return 1
+    fi
+  done
   return 0
 }
 
@@ -534,12 +563,15 @@ handle_event() {
 
   if [ "$flag" = 1 ]; then # we are trying to enable
     # check to see if its unlocked
-    lock_unlock_event "$event" "$flag"
+    is_event_locked "$event"
     if [ $? != 0 ]; then
-      # if the event was locked(enabled),
-      # we tried to enable it again
+      # we tried to enable an already active event
       log_msg 2 "$event was triggered but it is currently enabled"
+      # return early
       return 1
+    else
+      # lock the event
+      active_events+=( "$event" )
     fi
   fi
 
@@ -641,8 +673,12 @@ handle_event() {
   if [ "$flag" = 0 ]; then
     log_msg 1 "Undoing actions for $event"
     disable_pwr_save
-    # unlock event lock
-    lock_unlock_event "$event" "$flag"
+    # remove from active_events
+    for i in ${!active_events[@]}; do
+      if [ "${active_events[$i]}" = "$event" ]; then
+        unset "active_events[$i]"
+      fi
+    done
     log_msg 1 "Actions for $event undone"
   else
     log_msg 1 "Performing actions for $event event"
@@ -654,20 +690,14 @@ handle_event() {
       exit 0
     fi
   fi
-  active_events="boot "
-  if [ "$charging_lock" = 1 ]; then
-    active_events+="charging "
-  fi
-  if [ "$screen_off_lock" = 1 ]; then
-    active_events+="screen_off "
-  fi
-  if [ "$low_power_lock" = 1 ]; then
-    active_events+="low_power "
-  fi
-  for i in ${user_events[@]}; do
-    active_events+="$i"
+
+  # build the active events notification
+  for i in ${!active_events[@]}; do
+    active_notif+="${active_events[$i]} "
   done
-  notif "Active Events: $active_events"
+
+  notif "Active Events: $active_notif"
+  unset active_notif
 }
 
 init_v2() {
@@ -684,7 +714,11 @@ while true; do
   case $cmd in
     reload)
       # reload is for top level config opts
-      log_msg 2 "The reload command was received but v2 is dynamic"
+      for i in ${!active_events[@]}; do
+        handle_event "${active_events[$i]}" 0
+      done
+      log_msg 2 "Reloading the config"
+      exec "$0"
       ;;
     start)
       if [ "$cmd_event" = "" ]; then
@@ -692,7 +726,6 @@ while true; do
         handle_event manual 1
       else
         log_msg 1 "The start command was received. Attempting to start $cmd_event"
-        user_events+=( "$cmd_event" )
         handle_event "$cmd_event" 1
       fi
       ;;
@@ -702,10 +735,9 @@ while true; do
         handle_event manual 0
       else
         log_msg 1 "The stop command was received. Attempting to start $cmd_event"
-        for event in ${!user_events[@]}; do
-          if [ "${user_events[$event]}" = "$cmd_event" ]; then
-            handle_event "${user_events[$event]}" 0
-            unset "${user_events[$event]}"
+        for i in ${!active_events[@]}; do
+          if [ "${active_events[$i]}" = "$cmd_event" ]; then
+            handle_event "${active_events[$i]}" 0
           fi
         done
       fi
@@ -717,31 +749,20 @@ while true; do
       done ;;
     safe)
       log_msg 1 "Entered Safe Mode"
-      # check locks here. if is 1, undo.
-      if [ "$charging_lock" = 1 ]; then
-        handle_event charging 0
-      fi
-      if [ "$screen_off_lock" = 1 ]; then
-        handle_event screen_off 0
-      fi
-      if [ "$low_power_lock" = 1 ]; then
-        handle_event low_power 0
-      fi
-      for event in ${!user_events[@]}; do
-        handle_event "${user_events[$event]}" 0
-        unset "${user_events[$event]}"
+      echo "safemode=1" >> "$conf"
+      for i in ${!active_events[@]}; do
+        handle_event "${active_events[$i]}" 0
       done
-      handle_event boot 0
-      # i think this will work.
-      # not tested due to lazyness
       for pkg in $(pm list packages | cut -d: -f2-); do
         pm unsuspend "$pkg"
       done
       notif "Safe Mode is Active"
       until [ "$ready" = "resume" ]; do
         ready="$(cat $ctl_file)"
-      done && handle_event boot 1
+      done
       log_msg 1 "Resume command received. Safe Mode Exited."
+      sed -i '/safemode=1/d' "$conf"
+      exec "$0"
       ;;
     *)
       :
@@ -754,9 +775,7 @@ while true; do
     if [ "$charging" != "$was_charging" ]; then
       log_msg 2 "Charging event was triggered"
       if [ "$charging" = "true" ]; then
-        if [ "$charging_lock" = 0 ]; then
-          handle_event charging 1
-        fi
+        handle_event charging 1
       else
         handle_event charging 0
       fi
@@ -770,9 +789,7 @@ while true; do
     if [ "$low_power" != "$was_low_power" ]; then
       log_msg 2 "Low Power event was triggered"
       if [ "$low_power" = "true" ]; then
-        if [ "$low_power_lock" = 0 ]; then
-          handle_event low_power 1
-        fi
+        handle_event low_power 1
       else
         handle_event low_power 0
       fi
@@ -788,9 +805,7 @@ while true; do
       # here we invert because we only want to
       # do something if the screen is off
       if [ "$screen_on" = "false" ]; then
-        if [ "$screen_off_lock" = 0 ]; then
-          handle_event screen_off 1
-        fi
+        handle_event screen_off 1
       else
         handle_event screen_off 0
       fi
@@ -863,6 +878,7 @@ init_v1() {
           log_msg 1 "Resume command received"
           ;;
         safe)
+          echo "safemode=1" >> "$conf"
           log_msg 1 "Entering Safe Mode"
           disable_pwr_save
           # enhance safemode here
@@ -878,8 +894,10 @@ init_v1() {
           notif "Safe Mode is Active"
           until [ "$ready" = "resume" ]; do
             ready="$(cat $ctl_file)"
-          done && read_config
-          log_msg 1 "Resume command received. Safe Mode Exited. Config Reloaded"
+          done
+          sed -i '/safemode=1/d' "$conf"
+          log_msg 1 "Resume command received. Safe Mode Exited. Restarting Daemon."
+          exec "$0"
           ;;
         *)
           :
@@ -999,8 +1017,25 @@ fi
 log_file=$(getconf log_file "/sdcard/XtremeBS.log")
 log_level=$(getconf log_level 3) # set debug by default
 
+# this fixes the infinite growth issue
+[ -f "$log_file" ] && mv "$log_file" "$log_file.old"
+
 # set ctl_file
 ctl_file=$(getconf ctl_file "/data/local/tmp/xbs")
+
+# persistent safe mode
+safe=$(getconf safemode 0)
+if [ "$safe" = "1" ]; then
+  log_msg 1 "Safemode was found in the config file, Entering safemode."
+  notif "Safe Mode is Active"
+  until [ "$resume" = "resume" ] || [ $(getconf safemode 0) = "0" ]; do
+    resume=$(cat "$ctl_file")
+  done
+  sed -i '/safemode=1/d' "$conf"
+  sed -i '/safemode=0/d' "$conf"
+  log_msg 1 "Safemode was exited. Restarting the daemon."
+  exec "$0"
+fi
 
 delay=$(getconf delay 3)
 
@@ -1009,10 +1044,6 @@ auto_map_cores
 
 # check version and init
 if [ "$version" = 2 ]; then
-  # set locks lol
-  low_power_lock=0
-  charging_lock=0
-  screen_off_lock=0
   log_msg 1 "Starting XtremeBS"
   init_v2
 else

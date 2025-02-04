@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>XtremeBS Status</title>
+  <title>XtremeBS Config Editor</title>
   <style>
     body { 
       background-color: #1a1a1a; 
@@ -45,17 +45,16 @@
     }
   </style>
 </head>
-<body onload="setInterval(loadFileOnLoad, 1000);">
+<body onload="loadFileOnLoad()">
 <!--  <h1>XtremeBS.conf</h1> -->
   <div id="editor-container">
-    <textarea readonly id="editor" wrap="soft"></textarea>
+    <textarea id="editor" wrap="soft"></textarea>
   </div>
-  <button onclick="location.href='/conf';">Config Editor</button>
-  <button onclick="location.href='/log';">Log Viewer</button>
-  
+  <button onclick="saveFile()">Save</button>
+
   <script>
     function loadFileOnLoad() {
-      fetch('/cgi-bin/status.cgi')
+      fetch('/cgi-bin/load.cgi')
         .then(response => response.text())
         .then(data => {
           document.getElementById('editor').value = data;
@@ -64,6 +63,31 @@
           console.error('Error loading the file:', error);
           alert('Could not load the file.');
         });
+    }
+
+    function saveFile() {
+      let content = document.getElementById('editor').value;
+      
+      fetch('/cgi-bin/save.cgi', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'text/plain'
+        },
+        body: content
+      })
+      .then(response => {
+        if (!response.ok) {
+          throw new Error('Network response was not ok');
+        }
+        return response.text();
+      })
+      .then(data => {
+        alert('File saved successfully.');
+      })
+      .catch(error => {
+        console.error('Error saving the file:', error);
+        alert('Failed to save the file.');
+      });
     }
   </script>
 </body>

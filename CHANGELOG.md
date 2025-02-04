@@ -1,4 +1,12 @@
 
+### v2.1.0
+  - Improved WebUI to show the status of a few things
+  - Improved WebUI to show the log amd allow copying to storage for easy bug reports
+  - Logging will no longer fill up your storage
+  - Improved reloading
+  - Safe Mode is persistent until its turned off. (also you can enter safe mode using `safemode=1` in your config)
+  - other minor improvements and bug fixes
+
 ### v2.0.0
   - Add event handling (different triggers, which makes the module dynamic)
   - Added support for custom events

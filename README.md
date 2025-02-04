@@ -50,39 +50,21 @@ The v1 config used a simple `key=value` format
 
 The v2 config, uses a different format.
 It replaces the `trigger` option with what i like to call "event blocks"
+There are a few hardcoded ones (boot, screen_off, charging, manual, low_power) all of the hardcoded ones except manual, hook into the OS and use those as triggers. Then you have user-defined events. The user-defined events are named anything else and are defined exactly like the hardcoded ones.
 they look like this:
 
-`low_power={`
 
-`handle_cores=false`
+    my_event={
+    #some config options here
+    }
 
-`low_ram=false`
 
-`disable_cores=cpu4 cpu5 cpu6 cpu7`
+NOTE: the `my_event={` and `}` have their own line. THIS IS VERY IMPORTANT
 
-`}`
-
-NOTE: the `low_power={` and `}` have their own line. THIS IS VERY IMPORTANT
-
-This change adds more dynamicism to XtremeBS, making it much more powerful,
+This change adds more dynamicism to XtremeBS, making it much more powerful
 and allows you to change the balance of perfomance and powersaving
 based on certain events. You may choose to stay on the v1 config if
-you dont need this type of functionality.
-
-As an added bonus, this creates the ability to use Tasker profiles and set your own triggers to handle custom events.
-To define a custom event, you can just write it into the config like so, naming it whatever you wish.
-
-`start_at_midnight={`
-
-`handle_cores=auto`
-
-`handle_apps=false`
-
-`disable_cores=false`
-
-`handle_proc=true`
-
-`}`
+you dont need this type of functionality, as it is backwards compatible.
 
 you may name it whatever you wish, as long as you only use alphanumeric characters, underscores, or dashes.
 No spaces
@@ -90,15 +72,51 @@ No $
 No =
 No { or }
 
-To enable or disable your custom event, you can just call it from a root shell, using XBSctl like so
-`XBSctl start start_at_midnight`
+Custom events are started using 
+
+    XBSctl start my_event
+
+And stopped using
+
+    XBSctl stop my_event
+
+The user-defined events are not called automatically by the daemon and are only known to the daemon if they are called like so. 
+
+In any of the event blocks, you can leave them blank and they do nothing.
+
+So if you wanted cpu cores 6 and 7 disabled during screen off and cpu cores 2-5 disabled on low_power, you can set those like so
+
+    screen_off={
+    disable_cores=cpu6 cpu7
+    }
+    low_power={
+    disable_cores=cpu2 cpu3 cpu4 cpu5
+    }
+
+Each will take effect when they are triggered by the daemon but if both low_power is active and the screen is off, then both take effect. Meaning cpu cores 2-7 are disabled.
+
+Now if you have defined cpu5 in each of those event blocks, then which ever event is called first, will disable cpu5 and whichever event deactivates first like the screen turning on, will re-enable cpu5.
+
+Low power is triggered when you turn on your devices battery saver.
+
+Screen off, charging, and boot are self explanitory.
+
+
+Manual is a special case, it is started using
+
+    XBSctl start
+
+And stopped using
+
+    XBSctl stop
+
+Without any options and is like a user defined event, its really only for those who dont need more than 1 custom event. However you can specify it using XBSctl like any other custom event and it does the same thing.
 
 Why events, DethByte64?
 What if i told you, that you could do certain things when your battery saver turned on and do a different thing when your screen turned off, or do other things when your device begins charging?
 Thats exactly what its for. Not to mention, you can use different allowlists with the `handle_apps` option per event, or literally any combination of config options per event.
 This allows for many more possibilities than just "on" or "off".
 
-Still too complex? Just think of events as profiles.
 
 ### trigger
 This option specifies when to trigger power saving and is only necessary when using the v1 config.
