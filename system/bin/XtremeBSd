@@ -186,28 +186,33 @@ update_status() {
   done
 
   # wifi
-  busybox="$(find /data/adb/ -type f -name busybox)"
-  if [ -f "$busybox" ]; then
-    wifi=$($busybox rfkill list wifi | grep "Soft" | cut -d' ' -f3)
-    if [ "$wifi" = "yes" ]; then
-      wifi="disabled"
-    else
-      wifi="enabled"
-    fi
+  if command -v rfkill; then
+    wifi=$(rfkill list wifi | grep "Soft" | cut -d' ' -f3)
+  elif command -v toybox; then
+    wifi=$(toybox rfkill list wifi | grep "Soft" | cut -d' ' -f3)
   else
-    log_msg 3 "Looks like you dont have busybox! Are you rooted? What happened?"
+    busybox="$(find /data/adb/ -type f -name busybox)"
+    if [ -f "$busybox" ]; then
+      wifi=$($busybox rfkill list wifi | grep "Soft" | cut -d' ' -f3)
+    fi
+  fi
+  if [ "$wifi" = "yes" ]; then
+    wifi="disabled"
+  else
+    wifi="enabled"
   fi
 
   # Doze
+  unset doze
   light="$(dumpsys deviceidle get light)"
   deep="$(dumpsys deviceidle get deep)"
   if [ "$light" = "IDLE" ]; then
     doze="light"
-  fi
-  if [ "$deep" = "IDLE" ]; then
+  elif [ "$deep" = "IDLE" ]; then
     doze="deep"
+  else
+    doze="inactive"
   fi
-  doze="${doze:-inactive}"
 
   for i in ${!core_list[@]}; do
     echo "${core_list[$i]}: ${core_status[$i]}" >> "$status_file"
@@ -216,6 +221,7 @@ update_status() {
   echo "Low RAM: $(getprop ro.config.low_ram)" >> "$status_file"
   echo "WiFi: $wifi" >> "$status_file"
   echo "Doze: $doze" >> "$status_file"
+  unset doze wifi
 }
 
 # V1 read_config
@@ -358,11 +364,17 @@ enable_pwr_save() {
   # Handle WiFi
   if [ "$kill_wifi" = "true" ]; then
     log_msg 3 "Disabling WiFi"
-    busybox="$(find /data/adb/ -type f -name busybox)"
-    if [ -f "$busybox" ]; then
-      $busybox rfkill block wifi
+    if command -v rfkill; then
+      rfkill block wifi
+    elif command -v toybox; then
+      toybox rfkill block wifi
     else
-      log_msg 3 "Looks like you dont have busybox! Are you rooted? What happened?"
+      busybox="$(find /data/adb/ -type f -name busybox)"
+      if [ -f "$busybox" ]; then
+        $busybox rfkill block wifi
+      else
+        log_msg 3 "I couldnt find a way to run rfkill. The kill_wifi option is useless."
+      fi
     fi
   fi
 
@@ -486,11 +498,17 @@ disable_pwr_save() {
   # Handle WiFi
   if [ "$kill_wifi" = "true" ]; then
     log_msg 3 "Enabling WiFi"
-    busybox="$(find /data/adb/ -type f -name busybox)"
-    if [ -f "$busybox" ]; then
-      $busybox rfkill unblock wifi
+    if command -v rfkill; then
+      rfkill unblock wifi
+    elif command -v toybox; then
+      toybox rfkill unblock wifi
     else
-      log_msg 3 "Where is your busybox? WTF happened?"
+      busybox="$(find /data/adb/ -type f -name busybox)"
+      if [ -f "$busybox" ]; then
+        $busybox rfkill unblock wifi
+      else
+        log_msg 3 "I couldnt find rfkill. The kill_wifi option is useless."
+      fi
     fi
   fi
 
@@ -660,7 +678,7 @@ handle_event() {
   done < <(grep -A99 "$event={" "$conf")
 
   # perform sanity checks to prevent the user from killing themself
-  if [ "$handle_apps" != "false" ] && [ "$allowlist" = "null" ]; then
+  if [ "$handle_apps" != "false" ] && [ "$allowlist" = "null" ] && [ "$denylist" = "null" ]; then
     handle_apps=false
   fi
   if [ "$handle_proc" != "false" ] && [ "$proc_file" = "null" ]; then
@@ -703,6 +721,23 @@ handle_event() {
 init_v2() {
 
 handle_event boot 1
+charging="$(is_device charging)"
+if [ "$charging" = "true" ]; then
+  handle_event charging 1
+fi
+was_charging="$charging"
+low_power="$(is_device low_power)"
+if [ "$low_power" = "true" ]; then
+  handle_event low_power 1
+fi
+was_low_power="$low_power"
+screen_on="$(is_device screen)"
+# here we invert because we only want to
+# do something if the screen is off
+if [ "$screen_on" = "false" ]; then
+  handle_event screen_off 1
+fi
+was_screen_on="$screen_on"
 
 while true; do
 

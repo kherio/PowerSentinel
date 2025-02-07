@@ -1,4 +1,10 @@
 
+### v2.1.1
+  - Improved start for v2 configs. Now on boot, it activates events that should be active (charging, screen_off, low_power)
+  - Fixed status checks for the WebUI
+  - Fixed kill_wifi handling
+  - Added bc (1.08.1) binary for upcoming battery prediction update
+
 ### v2.1.0
   - Improved WebUI to show the status of a few things
   - Improved WebUI to show the log amd allow copying to storage for easy bug reports
