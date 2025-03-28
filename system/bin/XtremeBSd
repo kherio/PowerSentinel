@@ -31,7 +31,10 @@ is_device() {
 }
 
 notif() {
-  su -lp 2000 -c "cmd notification post -S bigtext -t 'XtremeBS' 'STATUS' \"$1\"" >/dev/null
+  # dont notify if notify=false
+  if [ "$(getconf notify true)" = "true" ]; then
+    su -lp 2000 -c "cmd notification post -S bigtext -t 'XtremeBS' 'STATUS' \"$1\"" >/dev/null
+  fi
 }
 
 log_msg() {
@@ -756,7 +759,7 @@ while true; do
       exec "$0"
       ;;
     start)
-      if [ "$cmd_event" = "" ]; then
+      if [ ! "$cmd_event" ]; then
         log_msg 1 "The start command was received. Starting manual event"
         handle_event manual 1
       else
@@ -765,7 +768,7 @@ while true; do
       fi
       ;;
     stop)
-      if [ "$cmd_event" = "" ]; then
+      if [ ! "$cmd_event" ]; then
         log_msg 1 "The stop command was received. Stopping manual event"
         handle_event manual 0
       else

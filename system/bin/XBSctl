@@ -56,6 +56,10 @@ case $1 in
     fi
     ;;
   *)
-    echo "$@" > "$ctl_file"
+    if [[ "$1" = "start" || "$1" = "stop" ]] && [ "$version" = "2" ] && [ ! "$2" ]; then
+      echo "start manual" > "$ctl_file"
+    else
+      echo "$@" > "$ctl_file"
+    fi
     ;;
 esac

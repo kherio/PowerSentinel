@@ -285,6 +285,24 @@ Not even the switch in Settings will re-enable it
 You might be asking, "Why would anyone want to do this?" Well, WiFi is very power hungry and disabling it will save a ton of power.
 Dont worry, it will be re-enabled when your trigger gets called.
 
+### notify
+This option is to stop those annoying notifications that make your phone go bzzz when an event is changed
+
+`notify=true` DEFAULT
+
+`notify=false` Turns off all notifications
+
+### safemode
+This option is for an all else fails and the system wont accept a XBSctl command.
+This has never been used, nor was it requested, its just in here for persistence and if something really bad happens.
+If all else fails, you can do this from your recovery mode.
+
+`safemode=1` Enables Safemode
+
+`safemode=0` Disables Safemode and removes its presence from the config.
+
+You may also exit safemode the normal way as this is linked to XBSctl and vice-versa.
+
 ## XBSctl
 This is how you control the daemon. 
 
@@ -302,5 +320,28 @@ commands are:
 
 `safe` Safemode. If you mess up, use this. It stops XtremeBS and waits until you tell it to Resume, Then reloads the config.
 
+## FAQ
 
+Q: It softloops my device/systemui crash. What do i do?
+A: You tried too many options! Start slow, see what works and what doesnt.
+   Note: Some Samsung devices dont like the CPU cores tampered with. Dont use any core options.
+   If you have a Oneplus, don't use low_ram
+
+Q: Will this break my device?
+A: Probably not. If you move slow with your config options and test it, you should have a beefy config that does well.
+
+Q: Do i have to configure the module or is it plug n' play?
+A: Youre going to have to get your hands dirty and configure it yourself. I have thought about an "autoconfig tool/mode", its a concept ive been playing with for awhile now, but its a tough one to pull off while maintaining stability, not to mention, the codebase will be about 5x-10x what it is now, and a full rewrite would have to be done, just for that feature.
+
+Q: Will there be an app for this, to configure more easily?
+A: Probably not. Thats what the webui is for. If you do want to make an app to do this, i would love to assist and possibly package it into the module.
+
+Q: How strong is this module?
+A: Its not for everybody, thats how strong it is. Scale of 1-10? 8.5-9.5. Its pretty stout. With enough tweaking, you could probably get device uptime to at least 5x what it was at stock. No other module is as strong as this.
+
+Q: When is the battery prediction update coming out?
+A: IDK, I was working on it pretty heavily and got prediction accuracy to 9/10. Then some life things happened and i havent had time to finish it up. All thats left is to get historical data, integrate into the WebUI, test, and release. I hope to get some free time soon to get this out there.
+
+Q: Will you write a config for me?
+A: No! You shouldnt ask anyone for a config, ever! Every device is different, your acceptable amount of lag is not another persons acceptable amount of lag, not to mention the security concerns. 
 

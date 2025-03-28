@@ -1,4 +1,8 @@
 
+### v2.1.2
+  - Improved handling of manual
+  - Added `notify` flag for those pesky notifications
+
 ### v2.1.1
   - Improved start for v2 configs. Now on boot, it activates events that should be active (charging, screen_off, low_power)
   - Fixed status checks for the WebUI
