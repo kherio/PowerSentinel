@@ -2,7 +2,6 @@
 # XtremeBS
 
 ## There is currently an app in development
-The app will make it easy to configure the module and view the status
 
 This module is for those who want to really stretch their battery and is designed to be highly configurable.
 
@@ -329,25 +328,39 @@ commands are:
 ## FAQ
 
 Q: It softloops my device/systemui crash. What do i do?
-A: You tried too many options! Start slow, see what works and what doesnt.
-   Note: Some Samsung devices dont like the CPU cores tampered with. Dont use any core options.
-   If you have a Oneplus, don't use low_ram
+
+
+**A: You tried too many options! Start slow, see what works and what doesnt.**
+**   Note: Some Samsung devices dont like the CPU cores tampered with. Dont use any core options.**
+**   If you have a Oneplus, don't use low_ram**
 
 Q: Will this break my device?
-A: Probably not. If you move slow with your config options and test it, you should have a beefy config that does well.
+
+
+**A: Probably not. If you move slow with your config options and test it, you should have a beefy config that does well.**
 
 Q: Do i have to configure the module or is it plug n' play?
-A: Youre going to have to get your hands dirty and configure it yourself. I have thought about an "autoconfig tool/mode", its a concept ive been playing with for awhile now, but its a tough one to pull off while maintaining stability, not to mention, the codebase will be about 5x-10x what it is now, and a full rewrite would have to be done, just for that feature.
+
+
+**A: Youre going to have to get your hands dirty and configure it yourself. I have thought about an "autoconfig tool/mode", its a concept ive been playing with for awhile now, but its a tough one to pull off while maintaining stability, not to mention, the codebase will be about 5x-10x what it is now, and a full rewrite would have to be done, just for that feature.**
 
 Q: Will there be an app for this, to configure more easily?
-A: Yes! I am currently developing an app that will be packaged with it. Upon release, the webUI will likely be removed and compatibility mode (for v1 configs) will be removed.
+
+
+**A: Yes! I am currently developing an app that will be packaged with it. Upon release, the webUI will likely be removed and compatibility mode (for v1 configs) will be removed.**
 
 Q: How strong is this module?
-A: Its not for everybody, thats how strong it is. Scale of 1-10? 8.5-9.5. Its pretty stout. With enough tweaking, you could probably get device uptime to at least 5x what it was at stock. No other module is as strong as this.
+
+
+**A: Its not for everybody, thats how strong it is. Scale of 1-10? 8.5-9.5. Its pretty stout. With enough tweaking, you could probably get device uptime to at least 5x what it was at stock. No other module is as strong as this.**
 
 Q: When is the battery prediction update coming out?
-A: IDK, I was working on it pretty heavily and got prediction accuracy to 9/10. Then some life things happened and i havent had time to finish it up. All thats left is to get historical data, integrate into the WebUI, test, and release. I hope to get some free time soon to get this out there.
+
+
+**A: It was going to integrate with the WebUI, but ive decided it will come out with the app update**
 
 Q: Will you write a config for me?
-A: No! You shouldnt ask anyone for a config, ever! Every device is different, your acceptable amount of lag is not another persons acceptable amount of lag, not to mention the security concerns. 
+
+
+**A: No! You shouldnt ask anyone for a config, ever! Every device is different, your acceptable amount of lag is not another persons acceptable amount of lag, not to mention the security concerns. **
 
