@@ -330,9 +330,9 @@ commands are:
 Q: It softloops my device/systemui crash. What do i do?
 
 
-**A: You tried too many options! Start slow, see what works and what doesnt.**
-**   Note: Some Samsung devices dont like the CPU cores tampered with. Dont use any core options.**
-**   If you have a Oneplus, don't use low_ram**
+**A: You tried too many options! Start slow, see what works and what doesnt.
+   Note: Some Samsung devices dont like the CPU cores tampered with. Dont use any core options.
+   If you have a Oneplus, don't use low_ram**
 
 Q: Will this break my device?
 
