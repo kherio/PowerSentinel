@@ -362,5 +362,5 @@ Q: When is the battery prediction update coming out?
 Q: Will you write a config for me?
 
 
-**A: No! You shouldnt ask anyone for a config, ever! Every device is different, your acceptable amount of lag is not another persons acceptable amount of lag, not to mention the security concerns. **
+**A: No! You shouldnt ask anyone for a config, ever! Every device is different, your acceptable amount of lag is not another persons acceptable amount of lag, not to mention the security concerns.**
 
