@@ -1,3 +1,9 @@
+
+# XtremeBS
+
+## There is currently an app in development
+The app will make it easy to configure the module and view the status
+
 This module is for those who want to really stretch their battery and is designed to be highly configurable.
 
 The main goal is to maximize battery life as much as possible while still remaining functional.
@@ -12,17 +18,17 @@ You should probably start slow and activate 1 at a time with a little testing.
 
 Everything has been built and tested on a Pixel 5 running ProtonAOSP.
 
-# Supported Root Managers
+## Supported Root Managers
 - Magisk
 - KernelSU Next (Thank you NanKill)
 
 Probably KSU and APatch. I would love confirmation on these.
 
-# Disclaimer
+## Disclaimer
 I am NOT responsible for any damages or data loss this software may cause. By using this software you accept the risks of using it.
 
-# What can this do?
-- kill, renice, or suspend apps.
+## What can this do?
+- kill, reprioritize, or suspend apps.
 - put CPU cores into powersave mode.
 - completely disable CPU cores.
 - disable Google Play Services(gms).
@@ -31,12 +37,12 @@ I am NOT responsible for any damages or data loss this software may cause. By us
 - completely disable WiFi
 - pretend the device has low ram
 
-# Installation
+## Installation
 
 1. Install using Magisk Manager and reboot.
 2. Configure the options in the config file `/data/local/tmp/XtremeBS/XtremeBS.conf`
 
-# Configuration
+## Configuration
 After you reboot from installation, XtremeBS drops a premade config file in `/data/local/tmp/XtremeBS/XtremeBS.conf`.
 
 Every time you change the config, you must reboot or reload using `XBSctl reload`.
@@ -44,7 +50,7 @@ Every time you change the config, you must reboot or reload using `XBSctl reload
 As of v1.0.6 there is a webui available at http://127.0.0.1:8081 to make editing the config easier
 action.sh will launch it
 
-## Config Options
+### Config Options
 
 The v1 config used a simple `key=value` format
 
@@ -118,7 +124,7 @@ Thats exactly what its for. Not to mention, you can use different allowlists wit
 This allows for many more possibilities than just "on" or "off".
 
 
-### trigger
+#### trigger
 This option specifies when to trigger power saving and is only necessary when using the v1 config.
 
 Options:
@@ -129,7 +135,7 @@ Options:
 
 `trigger=manual` For manual control using XBSctl
 
-### delay
+#### delay
 
 It sets a delay in seconds between checking for the trigger or commands to not spam the CPU.
 
@@ -137,7 +143,7 @@ Default is 3.
 
 `delay=3`
 
-### keep_on_charge
+#### keep_on_charge
 This is for if you wish to keep the powersaver on while charging
 added in v1.0.4
 This leads to faster charging speeds
@@ -147,7 +153,7 @@ You only need to set this if you are using `trigger=auto`
  
 `keep_on_charge=false`
 
-### allowlist
+#### allowlist
 This takes a path to a file.
 
 Default is `allowlist=/data/local/tmp/XtremeBS/apps.allow`
@@ -169,7 +175,7 @@ If you set `handle_apps=suspend` you should probably add whatever you know youre
 If you fuck this up and dont add things to the allowlist for suspend mode, you will have to use adb from a PC.
 `adb shell XBSctl safe`
 
-### denylist
+#### denylist
 By design, handle_apps only deals with user installed apps and not system apps to maintain stability.
 If you so desire, you can use this denylist to deal with system apps.
 
@@ -178,7 +184,7 @@ default is `denylist=/data/local/tmp/XtremeBS/apps.deny`
 You will have to create it to use it. It isnt mandatory.
 
 
-### handle_apps
+#### handle_apps
 This setting turns on or off the handling of apps.
 
 Options:
@@ -194,7 +200,7 @@ They can be restarted by other apps and you.
 This may take up more battery because of wasted cpu cycles.
 
 
-### handle_cores
+#### handle_cores
 This is like `handle_apps` but with CPU cores instead.
 
 You might be asking, "this seems kind of risky. *how are* cores handled?". Thats a good question, with a simple answer. If this setting is turned on, it changes the CPU governors to powersave if its supported.
@@ -205,7 +211,7 @@ You might be asking, "this seems kind of risky. *how are* cores handled?". Thats
 
 `handle_cores="cpu4 cpu5"` a manual selection of the cores you want to put in powersave mode.
 
-### disable_cores
+#### disable_cores
 Which CPU cores to disable, if any.
 
 `disable_cores=false` DEFAULT. Turns the setting off
@@ -215,7 +221,7 @@ This automagically disables only the high power cores which *might* produce a ti
 
 `disable_cores="cpu6 cpu7"` you can manually set the cores you want to disable.
 
-### handle_gms
+#### handle_gms
 This decides how to handle Google Play Services, which is a battery hog.
 
 `handle_gms=false` sets to not even bother with gms
@@ -225,14 +231,14 @@ This decides how to handle Google Play Services, which is a battery hog.
 `handle_gms=kill`
 WARNING! If you use this option, it will break google apps until you change the option. Also, YOU WILL FAIL SAFETYNET AND PLAY INTEGRITY. It just disables the package.
 
-### handle_proc
+#### handle_proc
 Whether we should renice system daemons and processes. This is touchy. Whatever you put in the proc_file, will be reniced with a value of 10. You might get messages late, you might miss alarms, who knows. Just be careful.
 
 `handle_proc=false` DEFAULT
 
 `handle_proc=true`
 
-### proc_file
+#### proc_file
 This file is where you put the processes you want to use less CPU power on. Personally, i put netd and system_server in here. One process per line.
 
 `proc_file=/data/local/tmp/XtremeBS/proc.list` DEFAULT
@@ -243,7 +249,7 @@ system_server 10`
 
 the nice numbers were added in v1.0.4
 
-#### A note on niceness
+##### A note on niceness
 The numbers beside the process names are nice levels 0 (normal) - 19 (very nice). If you choose to not give them a nice level, the nice level will be 10.
 If you dont know what "niceness" is, its pretty simple.
 The nicer a process is, the less CPU time it gets, like a line in a grocery store. a really nice program will let others by so they can get done first.
@@ -256,14 +262,14 @@ If you want to find processes that use high cpu, you can use this command and it
 or if that doesnt work, you can use this one
 `su -c "ps -A -o PCY,PID,USER,%CPU,ARGS" | sort -k4 -nr`
 
-### low_ram
+#### low_ram
 This sets the low_ram flag to true, so the system tries to use less and therefore save power.
 
 `low_ram=true` DEFAULT
 
 `low_ram=false`
 
-### doze
+#### doze
 This enables Doze Mode (added in v2.0.0)
 
 `doze=false` DEFAULT
@@ -274,7 +280,7 @@ This enables Doze Mode (added in v2.0.0)
 
 Doze may cause issues with alarms
 
-### kill_wifi
+#### kill_wifi
 This will disable the wifi radios (added in v2.0.0)
 Not even the switch in Settings will re-enable it
 
@@ -285,14 +291,14 @@ Not even the switch in Settings will re-enable it
 You might be asking, "Why would anyone want to do this?" Well, WiFi is very power hungry and disabling it will save a ton of power.
 Dont worry, it will be re-enabled when your trigger gets called.
 
-### notify
+#### notify
 This option is to stop those annoying notifications that make your phone go bzzz when an event is changed
 
 `notify=true` DEFAULT
 
 `notify=false` Turns off all notifications
 
-### safemode
+#### safemode
 This option is for an all else fails and the system wont accept a XBSctl command.
 This has never been used, nor was it requested, its just in here for persistence and if something really bad happens.
 If all else fails, you can do this from your recovery mode.
@@ -334,7 +340,7 @@ Q: Do i have to configure the module or is it plug n' play?
 A: Youre going to have to get your hands dirty and configure it yourself. I have thought about an "autoconfig tool/mode", its a concept ive been playing with for awhile now, but its a tough one to pull off while maintaining stability, not to mention, the codebase will be about 5x-10x what it is now, and a full rewrite would have to be done, just for that feature.
 
 Q: Will there be an app for this, to configure more easily?
-A: Probably not. Thats what the webui is for. If you do want to make an app to do this, i would love to assist and possibly package it into the module.
+A: Yes! I am currently developing an app that will be packaged with it. Upon release, the webUI will likely be removed and compatibility mode (for v1 configs) will be removed.
 
 Q: How strong is this module?
 A: Its not for everybody, thats how strong it is. Scale of 1-10? 8.5-9.5. Its pretty stout. With enough tweaking, you could probably get device uptime to at least 5x what it was at stock. No other module is as strong as this.
