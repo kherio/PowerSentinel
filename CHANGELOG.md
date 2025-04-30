@@ -1,4 +1,7 @@
 
+### v2.1.3
+  - Added a fallback for kill_wifi to support devices that dont have rfkill support
+
 ### v2.1.2
   - Improved handling of manual
   - Added `notify` flag for those pesky notifications

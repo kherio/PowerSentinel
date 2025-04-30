@@ -376,8 +376,12 @@ enable_pwr_save() {
       if [ -f "$busybox" ]; then
         $busybox rfkill block wifi
       else
-        log_msg 3 "I couldnt find a way to run rfkill. The kill_wifi option is useless."
+        log_msg 3 "I couldnt find a way to run rfkill"
       fi
+    fi
+    if [ "$(rfkill list wifi | grep Soft | cut -d: -f2 | cut -d' ' -f2)" != "yes" ]; then
+      log_msg 3 "rfkill command failed. Using svc command instead. this might not be as effective as rfkill."
+      svc wifi disable
     fi
   fi
 
@@ -510,8 +514,12 @@ disable_pwr_save() {
       if [ -f "$busybox" ]; then
         $busybox rfkill unblock wifi
       else
-        log_msg 3 "I couldnt find rfkill. The kill_wifi option is useless."
+        log_msg 3 "I couldnt find rfkill."
       fi
+    fi
+    if [ "$(rfkill list wifi | grep Soft | cut -d: -f2 | cut -d' ' -f2)" = "yes" ]; then
+      log_msg 3 "rfkill command failed. Using svc command instead. this might not be as effective as rfkill."
+      svc wifi enable
     fi
   fi
 
