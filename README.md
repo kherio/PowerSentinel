@@ -62,7 +62,8 @@ XtremeBS uses a configuration file (`/data/local/tmp/XtremeBS/XtremeBS.conf`) to
 - **v1 (Legacy)**: Simple `key=value` pairs. Suitable for basic setups but less flexible.
 - **v2 (Recommended)**: Event-driven blocks (e.g., `screen_off={...}`) for dynamic control based on device states or custom triggers.
 
-> [!TIP] Set `version=2` in the config to enable v2 mode. The module automatically migrates v1 configs to v2 if detected.
+> [!TIP]
+> Set `version=2` in the config to enable v2 mode. The module automatically migrates v1 configs to v2 if detected.
 
 ### v2 Configuration (Recommended)
 
@@ -118,7 +119,8 @@ handle_apps=suspend
 allowlist=/data/local/tmp/XtremeBS/apps.allow
 ```
 
-> [!NOTE] v1 is backward compatible but will be deprecated in future releases. Consider switching to v2 for advanced features.
+> [!NOTE]
+> v1 is backward compatible but will be deprecated in future releases. Consider switching to v2 for advanced features.
 
 ### Config Options
 
@@ -156,7 +158,8 @@ netd 19
 system_server 10
 ```
 
-> [!CAUTION] Always include essential apps (e.g., keyboard, terminal) in `apps.allow` when using `handle_apps=suspend`. Without a valid allowlist, apps may become unusable, requiring `XBSctl safe` via ADB.
+> [!CAUTION]
+> Always include essential apps (e.g., keyboard, terminal) in `apps.allow` when using `handle_apps=suspend`. Without a valid allowlist, apps may become unusable, requiring `XBSctl safe` via ADB.
 
 ---
 
@@ -173,7 +176,8 @@ Control XtremeBS with the `XBSctl` command-line tool (run as root via `su`):
 | `resume` | Resume trigger handling or exit safe mode | `XBSctl resume` |
 | `safe` | Enter safe mode (stops XtremeBS, unsuspends apps) | `XBSctl safe` |
 
-> [!TIP] Use `XBSctl safe` via ADB (`adb shell XBSctl safe`) if the device becomes unresponsive due to misconfiguration.
+> [!TIP]
+> Use `XBSctl safe` via ADB (`adb shell XBSctl safe`) if the device becomes unresponsive due to misconfiguration.
 
 ---
 
