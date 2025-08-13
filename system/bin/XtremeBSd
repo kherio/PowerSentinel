@@ -6,6 +6,7 @@ declare -a cpu_freqs
 declare -a hp_cpus
 declare -a lp_cpus
 declare -a lp_govs
+declare RFKILL_CMD="" # Global variable for the correct rfkill command
 cpu_base_path="/sys/devices/system/cpu"
 
 # Helpers and one time things
@@ -167,6 +168,25 @@ auto_map_cores() {
   unset tmp_var
 }
 
+find_rfkill_command() {
+  log_msg 2 "Searching for a valid rfkill command..."
+  if command -v rfkill >/dev/null 2>&1; then
+    RFKILL_CMD="rfkill"
+  elif command -v toybox >/dev/null 2>&1 && toybox --help | grep -q rfkill; then
+    RFKILL_CMD="toybox rfkill"
+  else
+    local busybox_path="$(find /data/adb/ -type f -name busybox)"
+    if [ -f "$busybox_path" ] && "$busybox_path" --help | grep -q rfkill; then
+      RFKILL_CMD="$busybox_path rfkill"
+    fi
+  fi
+
+  if [ -n "$RFKILL_CMD" ]; then
+    log_msg 2 "Found rfkill command: $RFKILL_CMD"
+  else
+    log_msg 2 "No rfkill command found. Will rely on svc for WiFi control."
+  fi
+}
 
 update_status() {
   status_file="/data/local/tmp/XtremeBS/XtremeBS.status"
@@ -189,15 +209,8 @@ update_status() {
   done
 
   # wifi
-  if command -v rfkill; then
-    wifi=$(rfkill list wifi | grep "Soft" | cut -d' ' -f3)
-  elif command -v toybox; then
-    wifi=$(toybox rfkill list wifi | grep "Soft" | cut -d' ' -f3)
-  else
-    busybox="$(find /data/adb/ -type f -name busybox)"
-    if [ -f "$busybox" ]; then
-      wifi=$($busybox rfkill list wifi | grep "Soft" | cut -d' ' -f3)
-    fi
+  if [ -n "$RFKILL_CMD" ]; then
+    wifi=$($RFKILL_CMD list wifi | grep "Soft" | cut -d' ' -f3)
   fi
   if [ "$wifi" = "yes" ]; then
     wifi="disabled"
@@ -367,20 +380,17 @@ enable_pwr_save() {
   # Handle WiFi
   if [ "$kill_wifi" = "true" ]; then
     log_msg 3 "Disabling WiFi"
-    if command -v rfkill; then
-      rfkill block wifi
-    elif command -v toybox; then
-      toybox rfkill block wifi
-    else
-      busybox="$(find /data/adb/ -type f -name busybox)"
-      if [ -f "$busybox" ]; then
-        $busybox rfkill block wifi
-      else
-        log_msg 3 "I couldnt find a way to run rfkill"
+    if [ -n "$RFKILL_CMD" ]; then
+      log_msg 3 "Attempting to block with: $RFKILL_CMD"
+      "$RFKILL_CMD" block wifi
+      
+      # Check if rfkill actually worked, if not, use svc as a final fallback
+      if [ "$("$RFKILL_CMD" list wifi | grep Soft | cut -d: -f2 | cut -d' ' -f2)" != "yes" ]; then
+         log_msg 3 "rfkill failed to block. Falling back to svc."
+         svc wifi disable
       fi
-    fi
-    if [ "$(rfkill list wifi | grep Soft | cut -d: -f2 | cut -d' ' -f2)" != "yes" ]; then
-      log_msg 3 "rfkill command failed. Using svc command instead. this might not be as effective as rfkill."
+    else
+      log_msg 3 "No rfkill command available. Using svc."
       svc wifi disable
     fi
   fi
@@ -505,20 +515,17 @@ disable_pwr_save() {
   # Handle WiFi
   if [ "$kill_wifi" = "true" ]; then
     log_msg 3 "Enabling WiFi"
-    if command -v rfkill; then
-      rfkill unblock wifi
-    elif command -v toybox; then
-      toybox rfkill unblock wifi
-    else
-      busybox="$(find /data/adb/ -type f -name busybox)"
-      if [ -f "$busybox" ]; then
-        $busybox rfkill unblock wifi
-      else
-        log_msg 3 "I couldnt find rfkill."
+    if [ -n "$RFKILL_CMD" ]; then
+      log_msg 3 "Attempting to unblock with: $RFKILL_CMD"
+      "$RFKILL_CMD" unblock wifi
+      
+      # Check if rfkill actually worked, if not, use svc as a final fallback
+      if [ "$("$RFKILL_CMD" list wifi | grep Soft | cut -d: -f2 | cut -d' ' -f2)" != "no" ]; then
+         log_msg 3 "rfkill failed to unblock. Falling back to svc."
+         svc wifi enable
       fi
-    fi
-    if [ "$(rfkill list wifi | grep Soft | cut -d: -f2 | cut -d' ' -f2)" = "yes" ]; then
-      log_msg 3 "rfkill command failed. Using svc command instead. this might not be as effective as rfkill."
+    else
+      log_msg 3 "No rfkill command available. Using svc."
       svc wifi enable
     fi
   fi
@@ -1087,6 +1094,9 @@ delay=$(getconf delay 3)
 
 # auto map cores in case we need them
 auto_map_cores
+
+# Find the rfkill command once and for all
+find_rfkill_command
 
 # check version and init
 if [ "$version" = 2 ]; then

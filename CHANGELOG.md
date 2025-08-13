@@ -1,4 +1,7 @@
 
+### v2.1.4
+  - Improve Wifi handling - Authored by [vikasmistry](https://github.com/vikasmistry)
+
 ### v2.1.3
   - Added a fallback for kill_wifi to support devices that dont have rfkill support
 
