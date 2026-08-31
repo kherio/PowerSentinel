@@ -1,4 +1,9 @@
 
+### v3.2.2-kherio
+  - **Carousel width fix, attempt 2**: v3.2.1's fix (adding `display:flex` to the view container) addressed the height chain but the reported width overflow persisted. Root cause was different from initially diagnosed: the carousel used percentage-based flex sizing (`.view-track` at `width:300%`, each `.view` at `flex-basis:33.3333%`), which is sensitive to how a given engine resolves flex-basis/min-width against a pane's own content - evidently not clipping as expected on-device. Rewrote it to use fixed pixel widths instead: `main.js` measures the real rendered viewport width and sets it as an explicit inline `width` (in px, not %) on the track and each pane, recalculated on resize/orientation change. This removes percentage-based flex sizing from the carousel entirely - flex is only used for row arrangement now, not for sizing math.
+  - Added defensive `min-width: 0` and `overflow-x: hidden` at a few more points in the layout chain (`.view-viewport`, `.view`, `html`) as extra safety margin.
+  - Could not be verified with an actual rendered browser in the development environment (no headless browser available to install) - needs on-device confirmation again.
+
 ### v3.2.1-kherio
   - **Critical fix**: v3.2.0's carousel broke the whole layout on-device (all three tabs wider than the screen, Config cut off/incomplete). Root cause: `.app-shell > main` was missing `display: flex; flex-direction: column;`, so `.view-viewport`'s `flex: 1` was inert (flex properties only apply inside a flex container) - it never received a resolved height, which broke the entire `height: 100%` chain down through `.view-track` and each `.view` pane, and let the 300%-wide track overflow the viewport horizontally instead of being clipped to one pane's width. One-line fix; the rest of v3.2.0 is unchanged.
 
