@@ -11,43 +11,52 @@ const LIFECYCLE = {
   log: { activate: activateLog, deactivate: deactivateLog }
 };
 
-let currentView = 'estado';
+let currentIndex = 0;
 
-function confirmLeave(fromView) {
+function confirmLeave(fromIndex) {
   // Only Config currently guards against unsaved changes; other views
   // have nothing to lose by switching away.
-  if (fromView === 'conf') return confirmLeaveConfig();
+  if (VIEWS[fromIndex] === 'conf') return confirmLeaveConfig();
   return true;
 }
 
-function switchView(name) {
-  if (name === currentView || VIEWS.indexOf(name) === -1) return;
-  if (!confirmLeave(currentView)) return;
-
-  document.getElementById(`view-${currentView}`).classList.remove('active');
-  document.getElementById(`tab-btn-${currentView}`).classList.remove('active');
-  LIFECYCLE[currentView].deactivate();
-
-  currentView = name;
-
-  document.getElementById(`view-${currentView}`).classList.add('active');
-  document.getElementById(`tab-btn-${currentView}`).classList.add('active');
-  LIFECYCLE[currentView].activate();
-}
-
-function initTabButtons() {
-  VIEWS.forEach((name) => {
-    document.getElementById(`tab-btn-${name}`).addEventListener('click', () => switchView(name));
+function setTabActive(index) {
+  VIEWS.forEach((name, i) => {
+    document.getElementById(`tab-btn-${name}`).classList.toggle('active', i === index);
+    document.getElementById(`view-${name}`).classList.toggle('active', i === index);
   });
 }
 
-// Swipe anywhere on the app moves between Estado / Config / Log, in tab
-// order. Mostly-vertical drags are ignored so normal scrolling still
-// works. Unlike the old httpd/CGI pages (separate documents, full page
-// navigation), this is a pure in-memory view swap - no reload, no
-// beforeunload needed, and confirmLeave() runs synchronously first.
+function commitToIndex(newIndex) {
+  if (newIndex === currentIndex) return;
+  const oldIndex = currentIndex;
+  currentIndex = newIndex;
+  setTabActive(currentIndex);
+  LIFECYCLE[VIEWS[oldIndex]].deactivate();
+  LIFECYCLE[VIEWS[currentIndex]].activate();
+}
+
+function initTabButtons() {
+  VIEWS.forEach((name, index) => {
+    document.getElementById(`tab-btn-${name}`).addEventListener('click', () => {
+      if (index === currentIndex) return;
+      if (!confirmLeave(currentIndex)) return;
+      commitToIndex(index);
+    });
+  });
+}
+
+// Swipe just switches tabs on release - it does not visually follow the
+// finger mid-drag. An earlier version tried a live-dragging carousel
+// (transform-based, tracking pane width in JS), but that kept rendering
+// wider than the screen on-device across three different fix attempts
+// (percentage flex sizing, then two different pixel-measurement
+// strategies), all impossible to verify without a real browser in the
+// development environment. This version has zero width/transform math
+// at all - it can't have that class of bug - at the cost of the drag
+// no longer visibly tracking the finger before release.
 function initSwipeNav() {
-  const THRESHOLD = 70;
+  const THRESHOLD_PX = 60;
   let startX = null, startY = null, tracking = false;
 
   document.addEventListener('touchstart', (e) => {
@@ -58,20 +67,19 @@ function initSwipeNav() {
   }, { passive: true });
 
   document.addEventListener('touchend', (e) => {
-    if (!tracking || startX === null) return;
+    if (!tracking) return;
     tracking = false;
     const touch = e.changedTouches[0];
     const dx = touch.clientX - startX;
     const dy = touch.clientY - startY;
-    startX = null; startY = null;
 
-    if (Math.abs(dx) < THRESHOLD) return;
+    if (Math.abs(dx) < THRESHOLD_PX) return;
     if (Math.abs(dx) < Math.abs(dy) * 1.3) return; // mostly-vertical, treat as scroll
 
-    const idx = VIEWS.indexOf(currentView);
-    const targetIdx = dx < 0 ? idx + 1 : idx - 1; // swipe left -> next tab, right -> previous
-    if (targetIdx < 0 || targetIdx >= VIEWS.length) return;
-    switchView(VIEWS[targetIdx]);
+    const targetIndex = dx < 0 ? currentIndex + 1 : currentIndex - 1; // swipe left -> next, right -> previous
+    if (targetIndex < 0 || targetIndex >= VIEWS.length) return;
+    if (!confirmLeave(currentIndex)) return;
+    commitToIndex(targetIndex);
   }, { passive: true });
 }
 
@@ -84,5 +92,5 @@ initConfig();
 initLog();
 
 // Estado starts active on load; the other two only start their polling
-// once the user actually switches to them (see switchView/LIFECYCLE).
+// once the user actually swipes/taps to them (see commitToIndex/LIFECYCLE).
 activateEstado();

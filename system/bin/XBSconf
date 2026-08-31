@@ -19,7 +19,7 @@ CONF_DIR="/data/local/tmp/XtremeBS"
 CONF="$CONF_DIR/XtremeBS.conf"
 
 FIELD_KEYS="handle_apps allowlist denylist handle_cores disable_cores handle_gms handle_proc proc_file low_ram doze kill_wifi keep_on_charge"
-PREDEFINED_EVENTS="boot charging screen_off low_power manual"
+PREDEFINED_EVENTS="boot charging screen_off low_power night manual"
 
 require_root() {
   if [ "$(id -u 2>/dev/null)" != "0" ]; then

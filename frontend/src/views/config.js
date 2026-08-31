@@ -1,9 +1,10 @@
 import { ICONS } from '../icons.js';
-import { readConfig, writeConfig, readStatus } from '../api.js';
+import { readConfig, writeConfig, readStatus, startEvent, stopEvent } from '../api.js';
 import { toast, escapeHtml } from '../helpers.js';
+import { mountAppsPicker, persistAppsPicker } from './apps-picker.js';
 import {
-  PREDEFINED_EVENTS, FIELD_DEFS, GLOBAL_DEFS, V1_TRIGGER_DEF,
-  parseConfig, serializeConfig, renderFieldsForm, renderFieldRow
+  PREDEFINED_EVENTS, FIELD_DEFS, GLOBAL_DEFS, EVENT_PRESETS,
+  parseConfig, serializeConfig, renderFieldsForm, renderFieldRow, buildRecommendedModel
 } from '../config-form.js';
 
 let model = null;
@@ -35,7 +36,8 @@ function refreshHighlight() {
   highlightCode.innerHTML = editor.value.split('\n').map(highlightLine).join('\n') + '\n';
 }
 
-function markDirty(isDirty) { dirtyFlag.style.visibility = isDirty ? 'visible' : 'hidden'; }
+let isDirty = false;
+function markDirty(dirty) { isDirty = dirty; dirtyFlag.style.visibility = dirty ? 'visible' : 'hidden'; }
 
 function renderGlobalFields() {
   const container = document.getElementById('c-global-fields');
@@ -49,14 +51,10 @@ function renderGlobalFields() {
   });
 }
 
-function renderV1() {
-  renderFieldsForm(document.getElementById('c-v1-fields'),
-    Object.assign({}, model.v1Fields, { trigger: model.v1Fields.trigger || 'auto' }),
-    [V1_TRIGGER_DEF].concat(FIELD_DEFS), coreList,
-    () => markDirty(true));
-}
-
-const EVENT_ICONS = { boot: ICONS.power, charging: ICONS.plug, screen_off: ICONS.moon, low_power: ICONS.warn, manual: ICONS.manual };
+const EVENT_ICONS = {
+  boot: ICONS.power, charging: ICONS.plug, screen_off: ICONS.moon,
+  low_power: ICONS.warn, night: ICONS.moon, manual: ICONS.manual
+};
 
 function renderEvents() {
   const list = document.getElementById('c-events-list');
@@ -90,6 +88,45 @@ function renderEvents() {
     }
     head.appendChild(nameEl);
 
+    // Try-it-now: fires the event immediately via XBSctl, without
+    // waiting for its real trigger condition (screen off, low battery...)
+    const applyBtn = document.createElement('button');
+    applyBtn.className = 'btn ghost';
+    applyBtn.innerHTML = ICONS.bolt;
+    applyBtn.title = 'Aplicar ahora (probar el evento)';
+    applyBtn.addEventListener('click', async () => {
+      try { await startEvent(block.name); toast(`"${block.name}" aplicado`, 'success'); }
+      catch (e) { toast('Error al aplicar: ' + e.message, 'error'); }
+    });
+    head.appendChild(applyBtn);
+
+    const stopBtn = document.createElement('button');
+    stopBtn.className = 'btn ghost';
+    stopBtn.innerHTML = ICONS.power;
+    stopBtn.title = 'Detener (deshacer la prueba)';
+    stopBtn.addEventListener('click', async () => {
+      try { await stopEvent(block.name); toast(`"${block.name}" detenido`, 'success'); }
+      catch (e) { toast('Error al detener: ' + e.message, 'error'); }
+    });
+    head.appendChild(stopBtn);
+
+    const dupBtn = document.createElement('button');
+    dupBtn.className = 'btn ghost';
+    dupBtn.innerHTML = ICONS.plus;
+    dupBtn.title = 'Duplicar como evento personalizado';
+    dupBtn.addEventListener('click', () => {
+      let base = block.name.replace(/_copy\d*$/, '') + '_copy';
+      let name = base, n = 2;
+      const existing = model.blocks.map((b) => b.name);
+      while (existing.indexOf(name) !== -1) { name = base + n; n++; }
+      const clonedFields = Object.assign({}, block.fields);
+      delete clonedFields.__apps; // don't share the (unsaved) apps-picker state between events
+      model.blocks.push({ name, fields: clonedFields, extra: [] });
+      markDirty(true);
+      renderEvents();
+    });
+    head.appendChild(dupBtn);
+
     const delBtn = document.createElement('button');
     delBtn.className = 'btn ghost';
     delBtn.innerHTML = ICONS.trash;
@@ -102,9 +139,45 @@ function renderEvents() {
     head.appendChild(delBtn);
     card.appendChild(head);
 
+    // Quick-start template row
+    const presetRow = document.createElement('div');
+    presetRow.style.marginBottom = '10px';
+    const presetSelect = document.createElement('select');
+    presetSelect.className = 'filter';
+    presetSelect.style.width = '100%';
+    const noneOpt = document.createElement('option');
+    noneOpt.value = ''; noneOpt.textContent = 'Aplicar plantilla…';
+    presetSelect.appendChild(noneOpt);
+    Object.keys(EVENT_PRESETS).forEach((key) => {
+      const opt = document.createElement('option');
+      opt.value = key; opt.textContent = EVENT_PRESETS[key].label;
+      presetSelect.appendChild(opt);
+    });
+    presetSelect.addEventListener('change', () => {
+      if (!presetSelect.value) return;
+      const preset = EVENT_PRESETS[presetSelect.value];
+      Object.assign(block.fields, preset.fields);
+      markDirty(true);
+      toast(`Plantilla "${preset.label}" aplicada a ${block.name}`, 'success');
+      renderEvents();
+    });
+    presetRow.appendChild(presetSelect);
+    card.appendChild(presetRow);
+
+    // __eventName is a hidden marker (not serialized - see serializeConfig,
+    // which only ever writes known FIELD_DEFS keys) so field defs like
+    // night_start/night_end can show themselves only within the "night"
+    // event's own card via showIf, without config-form.js needing to know
+    // about block names at all.
+    block.fields.__eventName = block.name;
+
     const fieldsDiv = document.createElement('div');
     card.appendChild(fieldsDiv);
     renderFieldsForm(fieldsDiv, block.fields, FIELD_DEFS, coreList, () => markDirty(true));
+
+    const appsDiv = document.createElement('div');
+    card.appendChild(appsDiv);
+    mountAppsPicker(appsDiv, block.fields, () => markDirty(true));
 
     list.appendChild(card);
   });
@@ -137,11 +210,8 @@ function renderEvents() {
 }
 
 function renderVersionView() {
-  document.getElementById('c-version-select').value = model.version;
-  document.getElementById('c-v1-card').style.display = model.version === '1' ? 'block' : 'none';
-  document.getElementById('c-v2-section').style.display = model.version === '2' ? 'block' : 'none';
   renderGlobalFields();
-  if (model.version === '1') renderV1(); else renderEvents();
+  renderEvents();
 }
 
 function switchSubTab(view) {
@@ -189,6 +259,10 @@ async function saveFile() {
   const content = currentText();
   try {
     await writeConfig(content);
+    // Apps picker edits live outside XtremeBS.conf (separate allow/deny
+    // files), so they're persisted alongside it here rather than being
+    // part of the serialized config text.
+    await Promise.all(model.blocks.map((b) => persistAppsPicker(b.fields)));
     original = content;
     if (activeView === 'form') { editor.value = content; refreshHighlight(); }
     markDirty(false);
@@ -198,12 +272,29 @@ async function saveFile() {
   }
 }
 
+async function restoreRecommended() {
+  const ok = window.confirm(
+    'Esto reemplaza el formulario por una configuración recomendada de partida ' +
+    '(boot, charging, screen_off, low_power y night con ajustes equilibrados). ' +
+    'No se escribe nada en el dispositivo hasta que pulses Guardar. ¿Continuar?'
+  );
+  if (!ok) return;
+  model = buildRecommendedModel();
+  activeView = 'form';
+  document.getElementById('c-view-form').style.display = 'block';
+  document.getElementById('c-view-text').style.display = 'none';
+  document.getElementById('c-tab-form').classList.add('active');
+  document.getElementById('c-tab-text').classList.remove('active');
+  renderVersionView();
+  markDirty(true);
+  toast('Valores recomendados cargados - revisa y pulsa Guardar', 'success');
+}
+
 export function initConfig() {
   editor = document.getElementById('c-editor');
   highlightCode = document.getElementById('c-highlight').querySelector('code');
   dirtyFlag = document.getElementById('c-dirty-flag');
 
-  document.getElementById('c-highlight').addEventListener('scroll', () => {});
   editor.addEventListener('scroll', () => {
     document.getElementById('c-highlight').scrollTop = editor.scrollTop;
     document.getElementById('c-highlight').scrollLeft = editor.scrollLeft;
@@ -215,19 +306,15 @@ export function initConfig() {
 
   document.getElementById('c-save-btn').innerHTML = ICONS.save + ' Guardar';
   document.getElementById('c-reload-btn').innerHTML = ICONS.reload + ' Recargar';
+  document.getElementById('c-restore-btn').innerHTML = ICONS.leaf + ' Recomendados';
   document.getElementById('c-dirty-flag').innerHTML =
     '<span class="badge warn"><span class="b-dot"></span>Cambios sin guardar</span>';
-
-  document.getElementById('c-version-select').addEventListener('change', (e) => {
-    model.version = e.target.value;
-    markDirty(true);
-    renderVersionView();
-  });
 
   document.getElementById('c-add-predefined-btn').addEventListener('click', () => {
     const sel = document.getElementById('c-predefined-event-select');
     if (!sel.value) return;
-    model.blocks.push({ name: sel.value, fields: {}, extra: [] });
+    const fields = sel.value === 'night' ? { night_start: '23:00', night_end: '07:00' } : {};
+    model.blocks.push({ name: sel.value, fields, extra: [] });
     markDirty(true);
     renderEvents();
   });
@@ -249,6 +336,7 @@ export function initConfig() {
   document.getElementById('c-tab-text').addEventListener('click', () => switchSubTab('text'));
   document.getElementById('c-save-btn').addEventListener('click', saveFile);
   document.getElementById('c-reload-btn').addEventListener('click', () => loadFile(true));
+  document.getElementById('c-restore-btn').addEventListener('click', restoreRecommended);
 
   // Detect core count from the live status so cores in the form get
   // real chips (best-effort - fine if it stays empty on first load).
@@ -276,6 +364,6 @@ export function deactivateConfig() {}
 // Used by the tab-switch / swipe-nav guard in main.js: returns true if
 // it's fine to leave (no changes, or the user confirmed discarding them).
 export function confirmLeaveConfig() {
-  if (!loaded || currentText() === original) return true;
+  if (!loaded || !isDirty) return true;
   return window.confirm('Tienes cambios sin guardar en la configuración. ¿Salir sin guardar?');
 }
