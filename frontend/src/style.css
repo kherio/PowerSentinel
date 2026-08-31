@@ -53,6 +53,7 @@ body.app-shell {
 .app-shell > header.app-header { flex: 0 0 auto; }
 .app-shell > main {
   flex: 1;
+  width: 100%;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -61,19 +62,21 @@ body.app-shell {
 
 /* --- Swipeable carousel: all three views are always mounted, laid out
    side by side in #view-track, and positioned purely via transform.
-   Widths are set in PIXELS by main.js (measured from the real, rendered
-   viewport width), not percentages - percentage flex-basis inside a
-   300%-wide row here turned out to render inconsistently (each pane
-   wider than the screen) on-device, most likely due to how the WebView's
-   engine resolves flex-basis/min-width against oversized content in the
-   pane rather than clipping it as expected. Fixed pixel widths remove
-   that ambiguity entirely: each .view's width is deterministic, set
-   directly by JS, independent of its own content or of flexbox's
-   content-based sizing rules. main.js follows the finger 1:1 during
-   touchmove (transition disabled) with edge rubber-banding, and animates
-   to the target pane (or snaps back) on touchend. */
+   The % widths below are only a same-shaped safety net for the very
+   first paint - main.js's setPaneWidths() immediately overrides
+   #view-track and each .view's width with exact PIXEL values (measured
+   from window.innerWidth, deliberately never from an element inside
+   this same layout - see the comment there for why: measuring from
+   .view-viewport's own clientWidth turned out to be circular, since
+   before any width was fixed, .view's content could inflate its own
+   natural size and get measured back as "the viewport width", baking
+   the bug into the very fix meant to remove it). main.js follows the
+   finger 1:1 during touchmove (transition disabled) with edge
+   rubber-banding, and animates to the target pane (or snaps back) on
+   touchend. */
 .view-viewport {
   flex: 1;
+  width: 100%;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
@@ -81,15 +84,16 @@ body.app-shell {
 }
 .view-track {
   display: flex;
+  width: 300%;
   height: 100%;
   transform: translateX(0);
   transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
-  /* width and each .view child's width are set inline in px by main.js */
 }
 .view-track.dragging { transition: none; }
 
 .view {
-  flex: 0 0 auto;
+  flex: 0 0 33.3333%;
+  width: 33.3333%;
   height: 100%;
   min-width: 0;
   min-height: 0;
