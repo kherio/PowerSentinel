@@ -1,94 +1,374 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>XtremeBS Config Editor</title>
+  <title>XtremeBS · Config</title>
+  <link rel="stylesheet" href="../assets/style.css">
   <style>
-    body { 
-      background-color: #1a1a1a; 
-      color: #e0e0e0; 
-      margin: 0;
-      padding: 0;
+    .subtabs { display: flex; gap: 6px; margin-bottom: 14px; }
+    .subtabs button {
+      flex: 1; background: var(--surface); color: var(--muted); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); padding: 8px; font-size: 13px; cursor: pointer;
+      transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
     }
-    #editor-container {
-      background-color: #2b2b2b;
-      color: #e0e0e0;
-      width: 100%; 
-      height: 300px; 
-      box-sizing: border-box;
-    }
-    #editor {
-      width: 100%; 
-      height: 100%;
-      background-color: transparent;
-      color: inherit;
-      border: none;
-      outline: none;
-      resize: none;
-      white-space: pre-wrap;
-      word-wrap: break-word;
-      font-family: monospace;
-      box-sizing: border-box;
-      padding: 5px 20px 5px 20px;
-      line-height: 1.5;
-      font-size: 14px;
-    }
-    button { 
-      background-color: #333; 
-      color: #e0e0e0; 
-      border: 1px solid #555; 
-      padding: 5px 10px;
-      font-size: 20px;
-      margin: 10px 0;
-      cursor: pointer;
-    }
+    .subtabs button:active { transform: translateY(1px); }
+    .subtabs button.active { color: var(--accent); border-color: var(--accent); background: var(--accent-dim); }
+    .event-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 14px; margin-bottom: 12px; opacity: 0; transform: translateY(4px); animation: tile-in 0.3s ease forwards; }
+    .event-card .event-head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+    .event-card .event-icon { width: 26px; height: 26px; border-radius: 50%; background: var(--accent-dim);
+      color: var(--accent); display: flex; align-items: center; justify-content: center; flex: none; }
+    .event-card .event-icon svg { width: 14px; height: 14px; }
+    .event-card .event-name { font-weight: 600; font-size: 14px; flex: 1; }
+    .event-card .event-name.custom-input { background: transparent; border: none; color: var(--text);
+      font-weight: 600; font-size: 14px; width: 100%; outline: none; border-bottom: 1px dashed var(--border); }
+    .add-event-row { display: flex; gap: 8px; margin-top: 4px; flex-wrap: wrap; }
   </style>
 </head>
-<body onload="loadFileOnLoad()">
-<!--  <h1>XtremeBS.conf</h1> -->
-  <div id="editor-container">
-    <textarea id="editor" wrap="soft"></textarea>
-  </div>
-  <button onclick="saveFile()">Save</button>
+<body class="app-shell">
+  <header class="app-header">
+    <div class="app-title"><span class="dot"></span> XtremeBS</div>
+    <nav class="tabs">
+      <a href="/">Estado</a>
+      <a href="/conf" class="active">Config</a>
+      <a href="/log">Log</a>
+    </nav>
+  </header>
 
+  <main>
+    <div class="toolbar">
+      <button class="btn primary" id="save-btn"></button>
+      <button class="btn ghost" id="reload-btn"></button>
+      <div class="spacer"></div>
+      <span id="dirty-flag" style="visibility:hidden;"></span>
+    </div>
+
+    <div class="subtabs">
+      <button id="tab-form" class="active">Formulario</button>
+      <button id="tab-text">Texto sin formato</button>
+    </div>
+
+    <!-- FORM VIEW -->
+    <div id="view-form" class="scroll-area">
+      <div class="card" style="margin-bottom:14px;">
+        <div class="section-title" style="margin-top:0;">General</div>
+        <div style="margin-bottom:14px;">
+          <div style="font-size:13px;font-weight:500;margin-bottom:6px;">Formato de configuración</div>
+          <select class="filter" id="version-select">
+            <option value="2">v2 · Eventos (recomendado)</option>
+            <option value="1">v1 · Simple (heredado)</option>
+          </select>
+        </div>
+        <div id="global-fields"></div>
+      </div>
+
+      <div id="v1-card" class="card" style="margin-bottom:14px; display:none;">
+        <div class="section-title" style="margin-top:0;">Ajustes</div>
+        <div id="v1-fields"></div>
+      </div>
+
+      <div id="v2-section" style="display:none;">
+        <div class="section-title">Eventos</div>
+        <div id="events-list"></div>
+        <div class="card">
+          <div style="font-size:13px;font-weight:500;margin-bottom:8px;">Añadir evento</div>
+          <div class="add-event-row">
+            <select class="filter" id="predefined-event-select"></select>
+            <button class="btn" id="add-predefined-btn">Añadir</button>
+          </div>
+          <div class="add-event-row">
+            <input class="filter" id="custom-event-input" type="text" placeholder="nombre_evento_personalizado" style="flex:1;">
+            <button class="btn" id="add-custom-btn">Añadir personalizado</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TEXT VIEW -->
+    <div id="view-text" class="fill-area" style="display:none;">
+      <div class="editor-wrap">
+        <pre id="highlight"><code></code></pre>
+        <textarea id="editor" spellcheck="false" wrap="soft"></textarea>
+      </div>
+    </div>
+  </main>
+
+  <div id="toast-container"></div>
+
+  <script src="../assets/app.js"></script>
+  <script src="../assets/config-form.js"></script>
   <script>
-    function loadFileOnLoad() {
-      fetch('/cgi-bin/load.cgi')
-        .then(response => response.text())
-        .then(data => {
-          document.getElementById('editor').value = data;
-        })
-        .catch(error => {
-          console.error('Error loading the file:', error);
-          alert('Could not load the file.');
+    var model = null;
+    var original = '';
+    var coreList = null;
+    var activeView = 'form';
+
+    var editor = document.getElementById('editor');
+    var highlightCode = document.getElementById('highlight').querySelector('code');
+    var dirtyFlag = document.getElementById('dirty-flag');
+
+    // ---- text-view syntax highlight (advanced tab) ----
+    function highlightLine(line) {
+      if (/^\s*#/.test(line)) return '<span class="tok-comment">' + escapeHtml(line) + '</span>';
+      var blockMatch = line.match(/^(\s*)([a-zA-Z0-9_-]+)(=\{)(\s*)$/);
+      if (blockMatch) {
+        return blockMatch[1] + '<span class="tok-block">' + escapeHtml(blockMatch[2]) + '</span>' +
+          '<span class="tok-punct">' + escapeHtml(blockMatch[3]) + '</span>' + blockMatch[4];
+      }
+      if (/^\s*\}\s*$/.test(line)) return '<span class="tok-punct">' + escapeHtml(line) + '</span>';
+      var kv = line.match(/^(\s*)([a-zA-Z0-9_]+)(\s*=\s*)(.*)$/);
+      if (kv) {
+        return kv[1] + '<span class="tok-key">' + escapeHtml(kv[2]) + '</span>' +
+          '<span class="tok-op">' + escapeHtml(kv[3]) + '</span>' +
+          '<span class="tok-val">' + escapeHtml(kv[4]) + '</span>';
+      }
+      return escapeHtml(line);
+    }
+    function refreshHighlight() {
+      highlightCode.innerHTML = editor.value.split('\n').map(highlightLine).join('\n') + '\n';
+    }
+    document.getElementById('highlight').addEventListener('scroll', function () {}); // noop guard
+    editor.addEventListener('scroll', function () {
+      document.getElementById('highlight').scrollTop = editor.scrollTop;
+      document.getElementById('highlight').scrollLeft = editor.scrollLeft;
+    });
+    editor.addEventListener('input', function () {
+      refreshHighlight();
+      markDirty(editor.value !== original);
+    });
+
+    document.getElementById('save-btn').innerHTML = ICONS.save + ' Guardar';
+    document.getElementById('reload-btn').innerHTML = ICONS.reload + ' Recargar';
+    document.getElementById('dirty-flag').innerHTML =
+      '<span class="badge warn"><span class="b-dot"></span>Cambios sin guardar</span>';
+
+    function markDirty(isDirty) { dirtyFlag.style.visibility = isDirty ? 'visible' : 'hidden'; }
+
+    // ---- form view ----
+    function renderGlobalFields() {
+      var container = document.getElementById('global-fields');
+      container.innerHTML = '';
+      GLOBAL_DEFS.forEach(function (def) {
+        var row = renderFieldRow(def, model, null, function (val) {
+          model[def.key] = val;
+          markDirty(true);
         });
+        if (row) container.appendChild(row);
+      });
+    }
+
+    function renderV1() {
+      renderFieldsForm(document.getElementById('v1-fields'),
+        Object.assign({}, model.v1Fields, { trigger: model.v1Fields.trigger || 'auto' }),
+        [V1_TRIGGER_DEF].concat(FIELD_DEFS), coreList,
+        function () { markDirty(true); });
+      // sync back trigger + fields into model.v1Fields (renderFieldsForm mutates the object we pass,
+      // so re-point model.v1Fields to it)
+      var proxy = document.getElementById('v1-fields');
+    }
+
+    function renderEvents() {
+      var list = document.getElementById('events-list');
+      list.innerHTML = '';
+      model.blocks.forEach(function (block, idx) {
+        var card = document.createElement('div');
+        card.className = 'event-card';
+
+        var head = document.createElement('div');
+        head.className = 'event-head';
+
+        var EVENT_ICONS = { boot: ICONS.power, charging: ICONS.plug, screen_off: ICONS.moon, low_power: ICONS.warn, manual: ICONS.manual };
+        var iconEl = document.createElement('div');
+        iconEl.className = 'event-icon';
+        iconEl.innerHTML = EVENT_ICONS[block.name] || ICONS.bolt;
+        head.appendChild(iconEl);
+
+        var isPredefined = PREDEFINED_EVENTS.indexOf(block.name) !== -1;
+        var nameEl;
+        if (isPredefined) {
+          nameEl = document.createElement('div');
+          nameEl.className = 'event-name';
+          nameEl.textContent = block.name;
+        } else {
+          nameEl = document.createElement('input');
+          nameEl.className = 'event-name custom-input';
+          nameEl.value = block.name;
+          nameEl.addEventListener('input', function () {
+            block.name = nameEl.value.replace(/[^a-zA-Z0-9_-]/g, '');
+            markDirty(true);
+          });
+        }
+        head.appendChild(nameEl);
+
+        var delBtn = document.createElement('button');
+        delBtn.className = 'btn ghost';
+        delBtn.innerHTML = ICONS.trash;
+        delBtn.title = 'Eliminar evento';
+        delBtn.addEventListener('click', function () {
+          model.blocks.splice(idx, 1);
+          markDirty(true);
+          renderEvents();
+        });
+        head.appendChild(delBtn);
+        card.appendChild(head);
+
+        var fieldsDiv = document.createElement('div');
+        card.appendChild(fieldsDiv);
+        renderFieldsForm(fieldsDiv, block.fields, FIELD_DEFS, coreList, function () { markDirty(true); });
+
+        list.appendChild(card);
+      });
+
+      if (!model.blocks.length) {
+        var empty = document.createElement('div');
+        empty.className = 'log-empty';
+        empty.textContent = 'Sin eventos configurados todavía.';
+        list.appendChild(empty);
+      }
+
+      // refresh predefined dropdown to exclude already-added
+      var predefSelect = document.getElementById('predefined-event-select');
+      predefSelect.innerHTML = '';
+      var existing = model.blocks.map(function (b) { return b.name; });
+      var available = PREDEFINED_EVENTS.filter(function (e) { return existing.indexOf(e) === -1; });
+      if (!available.length) {
+        var opt = document.createElement('option');
+        opt.textContent = 'Todos los eventos predefinidos añadidos';
+        opt.disabled = true;
+        predefSelect.appendChild(opt);
+        document.getElementById('add-predefined-btn').disabled = true;
+      } else {
+        document.getElementById('add-predefined-btn').disabled = false;
+        available.forEach(function (e) {
+          var opt = document.createElement('option');
+          opt.value = e; opt.textContent = e;
+          predefSelect.appendChild(opt);
+        });
+      }
+    }
+
+    function renderVersionView() {
+      document.getElementById('version-select').value = model.version;
+      document.getElementById('v1-card').style.display = model.version === '1' ? 'block' : 'none';
+      document.getElementById('v2-section').style.display = model.version === '2' ? 'block' : 'none';
+      renderGlobalFields();
+      if (model.version === '1') renderV1(); else renderEvents();
+    }
+
+    document.getElementById('version-select').addEventListener('change', function (e) {
+      model.version = e.target.value;
+      markDirty(true);
+      renderVersionView();
+    });
+
+    document.getElementById('add-predefined-btn').addEventListener('click', function () {
+      var sel = document.getElementById('predefined-event-select');
+      if (!sel.value) return;
+      model.blocks.push({ name: sel.value, fields: {}, extra: [] });
+      markDirty(true);
+      renderEvents();
+    });
+
+    document.getElementById('add-custom-btn').addEventListener('click', function () {
+      var input = document.getElementById('custom-event-input');
+      var name = input.value.trim().replace(/[^a-zA-Z0-9_-]/g, '');
+      if (!name) { toast('Escribe un nombre de evento válido', 'error'); return; }
+      if (model.blocks.some(function (b) { return b.name === name; })) {
+        toast('Ese evento ya existe', 'error'); return;
+      }
+      model.blocks.push({ name: name, fields: {}, extra: [] });
+      input.value = '';
+      markDirty(true);
+      renderEvents();
+    });
+
+    // ---- tab switching (form <-> raw text), keeping both in sync ----
+    function switchTab(view) {
+      if (view === activeView) return;
+      if (view === 'text') {
+        editor.value = serializeConfig(model);
+        refreshHighlight();
+      } else {
+        try {
+          model = parseConfig(editor.value);
+        } catch (e) {
+          toast('No se pudo interpretar el texto, revisa el formato', 'error');
+          return;
+        }
+        renderVersionView();
+      }
+      activeView = view;
+      document.getElementById('view-form').style.display = view === 'form' ? 'block' : 'none';
+      document.getElementById('view-text').style.display = view === 'text' ? 'flex' : 'none';
+      document.getElementById('tab-form').classList.toggle('active', view === 'form');
+      document.getElementById('tab-text').classList.toggle('active', view === 'text');
+    }
+    document.getElementById('tab-form').addEventListener('click', function () { switchTab('form'); });
+    document.getElementById('tab-text').addEventListener('click', function () { switchTab('text'); });
+
+    // ---- load / save ----
+    function currentText() {
+      return activeView === 'text' ? editor.value : serializeConfig(model);
+    }
+
+    function loadFile(showToast) {
+      xbsFetch('/cgi-bin/load.cgi')
+        .then(function (data) {
+          original = data;
+          model = parseConfig(data);
+          editor.value = data;
+          refreshHighlight();
+          renderVersionView();
+          markDirty(false);
+          if (showToast) toast('Configuración recargada', 'success');
+        })
+        .catch(function () { toast('No se pudo cargar la configuración', 'error'); });
     }
 
     function saveFile() {
-      let content = document.getElementById('editor').value;
-      
-      fetch('/cgi-bin/save.cgi', {
+      var content = currentText();
+      xbsFetch('/cgi-bin/save.cgi', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'text/plain'
-        },
+        headers: { 'Content-Type': 'text/plain' },
         body: content
       })
-      .then(response => {
-        if (!response.ok) {
-          throw new Error('Network response was not ok');
-        }
-        return response.text();
-      })
-      .then(data => {
-        alert('File saved successfully.');
-      })
-      .catch(error => {
-        console.error('Error saving the file:', error);
-        alert('Failed to save the file.');
-      });
+        .then(function () {
+          original = content;
+          if (activeView === 'form') { editor.value = content; refreshHighlight(); }
+          markDirty(false);
+          toast('Configuración guardada', 'success');
+        })
+        .catch(function () { toast('Error al guardar la configuración', 'error'); });
     }
+
+    document.getElementById('save-btn').addEventListener('click', saveFile);
+    document.getElementById('reload-btn').addEventListener('click', function () { loadFile(true); });
+
+    window.addEventListener('beforeunload', function (e) {
+      if (currentText() !== original) { e.preventDefault(); e.returnValue = ''; }
+    });
+
+    // Swipe-to-navigate: block leaving via swipe if there are unsaved changes,
+    // same rule as the native beforeunload guard above (which many Android
+    // WebViews ignore, so this confirm() is the one that actually shows up).
+    window.XBS_CONFIRM_LEAVE = function () {
+      if (currentText() === original) return true;
+      return confirm('Tienes cambios sin guardar en la configuración. ¿Salir sin guardar?');
+    };
+    initSwipeNav('/conf');
+
+    // detect core count from status.cgi for nicer core chips (best-effort)
+    xbsFetch('/cgi-bin/status.cgi').then(function (text) {
+      var cores = [];
+      text.split('\n').forEach(function (line) {
+        var m = line.trim().match(/^core(\d+):/i);
+        if (m) cores.push(parseInt(m[1], 10));
+      });
+      if (cores.length) { coreList = cores.sort(function (a, b) { return a - b; }); renderVersionView(); }
+    }).catch(function () {});
+
+    loadFile(false);
   </script>
 </body>
 </html>
