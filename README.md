@@ -19,6 +19,12 @@
 - **User-Friendly Tools**: Control via `XBSctl` commands, monitor with logs and status files, and configure via a web UI (v1.0.6+).
 - **Safety Features**: Safe mode to recover from misconfigurations and sanity checks to prevent system crashes.
 
+## Screenshots
+
+<img width="1440" height="2811" alt="Screenshot_20260831-113741_Firefox Nightly" src="https://github.com/user-attachments/assets/1ca40545-a912-40b3-81f4-b664770fb360" />
+<img width="1440" height="2873" alt="Screenshot_20260831-113727_Firefox Nightly" src="https://github.com/user-attachments/assets/57b5850f-5580-47dc-9fa3-f1fd6d62b865" />
+<img width="1440" height="2848" alt="Screenshot_20260831-113715_Firefox Nightly" src="https://github.com/user-attachments/assets/cae06991-b573-4620-8ede-1a591ae9fc1b" />
+
 ---
 
 ## Supported Root Managers
