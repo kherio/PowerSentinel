@@ -53,6 +53,40 @@ ensure_ctl_file() {
   chmod 600 "$f" 2>/dev/null
 }
 
+# Independent, time-of-day based profile (feature request: "perfil
+# nocturno"). Unlike the other events, "night" isn't tied to any device
+# state (charging/screen/battery) - it's purely a clock range read from
+# its own event block's night_start/night_end fields (HH:MM), and can be
+# active at the same time as any other event.
+get_night_times() {
+  night_start=$(grep -F -A99 "night={" "$conf" 2>/dev/null | grep '^\s*night_start=' | head -1 | cut -d= -f2 | tr -d ' \r')
+  night_end=$(grep -F -A99 "night={" "$conf" 2>/dev/null | grep '^\s*night_end=' | head -1 | cut -d= -f2 | tr -d ' \r')
+}
+
+is_night_now() {
+  if [ -z "$night_start" ] || [ -z "$night_end" ]; then
+    echo false
+    return
+  fi
+  # "10#" forces base-10 parsing: bash treats a leading-zero number like
+  # 08/09 as invalid octal in arithmetic context otherwise.
+  local now_h now_m now_min start_h start_m start_min end_h end_m end_min
+  now_h=$(date +%H); now_m=$(date +%M)
+  start_h=${night_start%%:*}; start_m=${night_start##*:}
+  end_h=${night_end%%:*}; end_m=${night_end##*:}
+  now_min=$(( 10#$now_h * 60 + 10#$now_m ))
+  start_min=$(( 10#$start_h * 60 + 10#$start_m ))
+  end_min=$(( 10#$end_h * 60 + 10#$end_m ))
+
+  if [ "$start_min" -le "$end_min" ]; then
+    # same-day range, e.g. 13:00-18:00
+    if [ "$now_min" -ge "$start_min" ] && [ "$now_min" -lt "$end_min" ]; then echo true; else echo false; fi
+  else
+    # wraps past midnight, e.g. 23:00-07:00
+    if [ "$now_min" -ge "$start_min" ] || [ "$now_min" -lt "$end_min" ]; then echo true; else echo false; fi
+  fi
+}
+
 notif() {
   if [ "$(getconf notify true)" = "true" ]; then
     # SECURITY: "$1" is interpolated into a string that su -c hands to a
@@ -798,6 +832,13 @@ if [ "$screen_on" = "false" ]; then
 fi
 was_screen_on="$screen_on"
 
+get_night_times
+night_now="$(is_night_now)"
+if [ "$night_now" = "true" ]; then
+  handle_event night 1
+fi
+was_night="$night_now"
+
 while true; do
 
   # Check for command
@@ -906,6 +947,20 @@ while true; do
     fi
   fi
   was_screen_on="$screen_on"
+
+  # check night profile (time-of-day, independent of any device state)
+  night_now="$(is_night_now)"
+  if [ "$was_night" != "" ]; then
+    if [ "$night_now" != "$was_night" ]; then
+      log_msg 2 "Night profile boundary crossed"
+      if [ "$night_now" = "true" ]; then
+        handle_event night 1
+      else
+        handle_event night 0
+      fi
+    fi
+  fi
+  was_night="$night_now"
 
   sleep "$delay"
 done
