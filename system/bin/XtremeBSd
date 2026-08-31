@@ -231,13 +231,22 @@ update_status() {
   fi
 
   for i in ${!core_list[@]}; do
-    echo "${core_list[$i]}: ${core_status[$i]}" >> "$status_file"
+    core="${core_list[$i]}"
+    cur_freq="$(cat "$cpu_base_path/$core/cpufreq/scaling_cur_freq" 2>/dev/null)"
+    max_freq="$(cat "$cpu_base_path/$core/cpufreq/cpuinfo_max_freq" 2>/dev/null)"
+    if [ -n "$cur_freq" ] && [ -n "$max_freq" ]; then
+      echo "${core_list[$i]}: ${core_status[$i]} freq=${cur_freq}/${max_freq}" >> "$status_file"
+    else
+      echo "${core_list[$i]}: ${core_status[$i]}" >> "$status_file"
+    fi
   done
   unset core_list core_status
   echo "Low RAM: $(getprop ro.config.low_ram)" >> "$status_file"
   echo "WiFi: $wifi" >> "$status_file"
   echo "Doze: $doze" >> "$status_file"
-  unset doze wifi
+  load="$(cut -d' ' -f1-3 /proc/loadavg 2>/dev/null)"
+  [ -n "$load" ] && echo "Load: $load" >> "$status_file"
+  unset doze wifi load
 }
 
 # V1 read_config
