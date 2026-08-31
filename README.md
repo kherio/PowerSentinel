@@ -181,6 +181,24 @@ Control XtremeBS with the `XBSctl` command-line tool (run as root via `su`):
 
 ---
 
+## XBSconf: configuring without a browser
+
+Besides the web UI, `XtremeBS.conf` can be generated and edited entirely from a terminal (ADB, Termux, or any root shell) — no local httpd or browser needed:
+
+| Command | Description |
+|---------|-------------|
+| `XBSconf` | Interactive wizard; walks through every option and (re)writes the whole config |
+| `XBSconf show` | Print the current config |
+| `XBSconf get KEY [--event NAME]` | Read a single value (global, or inside an event block) |
+| `XBSconf set KEY VALUE [--event NAME]` | Update a single value in place |
+| `XBSconf events` | List configured v2 events |
+| `XBSconf add-event NAME` | Add an empty v2 event block |
+| `XBSconf rm-event NAME` | Remove a v2 event block |
+
+Run as root, e.g. `su -c XBSconf` or `adb shell su -c "XBSconf set doze light --event screen_off"`. A `.bak` copy of the previous config is kept on every change. Files it writes use the exact same format as the web UI, so you can freely switch between both.
+
+---
+
 ## Usage Tips
 
 1. **Start Slow**:
