@@ -12,7 +12,9 @@ const LIFECYCLE = {
 };
 
 let currentIndex = 0;
+let paneWidth = 0; // measured in real px, never a % - see setPaneWidths() below
 const track = () => document.getElementById('view-track');
+const viewport = () => document.querySelector('.view-viewport');
 
 function confirmLeave(fromIndex) {
   // Only Config currently guards against unsaved changes; other views
@@ -21,12 +23,24 @@ function confirmLeave(fromIndex) {
   return true;
 }
 
-// Sets the track's resting transform for a given pane index. Percentages
-// are relative to the track's own width (300%), so -100% lands exactly
-// one pane (33.3333% of the track = 100% of the viewport) to the left,
-// regardless of the device's actual pixel width.
-function baseTransform(index) {
-  return `translateX(${-index * 33.3333}%)`;
+// Measures the real, rendered viewport width and applies it as an
+// explicit inline px width to the track (3 panes wide) and each pane -
+// deliberately NOT percentages. A percentage-based flex-basis inside a
+// 300%-wide row rendered inconsistently on-device (each pane wider than
+// the screen), most likely from how the WebView resolved flex sizing
+// against the panes' own content rather than clipping it. Fixed,
+// JS-measured pixel widths remove that ambiguity: every pane's width is
+// deterministic and independent of both flexbox's content-based sizing
+// rules and of the specific engine's rounding behavior.
+function setPaneWidths() {
+  const vp = viewport();
+  paneWidth = vp.clientWidth || window.innerWidth;
+  const t = track();
+  t.style.width = (paneWidth * VIEWS.length) + 'px';
+  Array.from(t.children).forEach((child) => {
+    child.style.width = paneWidth + 'px';
+  });
+  goToIndex(currentIndex, 0);
 }
 
 function setTabActive(index) {
@@ -37,12 +51,9 @@ function setTabActive(index) {
 
 // Animates (or, mid-drag, immediately applies) the track to `index`.
 // `extraPx` is an additional live pixel offset used while the finger is
-// still down (0 once settled).
+// still down (0 once settled). Everything here is plain pixels - no %.
 function goToIndex(index, extraPx) {
-  const t = track();
-  t.style.transform = extraPx
-    ? `translateX(calc(${-index * 33.3333}% + ${extraPx}px))`
-    : baseTransform(index);
+  track().style.transform = `translateX(${-index * paneWidth + extraPx}px)`;
 }
 
 function commitToIndex(newIndex) {
@@ -72,15 +83,13 @@ function initTabButtons() {
 // current one, depending on how far the drag went.
 function initSwipeNav() {
   const THRESHOLD_PX = 60;       // minimum drag to consider "intentional"
-  const COMMIT_FRACTION = 0.28;  // or dragged past this fraction of the viewport width
+  const COMMIT_FRACTION = 0.28;  // or dragged past this fraction of the pane width
   let startX = null, startY = null, tracking = false, dragging = false;
-  let viewportWidth = 1;
 
   document.addEventListener('touchstart', (e) => {
     if (e.touches.length !== 1) { tracking = false; return; }
     startX = e.touches[0].clientX;
     startY = e.touches[0].clientY;
-    viewportWidth = document.querySelector('.view-viewport').clientWidth || window.innerWidth;
     tracking = true;
     dragging = false;
   }, { passive: true });
@@ -125,7 +134,7 @@ function initSwipeNav() {
 
     const touch = e.changedTouches[0];
     const dx = touch.clientX - startX;
-    const fraction = Math.abs(dx) / viewportWidth;
+    const fraction = paneWidth ? Math.abs(dx) / paneWidth : 0;
 
     let targetIndex = currentIndex;
     if (Math.abs(dx) > THRESHOLD_PX && fraction > COMMIT_FRACTION) {
@@ -147,6 +156,10 @@ initSwipeNav();
 initEstado();
 initConfig();
 initLog();
+
+setPaneWidths();
+window.addEventListener('resize', setPaneWidths);
+window.addEventListener('orientationchange', setPaneWidths);
 
 // Estado starts active on load; the other two only start their polling
 // once the user actually swipes/taps to them (see commitToIndex/LIFECYCLE).
