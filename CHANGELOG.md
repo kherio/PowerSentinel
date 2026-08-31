@@ -1,4 +1,7 @@
 
+### v2.2.1-kherio1
+  - Version bump only (v2.1.4-kherio1 -> v2.2.1-kherio1), no functional changes since the previous release
+
 ### v2.1.4-kherio1
   - Forked release: module now updates from this repo directly, no longer depends on DethByte64's update.json/zip
   - Added XBSconf CLI for terminal-based configuration
