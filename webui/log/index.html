@@ -1,96 +1,129 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>XtremeBS Log Viewer</title>
-  <style>
-    body { 
-      background-color: #1a1a1a; 
-      color: #e0e0e0; 
-      margin: 0;
-      padding: 0;
-    }
-    #editor-container {
-      background-color: #2b2b2b;
-      color: #e0e0e0;
-      width: 100%; 
-      height: 300px; 
-      box-sizing: border-box;
-    }
-    #editor {
-      width: 100%; 
-      height: 100%;
-      background-color: transparent;
-      color: inherit;
-      border: none;
-      outline: none;
-      resize: none;
-      white-space: pre-wrap;
-      word-wrap: break-word;
-      font-family: monospace;
-      box-sizing: border-box;
-      padding: 5px 20px 5px 20px;
-      line-height: 1.5;
-      font-size: 14px;
-    }
-    button { 
-      background-color: #333; 
-      color: #e0e0e0; 
-      border: 1px solid #555; 
-      padding: 5px 10px;
-      font-size: 20px;
-      margin: 10px 0;
-      cursor: pointer;
-    }
-  </style>
+  <title>XtremeBS · Log</title>
+  <link rel="stylesheet" href="../assets/style.css">
 </head>
-<body onload="loadFileOnLoad()">
-<!--  <h1>XtremeBS.log</h1> -->
-  <div id="editor-container">
-    <textarea readonly id="editor" wrap="soft"></textarea>
-  </div>
-  <button onclick="saveFile()">Save To External Storage</button>
+<body class="app-shell">
+  <header class="app-header">
+    <div class="app-title"><span class="dot"></span> XtremeBS</div>
+    <nav class="tabs">
+      <a href="/">Estado</a>
+      <a href="/conf">Config</a>
+      <a href="/log" class="active">Log</a>
+    </nav>
+  </header>
 
+  <main>
+    <div class="toolbar">
+      <select class="filter" id="level-filter">
+        <option value="ALL">Todos los niveles</option>
+        <option value="INFO">INFO</option>
+        <option value="VERBOSE">VERBOSE</option>
+        <option value="DEBUG">DEBUG</option>
+      </select>
+      <label class="switch">
+        <input type="checkbox" id="autoscroll" checked> Auto-scroll
+      </label>
+      <div class="spacer"></div>
+      <button class="btn ghost" id="refresh-btn"></button>
+      <button class="btn primary" id="save-btn"></button>
+    </div>
+    <div id="log-count" style="font-size:12px;color:var(--muted);margin-bottom:8px;"></div>
+
+    <div class="fill-area">
+      <div class="log-wrap" id="log-wrap"></div>
+    </div>
+  </main>
+
+  <div id="toast-container"></div>
+
+  <script src="../assets/app.js"></script>
   <script>
-    function loadFileOnLoad() {
-      textarea = document.getElementById('editor');
-      fetch('/cgi-bin/load_log.cgi')
-        .then(response => response.text())
-        .then(data => {
-          textarea.value = data;
-          textarea.scrollTop = textarea.scrollHeight
+    var logWrap = document.getElementById('log-wrap');
+    var levelFilter = document.getElementById('level-filter');
+    var autoscroll = document.getElementById('autoscroll');
+    var rawLog = '';
+
+    document.getElementById('refresh-btn').innerHTML = ICONS.reload;
+    document.getElementById('refresh-btn').title = 'Actualizar ahora';
+    document.getElementById('save-btn').innerHTML = ICONS.download + ' Exportar';
+
+    initSwipeNav('/log');
+
+    var LEVEL_KEY = 'xbs-log-level';
+    var SCROLL_KEY = 'xbs-log-autoscroll';
+    try {
+      var savedLevel = localStorage.getItem(LEVEL_KEY);
+      if (savedLevel) levelFilter.value = savedLevel;
+      var savedScroll = localStorage.getItem(SCROLL_KEY);
+      if (savedScroll !== null) autoscroll.checked = savedScroll === 'true';
+    } catch (e) {}
+
+    function renderLog() {
+      var filter = levelFilter.value;
+      var lines = rawLog.split('\n').filter(function (l) { return l.length; });
+
+      if (!lines.length) {
+        logWrap.innerHTML = '<div class="log-empty">Sin entradas de log.</div>';
+        document.getElementById('log-count').textContent = '';
+        return;
+      }
+
+      var shownCount = 0;
+      logWrap.innerHTML = lines.map(function (line) {
+        var m = line.match(/\[(INFO|VERBOSE|DEBUG)\]/);
+        var lvl = m ? m[1] : null;
+        var cls = 'log-line' + (lvl ? ' lvl-' + lvl : '');
+        if (filter !== 'ALL' && lvl !== filter) cls += ' hidden'; else shownCount++;
+        return '<div class="' + cls + '">' + escapeHtml(line) + '</div>';
+      }).join('');
+
+      document.getElementById('log-count').textContent = filter === 'ALL' ?
+        lines.length + ' líneas' : shownCount + ' de ' + lines.length + ' líneas (filtro ' + filter + ')';
+
+      if (autoscroll.checked) {
+        logWrap.scrollTop = logWrap.scrollHeight;
+      }
+    }
+
+    function loadLog(showToast) {
+      xbsFetch('/cgi-bin/load_log.cgi')
+        .then(function (data) {
+          rawLog = data;
+          renderLog();
+          if (showToast) toast('Log actualizado', 'success');
         })
-        .catch(error => {
-          console.error('Error loading the file:', error);
-          alert('Could not load the file.');
+        .catch(function () {
+          toast('No se pudo cargar el log', 'error');
         });
     }
 
-    function saveFile() {
-      let content = document.getElementById('editor').value;
-      
-      fetch('/cgi-bin/save_log.cgi', {
+    function exportLog() {
+      xbsFetch('/cgi-bin/save_log.cgi', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'text/plain'
-        },
-        body: content
+        headers: { 'Content-Type': 'text/plain' },
+        body: rawLog
       })
-      .then(response => {
-        if (!response.ok) {
-          throw new Error('Network response was not ok');
-        }
-        return response.text();
-      })
-      .then(data => {
-        alert('File saved successfully.');
-      })
-      .catch(error => {
-        console.error('Error saving the file:', error);
-        alert('Failed to save the file.');
-      });
+        .then(function () { toast('Log exportado a almacenamiento externo', 'success'); })
+        .catch(function () { toast('Error al exportar el log', 'error'); });
     }
+
+    levelFilter.addEventListener('change', function () {
+      try { localStorage.setItem(LEVEL_KEY, levelFilter.value); } catch (e) {}
+      renderLog();
+    });
+    autoscroll.addEventListener('change', function () {
+      try { localStorage.setItem(SCROLL_KEY, autoscroll.checked); } catch (e) {}
+      if (autoscroll.checked) logWrap.scrollTop = logWrap.scrollHeight;
+    });
+    document.getElementById('refresh-btn').addEventListener('click', function () { loadLog(true); });
+    document.getElementById('save-btn').addEventListener('click', exportLog);
+
+    loadLog(false);
+    setInterval(function () { loadLog(false); }, 4000);
   </script>
 </body>
 </html>

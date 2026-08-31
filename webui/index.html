@@ -1,70 +1,350 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>XtremeBS Status</title>
-  <style>
-    body { 
-      background-color: #1a1a1a; 
-      color: #e0e0e0; 
-      margin: 0;
-      padding: 0;
-    }
-    #editor-container {
-      background-color: #2b2b2b;
-      color: #e0e0e0;
-      width: 100%; 
-      height: 300px; 
-      box-sizing: border-box;
-    }
-    #editor {
-      width: 100%; 
-      height: 100%;
-      background-color: transparent;
-      color: inherit;
-      border: none;
-      outline: none;
-      resize: none;
-      white-space: pre-wrap;
-      word-wrap: break-word;
-      font-family: monospace;
-      box-sizing: border-box;
-      padding: 5px 20px 5px 20px;
-      line-height: 1.5;
-      font-size: 14px;
-    }
-    button { 
-      background-color: #333; 
-      color: #e0e0e0; 
-      border: 1px solid #555; 
-      padding: 5px 10px;
-      font-size: 20px;
-      margin: 10px 0;
-      cursor: pointer;
-    }
-  </style>
+  <title>XtremeBS · Estado</title>
+  <link rel="stylesheet" href="assets/style.css">
 </head>
-<body onload="setInterval(loadFileOnLoad, 1000);">
-<!--  <h1>XtremeBS.conf</h1> -->
-  <div id="editor-container">
-    <textarea readonly id="editor" wrap="soft"></textarea>
-  </div>
-  <button onclick="location.href='/conf';">Config Editor</button>
-  <button onclick="location.href='/log';">Log Viewer</button>
-  
+<body class="app-shell">
+  <header class="app-header">
+    <div class="app-title"><span class="dot"></span> XtremeBS</div>
+    <nav class="tabs">
+      <a href="/" class="active">Estado</a>
+      <a href="/conf">Config</a>
+      <a href="/log">Log</a>
+    </nav>
+  </header>
+
+  <main>
+    <div class="toolbar">
+      <span id="updated" style="font-size:12px;color:var(--muted);">Cargando…</span>
+      <div class="spacer"></div>
+      <button class="btn ghost" id="refresh-btn" title="Actualizar ahora"></button>
+    </div>
+
+    <div class="scroll-area">
+      <div class="hero-card">
+        <div class="gauge-wrap">
+          <svg class="gauge" viewBox="0 0 120 120">
+            <circle class="gauge-track" cx="60" cy="60" r="52"></circle>
+            <circle class="gauge-fill" id="gauge-fill" cx="60" cy="60" r="52" stroke-dasharray="326.73" stroke-dashoffset="326.73"></circle>
+          </svg>
+          <div class="gauge-center">
+            <div class="gauge-percent" id="gauge-percent">–</div>
+            <div class="gauge-label">en ahorro</div>
+          </div>
+        </div>
+        <div class="hero-text">
+          <div class="hero-title" id="hero-title">Cargando estado…</div>
+          <div class="hero-sub" id="hero-sub"></div>
+        </div>
+      </div>
+
+      <div class="section-title" style="margin-top:0;">Núcleos de CPU</div>
+      <div id="core-counts" style="font-size:12px;color:var(--muted);margin-bottom:8px;"></div>
+      <div class="core-map" id="core-map"></div>
+      <div class="core-summary-row" id="core-summary">
+        <span class="legend l-active"><span class="dot"></span> Activo</span>
+        <span class="legend l-save"><span class="dot"></span> Ahorro</span>
+        <span class="legend l-off"><span class="dot"></span> Apagado</span>
+      </div>
+      <div class="core-tiles" id="core-grid"></div>
+
+      <div class="section-title" id="freq-section-title" style="display:none;">Frecuencia y carga</div>
+      <div class="metric-row" id="freq-metrics" style="display:none;"></div>
+      <div class="chart-card" id="freq-chart-card" style="display:none;">
+        <div class="chart-head">
+          <span class="chart-title">Últimos ~90s</span>
+          <span class="chart-now" id="chart-now"></span>
+        </div>
+        <svg id="freq-chart" viewBox="0 0 300 64" preserveAspectRatio="none"></svg>
+        <div class="chart-legend">
+          <span><span class="dot freq"></span>Frecuencia media (% del máx.)</span>
+          <span><span class="dot load"></span>Carga (1 min)</span>
+        </div>
+      </div>
+
+      <div class="section-title">Sistema</div>
+      <div class="grid" id="sys-grid"></div>
+
+      <div id="unmatched-box" class="card" style="margin-top:14px;display:none;">
+        <div class="label" style="font-size:12px;color:var(--muted);margin-bottom:6px;">Otras líneas del estado (sin interpretar)</div>
+        <div class="value2" style="font-size:12px;font-family:var(--mono);"></div>
+      </div>
+
+      <details class="raw">
+        <summary>Ver salida sin procesar</summary>
+        <pre id="raw-status">—</pre>
+      </details>
+    </div>
+  </main>
+
+  <div id="toast-container"></div>
+
+  <script src="assets/app.js"></script>
   <script>
-    function loadFileOnLoad() {
-      fetch('/cgi-bin/status.cgi')
-        .then(response => response.text())
-        .then(data => {
-          document.getElementById('editor').value = data;
+    var lastText = null;
+    var GAUGE_C = 2 * Math.PI * 52;
+    var HISTORY_MAX = 30; // ~90s at 3s polling
+    var freqHistory = [];
+    var loadHistory = [];
+    var maxLoadSeen = 1;
+
+    initSwipeNav('/');
+
+    function badgeHtml(cls, label) {
+      return '<span class="badge ' + cls + '"><span class="b-dot"></span>' + label + '</span>';
+    }
+
+    function sparklinePath(values, w, h) {
+      if (values.length < 2) return { line: '', fill: '' };
+      var step = w / (values.length - 1);
+      var pts = values.map(function (v, i) { return [i * step, h - (v / 100) * h]; });
+      var line = 'M' + pts.map(function (p) { return p[0].toFixed(1) + ',' + p[1].toFixed(1); }).join(' L');
+      var fill = line + ' L' + (w).toFixed(1) + ',' + h + ' L0,' + h + ' Z';
+      return { line: line, fill: fill };
+    }
+
+    function renderChart() {
+      var svg = document.getElementById('freq-chart');
+      var w = 300, h = 64;
+      var freqPath = sparklinePath(freqHistory, w, h);
+      var loadPath = sparklinePath(loadHistory, w, h);
+      svg.innerHTML =
+        (freqPath.fill ? '<path class="chart-fill-freq" d="' + freqPath.fill + '"></path>' : '') +
+        (loadPath.fill ? '<path class="chart-fill-load" d="' + loadPath.fill + '"></path>' : '') +
+        (freqPath.line ? '<path class="chart-line-freq" d="' + freqPath.line + '"></path>' : '') +
+        (loadPath.line ? '<path class="chart-line-load" d="' + loadPath.line + '"></path>' : '');
+    }
+
+    function setGauge(percent) {
+      var fill = document.getElementById('gauge-fill');
+      var offset = GAUGE_C * (1 - percent / 100);
+      fill.style.strokeDasharray = GAUGE_C;
+      fill.style.strokeDashoffset = offset;
+      fill.style.stroke = percent >= 60 ? 'var(--accent)' : (percent >= 25 ? 'var(--warn)' : 'var(--muted)');
+      document.getElementById('gauge-percent').textContent = percent + '%';
+    }
+
+    function render(text) {
+      document.getElementById('raw-status').textContent = text;
+
+      var cores = [];
+      var sys = {};
+      var unmatched = [];
+
+      text.split('\n').forEach(function (line) {
+        line = line.trim();
+        if (!line) return;
+        var m;
+        // Real daemon output: "cpu0: online" / "cpu4: offline" / "cpu4: powersave freq=1800000/2841600"
+        if ((m = line.match(/^cpu(\d+):\s*(online|offline|powersave)(?:\s+freq=(\d+)\/(\d+))?$/i))) {
+          var core = { n: m[1], state: m[2].toLowerCase() };
+          if (m[3] && m[4]) { core.curFreq = parseInt(m[3], 10); core.maxFreq = parseInt(m[4], 10); }
+          cores.push(core);
+        } else if ((m = line.match(/^load:\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)$/i))) {
+          sys.load1 = parseFloat(m[1]); sys.load5 = parseFloat(m[2]); sys.load15 = parseFloat(m[3]);
+        } else if ((m = line.match(/^low ram:\s*(.*)$/i))) {
+          sys.lowRam = m[1].trim().toLowerCase(); // "true" | "false" | "" (prop not set on this device)
+        } else if ((m = line.match(/^wifi:\s*(enabled|disabled)$/i))) {
+          sys.wifi = m[1].toLowerCase();
+        } else if ((m = line.match(/^doze:\s*(light|deep|inactive)$/i))) {
+          sys.doze = m[1].toLowerCase();
+        } else if (line.toLowerCase().indexOf('error') === 0) {
+          sys.error = line;
+        } else {
+          unmatched.push(line);
+        }
+      });
+
+      var heroTitle = document.getElementById('hero-title');
+      var heroSub = document.getElementById('hero-sub');
+
+      if (sys.error) {
+        setGauge(0);
+        document.getElementById('gauge-percent').innerHTML = ICONS.warn;
+        heroTitle.textContent = 'Servicio no disponible';
+        heroSub.textContent = sys.error + ' — comprueba que el demonio de XtremeBS esté corriendo.';
+      }
+
+      var coreGrid = document.getElementById('core-grid');
+      var coreCounts = document.getElementById('core-counts');
+      var coreMap = document.getElementById('core-map');
+
+      // state -> { cls, label, icon } — "active" is the healthy/working state (green),
+      // "powersave" is an intermediate saving state (amber), "offline" is fully parked (muted).
+      var CORE_META = {
+        online: { cls: 'core-active', mapCls: 'active', label: 'Activo', icon: ICONS.bolt },
+        powersave: { cls: 'core-save', mapCls: 'save', label: 'Ahorro', icon: ICONS.leaf },
+        offline: { cls: 'core-off', mapCls: 'off', label: 'Apagado', icon: ICONS.power }
+      };
+
+      if (sys.error) {
+        coreGrid.innerHTML = '<div class="stat-card"><div class="label">' + ICONS.cpu + ' Demonio</div>' +
+          badgeHtml('off', 'No disponible') + '</div>';
+        coreCounts.textContent = '';
+        coreMap.innerHTML = '';
+      } else if (cores.length) {
+        cores.sort(function (a, b) { return parseInt(a.n, 10) - parseInt(b.n, 10); });
+
+        coreMap.innerHTML = cores.map(function (c) {
+          var meta = CORE_META[c.state] || CORE_META.online;
+          return '<div class="cm-dot ' + meta.mapCls + '" title="cpu' + c.n + ' · ' + meta.label + '">' + c.n + '</div>';
+        }).join('');
+
+        coreGrid.innerHTML = cores.map(function (c, i) {
+          var meta = CORE_META[c.state] || CORE_META.online;
+          var freqBit = '';
+          if (c.curFreq && c.maxFreq) {
+            var pct = Math.round((c.curFreq / c.maxFreq) * 100);
+            freqBit = '<div class="ct-freq">' + (c.curFreq / 1000).toFixed(0) + '/' + (c.maxFreq / 1000).toFixed(0) + ' MHz</div>' +
+              '<div class="ct-freqbar"><div class="ct-freqbar-fill" style="width:' + pct + '%"></div></div>';
+          }
+          return '<div class="core-tile ' + meta.cls + '" style="animation-delay:' + (i * 25) + 'ms">' +
+            '<div class="ct-icon">' + meta.icon + '</div>' +
+            '<div class="ct-name">cpu' + c.n + '</div>' +
+            '<div class="ct-state">' + meta.label + '</div>' +
+            freqBit +
+            '</div>';
+        }).join('');
+
+        var activeCount = cores.filter(function (c) { return c.state === 'online'; }).length;
+        var offCount = cores.filter(function (c) { return c.state === 'offline'; }).length;
+        var psCount = cores.filter(function (c) { return c.state === 'powersave'; }).length;
+        coreCounts.textContent = activeCount + ' de ' + cores.length + ' núcleos activos' +
+          ((offCount || psCount) ? ' · ' + (offCount + psCount) + ' en ahorro' +
+            (offCount && psCount ? ' (' + offCount + ' apagados, ' + psCount + ' powersave)' :
+              offCount ? ' (apagados)' : ' (powersave)') : '');
+      } else {
+        coreGrid.innerHTML = '<div class="stat-card"><div class="label">' + ICONS.cpu + ' Núcleos</div><div class="value" style="color:var(--muted)">Sin datos</div></div>';
+        coreCounts.textContent = '';
+        coreMap.innerHTML = '';
+      }
+
+      // --- Frequency & load section (only if the daemon reports it) ---
+      var freqSectionTitle = document.getElementById('freq-section-title');
+      var freqMetrics = document.getElementById('freq-metrics');
+      var freqChartCard = document.getElementById('freq-chart-card');
+      var coresWithFreq = cores.filter(function (c) { return c.curFreq && c.maxFreq; });
+
+      if (!sys.error && (coresWithFreq.length || sys.load1 !== undefined)) {
+        freqSectionTitle.style.display = '';
+        freqMetrics.style.display = '';
+        freqChartCard.style.display = '';
+
+        var cards = [];
+        var avgPct = null;
+        if (coresWithFreq.length) {
+          avgPct = Math.round(coresWithFreq.reduce(function (s, c) { return s + (c.curFreq / c.maxFreq) * 100; }, 0) / coresWithFreq.length);
+          cards.push('<div class="metric-card"><div class="mc-label"><span style="width:12px;height:12px;display:inline-flex">' + ICONS.bolt + '</span> Frecuencia media</div>' +
+            '<div class="mc-value">' + avgPct + '<span class="mc-unit">% del máx.</span></div></div>');
+          freqHistory.push(avgPct);
+          if (freqHistory.length > HISTORY_MAX) freqHistory.shift();
+        }
+        if (sys.load1 !== undefined) {
+          cards.push('<div class="metric-card"><div class="mc-label">Carga (1 min)</div>' +
+            '<div class="mc-value">' + sys.load1.toFixed(2) + '</div></div>');
+          cards.push('<div class="metric-card"><div class="mc-label">Carga (5/15 min)</div>' +
+            '<div class="mc-value" style="font-size:14px;">' + sys.load5.toFixed(2) + ' / ' + sys.load15.toFixed(2) + '</div></div>');
+          maxLoadSeen = Math.max(maxLoadSeen, sys.load1, 1);
+          loadHistory.push(Math.min(100, (sys.load1 / maxLoadSeen) * 100));
+          if (loadHistory.length > HISTORY_MAX) loadHistory.shift();
+        }
+        freqMetrics.innerHTML = cards.join('');
+
+        var nowBits = [];
+        if (avgPct !== null) nowBits.push(avgPct + '%');
+        if (sys.load1 !== undefined) nowBits.push('carga ' + sys.load1.toFixed(2));
+        document.getElementById('chart-now').textContent = nowBits.join(' · ');
+
+        renderChart();
+      } else {
+        freqSectionTitle.style.display = 'none';
+        freqMetrics.style.display = 'none';
+        freqChartCard.style.display = 'none';
+      }
+
+      var sysGrid = document.getElementById('sys-grid');
+      var sysCards = [];
+      if (sys.wifi) {
+        sysCards.push('<div class="stat-card"><div class="label">' + ICONS.wifi + ' WiFi</div>' +
+          badgeHtml(sys.wifi === 'disabled' ? 'on' : 'neutral', sys.wifi === 'disabled' ? 'Desactivado' : 'Activo') + '</div>');
+      }
+      if (sys.doze) {
+        var dozeLabel = sys.doze === 'light' ? 'Ligero' : (sys.doze === 'deep' ? 'Profundo' : 'Inactivo');
+        sysCards.push('<div class="stat-card"><div class="label">' + ICONS.moon + ' Doze</div>' +
+          badgeHtml(sys.doze === 'inactive' ? 'neutral' : 'on', dozeLabel) + '</div>');
+      }
+      if (sys.lowRam === 'true' || sys.lowRam === 'false') {
+        sysCards.push('<div class="stat-card"><div class="label">' + ICONS.ram + ' Low RAM</div>' +
+          badgeHtml(sys.lowRam === 'true' ? 'on' : 'neutral', sys.lowRam === 'true' ? 'Activado' : 'Desactivado') + '</div>');
+      } else {
+        sysCards.push('<div class="stat-card"><div class="label">' + ICONS.ram + ' Low RAM</div>' +
+          badgeHtml('neutral', 'No aplica') + '</div>');
+      }
+      sysGrid.innerHTML = sysCards.length ? sysCards.join('') :
+        '<div class="stat-card"><div class="label">Sistema</div><div class="value" style="color:var(--muted)">Sin datos</div></div>';
+
+      // --- overall savings gauge + friendly summary ---
+      if (!sys.error) {
+        var offlineC = cores.filter(function (c) { return c.state === 'offline'; }).length;
+        var psC = cores.filter(function (c) { return c.state === 'powersave'; }).length;
+        var totalUnits = cores.length + (sys.wifi ? 1 : 0) + (sys.doze ? 1 : 0);
+        var savingUnits = (offlineC + psC) + (sys.wifi === 'disabled' ? 1 : 0) + (sys.doze && sys.doze !== 'inactive' ? 1 : 0);
+        var percent = totalUnits ? Math.round((savingUnits / totalUnits) * 100) : 0;
+        setGauge(percent);
+
+        if (totalUnits === 0) {
+          heroTitle.textContent = 'Sin datos todavía';
+          heroSub.textContent = 'Esperando la primera lectura del demonio.';
+        } else if (percent >= 60) {
+          heroTitle.textContent = 'Ahorro activo';
+          heroSub.textContent = 'La mayoría de los sistemas monitorizados están en modo ahorro ahora mismo.';
+        } else if (percent >= 25) {
+          heroTitle.textContent = 'Ahorro parcial';
+          heroSub.textContent = 'Algunos sistemas están ahorrando batería; otros siguen activos.';
+        } else {
+          heroTitle.textContent = 'Sin ahorro activo';
+          heroSub.textContent = 'Ningún evento de ahorro está aplicado en este momento.';
+        }
+      }
+
+      var extraBox = document.getElementById('unmatched-box');
+      if (unmatched.length) {
+        extraBox.style.display = 'block';
+        extraBox.querySelector('.value2').textContent = unmatched.join(' · ');
+      } else {
+        extraBox.style.display = 'none';
+      }
+    }
+
+
+    function loadStatus(silent) {
+      xbsFetch('/cgi-bin/status.cgi')
+        .then(function (data) {
+          var firstLoad = lastText === null;
+          lastText = data;
+          render(data);
+          if (firstLoad) {
+            document.querySelector('.scroll-area').classList.add('loaded');
+          }
+          document.getElementById('updated').textContent =
+            'Actualizado ' + new Date().toLocaleTimeString();
         })
-        .catch(error => {
-          console.error('Error loading the file:', error);
-          alert('Could not load the file.');
+        .catch(function (err) {
+          document.getElementById('updated').textContent = 'Error al actualizar';
+          if (!silent) toast('No se pudo cargar el estado', 'error');
         });
     }
+
+    document.getElementById('refresh-btn').addEventListener('click', function () {
+      loadStatus(false);
+    });
+    document.getElementById('refresh-btn').innerHTML = ICONS.reload + ' Actualizar';
+
+    loadStatus(true);
+    setInterval(function () { loadStatus(true); }, 3000);
   </script>
 </body>
 </html>
