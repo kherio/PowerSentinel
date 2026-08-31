@@ -1,4 +1,20 @@
 
+### v3.2.0-kherio
+  - Config tab, usability improvements:
+    - **App picker**: search/select installed apps visually for the allowlist/denylist instead of hand-editing text files (new `listPackages`/`readAppListFile`/`writeAppListFile` in the WebUI's `exec()`-based API).
+    - **Visual core selector**: confirmed/polished - `handle_cores`/`disable_cores` already show tappable per-core chips (reusing live core data from Estado) instead of a free-text field whenever the daemon's core list is available.
+    - **Quick-start templates**: "Equilibrado" / "Ahorro agresivo" presets fill in a sensible set of fields for any event in one tap.
+    - **Contextual help**: every field in the form now has an explanatory line (previously only some did).
+    - **Inline safety warning**: if "Suspender" is selected with no apps in the allowlist, the form now shows the same warning the daemon would otherwise apply silently (it disables suspend and notifies).
+    - **v1 removed from the form entirely** (not just hidden): the legacy v1/v2 toggle and v1 field editor are gone. A legacy v1 config's lines are preserved verbatim (not lost) if one is ever loaded, but are no longer form-editable - only the raw-text editor can touch them. New/reset configs are always v2.
+    - **Duplicate event**: clone an existing event's settings into a new custom event instead of starting from blank fields.
+    - **Try it now**: per-event "Aplicar ahora" / "Detener" buttons call `XBSctl start|stop <event>` directly, to see an event's effect immediately instead of waiting for its real trigger condition.
+    - **Night profile**: new independent, time-of-day-based event (`night_start`/`night_end`, HH:MM, wraps past midnight) that the daemon activates/deactivates purely on wall-clock time - in parallel with, not instead of, the other events (screen/charging/battery). Requires a reload after changing its hours.
+    - **Restore recommended defaults**: a button that replaces the in-memory form with a sensible starting config (boot/charging/screen_off/low_power/night, balanced/aggressive presets) - nothing is written to disk until Guardar is pressed.
+  - **Swipe navigation reworked into a real sliding carousel**: the track now follows the finger 1:1 during the drag (with edge rubber-banding) instead of jumping instantly on release, and tab-bar taps animate the same way.
+  - **Fixed a real bug**: the "unsaved changes" prompt could fire when leaving Config with zero actual edits, because it compared the raw loaded file text against the form's freshly re-serialized text - any formatting difference (key order, spacing) between the two showed up as a false "unsaved change". Dirtiness is now tracked as an explicit flag set only by genuine edits (a field change, an apps-picker toggle, or typing in the raw editor), not by diffing text.
+  - Fixed a v3.0.0 regression: several Config-tab styles (event cards, subtabs) and the raw-text editor's element IDs were left behind in the old per-page stylesheets when `webui/` was removed, and never carried over into the new shared `style.css` - the editor highlighting and event card styling silently didn't apply. All restored and verified against the built `webroot/`.
+
 ### v3.0.0-kherio
   - **Breaking change**: replaced the local httpd/CGI web interface (`webui/`, `action.sh`) with a native KernelSU WebUI-X `webroot/`, built from a new Vite frontend (`frontend/`). No local server is started anymore; the manager's WebView loads `webroot/` directly and talks to the system through `kernelsu`'s `exec()`.
   - Added `XBS-writefile`: a hardened helper for writes coming from the webui - base64-encoded content over stdin (never interpolated into a shell command), path allowlisted to XtremeBS's own data dir, atomic write (temp file + `mv`), automatic `.bak` of the previous content.
