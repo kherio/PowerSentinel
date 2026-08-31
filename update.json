@@ -1,6 +1,6 @@
 {
   "version": "v2.2.1-kherio",
   "versionCode": "221",
-  "zipUrl": "https://raw.githubusercontent.com/kherio/Xtreme-Battery-Saver/main/XtremeBS.zip",
+  "zipUrl": "https://github.com/kherio/Xtreme-Battery-Saver/releases/download/v2.2.1-kherio/XtremeBS.zip",
   "changelog": "https://raw.githubusercontent.com/kherio/Xtreme-Battery-Saver/main/CHANGELOG.md"
 }
