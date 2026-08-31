@@ -9,7 +9,26 @@ getconf() {
   [ "$opt" != "" ] && echo "$opt" || echo "$2"
 }
 
-ctl_file=$(getconf ctl_file "/data/local/tmp/xbs")
+# SECURITY: see the matching comment in XtremeBSd - default lives inside
+# /data/local/tmp/XtremeBS/ (not the world-writable /data/local/tmp
+# itself), and a pre-existing file not owned by root is replaced rather
+# than trusted, to close a pre-creation race on a shared directory.
+ensure_ctl_file() {
+  local f="$1"
+  local owner
+  mkdir -p "$(dirname "$f")" 2>/dev/null
+  if [ -e "$f" ]; then
+    owner="$(stat -c '%u' "$f" 2>/dev/null)"
+    if [ "$owner" != "0" ]; then
+      rm -f "$f"
+    fi
+  fi
+  [ -e "$f" ] || : > "$f"
+  chmod 600 "$f" 2>/dev/null
+}
+
+ctl_file=$(getconf ctl_file "/data/local/tmp/XtremeBS/xbs")
+ensure_ctl_file "$ctl_file"
 version=$(getconf version 1)
 
 

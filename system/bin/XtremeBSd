@@ -31,10 +31,42 @@ is_device() {
   fi
 }
 
+# SECURITY: creates/repairs the control file the webui/XBSctl write
+# commands into. Any world-writable directory (like /data/local/tmp
+# itself) lets an unprivileged app pre-create a file with our exact name
+# before we do, keeping ownership/permissions of their choosing forever
+# after - so if a pre-existing ctl_file isn't owned by root, it's treated
+# as compromised and replaced with a fresh, root-only one instead of
+# trusting whatever is in it.
+ensure_ctl_file() {
+  local f="$1"
+  local owner
+  mkdir -p "$(dirname "$f")" 2>/dev/null
+  if [ -e "$f" ]; then
+    owner="$(stat -c '%u' "$f" 2>/dev/null)"
+    if [ "$owner" != "0" ]; then
+      log_msg 1 "ctl_file $f is not owned by root (uid $owner) - recreating it"
+      rm -f "$f"
+    fi
+  fi
+  [ -e "$f" ] || : > "$f"
+  chmod 600 "$f" 2>/dev/null
+}
+
 notif() {
-  # dont notify if notify=false
   if [ "$(getconf notify true)" = "true" ]; then
-    su -lp 2000 -c "cmd notification post -S bigtext -t 'XtremeBS' 'STATUS' \"$1\"" >/dev/null
+    # SECURITY: "$1" is interpolated into a string that su -c hands to a
+    # NEW shell to parse and execute, so any shell metacharacters in it
+    # would be executed too - not just displayed. Some callers build "$1"
+    # from data that ultimately originates in the world-writable control
+    # file (see handle_event()'s $cmd_event / $active_notif), so this is
+    # a real injection path, not a theoretical one. Base64-encoding the
+    # message first neutralizes it: that alphabet has no shell
+    # metacharacters, so it can't break out of the quoting no matter what
+    # the original message contained.
+    local b64
+    b64="$(printf '%s' "$1" | base64 | tr -d '\n')"
+    su -lp 2000 -c "cmd notification post -S bigtext -t 'XtremeBS' 'STATUS' \"\$(echo $b64 | base64 -d)\"" >/dev/null
   fi
 }
 
@@ -702,7 +734,7 @@ handle_event() {
           kill_wifi="true"
         fi;;
     esac
-  done < <(grep -A99 "$event={" "$conf")
+  done < <(grep -F -A99 "$event={" "$conf")
 
   # perform sanity checks to prevent the user from killing themself
   if [ "$handle_apps" != "false" ] && [ "$allowlist" = "null" ] && [ "$denylist" = "null" ]; then
@@ -1083,7 +1115,18 @@ log_level=$(getconf log_level 3) # set debug by default
 [ -f "$log_file" ] && mv "$log_file" "$log_file.old"
 
 # set ctl_file
-ctl_file=$(getconf ctl_file "/data/local/tmp/xbs")
+#
+# SECURITY: default lives inside /data/local/tmp/XtremeBS/ (created below
+# with normal root-owned permissions), not directly in /data/local/tmp
+# itself. /data/local/tmp is world-writable (mode 1777) on Android, so a
+# file placed straight in it can be pre-created by any unprivileged app
+# before this daemon ever runs, letting that app keep read/write access
+# to it (the sticky bit only stops others from deleting/renaming - not
+# from creating a same-named file first). ensure_ctl_file() below also
+# refuses to trust a pre-existing file it doesn't own, as defense in
+# depth for anyone who has overridden ctl_file back into a shared path.
+ctl_file=$(getconf ctl_file "/data/local/tmp/XtremeBS/xbs")
+ensure_ctl_file "$ctl_file"
 
 # persistent safe mode
 safe=$(getconf safemode 0)
