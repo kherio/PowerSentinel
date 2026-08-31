@@ -1,4 +1,7 @@
 
+### v3.2.1-kherio
+  - **Critical fix**: v3.2.0's carousel broke the whole layout on-device (all three tabs wider than the screen, Config cut off/incomplete). Root cause: `.app-shell > main` was missing `display: flex; flex-direction: column;`, so `.view-viewport`'s `flex: 1` was inert (flex properties only apply inside a flex container) - it never received a resolved height, which broke the entire `height: 100%` chain down through `.view-track` and each `.view` pane, and let the 300%-wide track overflow the viewport horizontally instead of being clipped to one pane's width. One-line fix; the rest of v3.2.0 is unchanged.
+
 ### v3.2.0-kherio
   - Config tab, usability improvements:
     - **App picker**: search/select installed apps visually for the allowlist/denylist instead of hand-editing text files (new `listPackages`/`readAppListFile`/`writeAppListFile` in the WebUI's `exec()`-based API).
