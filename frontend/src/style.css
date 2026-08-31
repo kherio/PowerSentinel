@@ -60,64 +60,55 @@ body.app-shell {
   overflow: hidden;
 }
 
-/* --- Swipeable carousel: all three views are always mounted, laid out
-   side by side in #view-track, and positioned purely via transform.
-   The % widths below are only a same-shaped safety net for the very
-   first paint - main.js's setPaneWidths() immediately overrides
-   #view-track and each .view's width with exact PIXEL values (measured
-   from window.innerWidth, deliberately never from an element inside
-   this same layout - see the comment there for why: measuring from
-   .view-viewport's own clientWidth turned out to be circular, since
-   before any width was fixed, .view's content could inflate its own
-   natural size and get measured back as "the viewport width", baking
-   the bug into the very fix meant to remove it). main.js follows the
-   finger 1:1 during touchmove (transition disabled) with edge
-   rubber-banding, and animates to the target pane (or snaps back) on
-   touchend. */
+/* --- Tab panes: after three failed attempts at a live-dragging
+   carousel (transform-based positioning kept overflowing the screen
+   width on-device, even after fixing the measurement source - see
+   CHANGELOG v3.2.1/2/3 for the full trail), this reverts to the
+   simple, previously-working mechanism: only the active pane is
+   rendered (display:none on the rest), toggled by main.js. Swiping
+   still switches tabs (see initSwipeNav in main.js), it just no
+   longer visually follows the finger mid-drag - that part is what
+   kept breaking and isn't worth the reliability cost until it can be
+   debugged with actual on-device tooling instead of guessing blind. */
 .view-viewport {
   flex: 1;
-  width: 100%;
-  min-width: 0;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
   position: relative;
 }
 .view-track {
   display: flex;
-  width: 300%;
-  height: 100%;
-  transform: translateX(0);
-  transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
-}
-.view-track.dragging { transition: none; }
-
-.view {
-  flex: 0 0 33.3333%;
-  width: 33.3333%;
-  height: 100%;
-  min-width: 0;
+  flex-direction: column;
+  flex: 1;
   min-height: 0;
+}
+.view { display: none; }
+.view.active {
   display: flex;
+  flex: 1;
+  min-height: 0;
   flex-direction: column;
   overflow: hidden;
 }
-.view > .toolbar,
-.view > .subtabs { flex: 0 0 auto; }
-.view > .scroll-area {
+.view.active > .toolbar,
+.view.active > .subtabs { flex: 0 0 auto; }
+.view.active > .scroll-area {
   flex: 1;
   min-height: 0;
   overflow: auto;
   -webkit-overflow-scrolling: touch;
 }
-.view > .fill-area {
+.view.active > .fill-area {
   flex: 1;
   min-height: 0;
   overflow: auto;
   display: flex;
   flex-direction: column;
 }
-.view > .fill-area .editor-wrap,
-.view > .fill-area .log-wrap {
+.view.active > .fill-area .editor-wrap,
+.view.active > .fill-area .log-wrap {
   flex: 1;
   min-height: 0;
   height: auto;
