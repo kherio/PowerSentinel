@@ -46,9 +46,7 @@ Tested primarily on a **Pixel 5** running **ProtonAOSP**. Compatibility varies b
 ## Installation
 
 1. **Download the Module**:
-   - Grab the latest release from [GitHub Releases](https://github.com/DethByte64/Xtreme-Battery-Saver/releases/latest).
-   - Alternatively, install via [MMRL](https://mmrl.dev/) for easy updates:  
-     [![MMRL](https://mmrl.dev/assets/badge.svg)](https://mmrl.dev/repository/zguectZGR/Xtreme-Battery-Saver)
+   - Grab the latest release from [GitHub Releases](https://github.com/kherio/Xtreme-Battery-Saver/releases/latest).
 
 2. **Install**:
    - Flash the module in your root manager (Magisk/KernelSU).
@@ -253,7 +251,7 @@ Run as root, e.g. `su -c XBSconf` or `adb shell su -c "XBSconf set doze light --
 - **Unresponsive Device**: Boot into recovery, edit `/data/local/tmp/XtremeBS/XtremeBS.conf` to set `safemode=1`, reboot, and fix the config.
 - **No Battery Improvement**: Verify active events (`XBSctl status` in future releases or check logs). Try `handle_apps=suspend` with a robust allowlist.
 - **Missed Alarms/Notifications**: Disable `doze` or `handle_proc`, as they may delay background tasks.
-- **Report Issues**: Open a [GitHub Issue](https://github.com/DethByte64/Xtreme-Battery-Saver/issues) with your config, device details, and logs.
+- **Report Issues**: Open a [GitHub Issue](https://github.com/kherio/Xtreme-Battery-Saver/issues) with your config, device details, and logs.
 
 ---
 
@@ -261,11 +259,11 @@ Run as root, e.g. `su -c XBSconf` or `adb shell su -c "XBSconf set doze light --
 
 We welcome contributions! To contribute:
 
-1. Fork the repository: [DethByte64/Xtreme-Battery-Saver](https://github.com/DethByte64/Xtreme-Battery-Saver).
+1. Fork the repository: [DethByte64/Xtreme-Battery-Saver](https://github.com/kherio/Xtreme-Battery-Saver).
 
 2. Submit pull requests with bug fixes, features, or documentation improvements.
 
-3. Report bugs or suggest features via [GitHub Issues](https://github.com/DethByte64/Xtreme-Battery-Saver/issues).
+3. Report bugs or suggest features via [GitHub Issues](https://github.com/kherio/Xtreme-Battery-Saver/issues).
 
 ---
 
@@ -275,9 +273,9 @@ We welcome contributions! To contribute:
 
 - [DerGoogler](https://github.com/DerGoogler) for MMRL and their work in MMAR
 
-- Special thanks to NanKillBro for KernelSU testing.
+- Special thanks to **DethByte64** for his initial idea and releases.
 
-- Gratitude to XDA and Reddit users for feedback and testing.
+- Gratitude to XDA users for feedback and testing.
 
 ---
 
