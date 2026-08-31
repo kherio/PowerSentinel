@@ -11,67 +11,132 @@ const LIFECYCLE = {
   log: { activate: activateLog, deactivate: deactivateLog }
 };
 
-let currentView = 'estado';
+let currentIndex = 0;
+const track = () => document.getElementById('view-track');
 
-function confirmLeave(fromView) {
+function confirmLeave(fromIndex) {
   // Only Config currently guards against unsaved changes; other views
   // have nothing to lose by switching away.
-  if (fromView === 'conf') return confirmLeaveConfig();
+  if (VIEWS[fromIndex] === 'conf') return confirmLeaveConfig();
   return true;
 }
 
-function switchView(name) {
-  if (name === currentView || VIEWS.indexOf(name) === -1) return;
-  if (!confirmLeave(currentView)) return;
-
-  document.getElementById(`view-${currentView}`).classList.remove('active');
-  document.getElementById(`tab-btn-${currentView}`).classList.remove('active');
-  LIFECYCLE[currentView].deactivate();
-
-  currentView = name;
-
-  document.getElementById(`view-${currentView}`).classList.add('active');
-  document.getElementById(`tab-btn-${currentView}`).classList.add('active');
-  LIFECYCLE[currentView].activate();
+// Sets the track's resting transform for a given pane index. Percentages
+// are relative to the track's own width (300%), so -100% lands exactly
+// one pane (33.3333% of the track = 100% of the viewport) to the left,
+// regardless of the device's actual pixel width.
+function baseTransform(index) {
+  return `translateX(${-index * 33.3333}%)`;
 }
 
-function initTabButtons() {
-  VIEWS.forEach((name) => {
-    document.getElementById(`tab-btn-${name}`).addEventListener('click', () => switchView(name));
+function setTabActive(index) {
+  VIEWS.forEach((name, i) => {
+    document.getElementById(`tab-btn-${name}`).classList.toggle('active', i === index);
   });
 }
 
-// Swipe anywhere on the app moves between Estado / Config / Log, in tab
-// order. Mostly-vertical drags are ignored so normal scrolling still
-// works. Unlike the old httpd/CGI pages (separate documents, full page
-// navigation), this is a pure in-memory view swap - no reload, no
-// beforeunload needed, and confirmLeave() runs synchronously first.
+// Animates (or, mid-drag, immediately applies) the track to `index`.
+// `extraPx` is an additional live pixel offset used while the finger is
+// still down (0 once settled).
+function goToIndex(index, extraPx) {
+  const t = track();
+  t.style.transform = extraPx
+    ? `translateX(calc(${-index * 33.3333}% + ${extraPx}px))`
+    : baseTransform(index);
+}
+
+function commitToIndex(newIndex) {
+  if (newIndex === currentIndex) { goToIndex(currentIndex, 0); return; }
+  const oldIndex = currentIndex;
+  currentIndex = newIndex;
+  setTabActive(currentIndex);
+  goToIndex(currentIndex, 0);
+  LIFECYCLE[VIEWS[oldIndex]].deactivate();
+  LIFECYCLE[VIEWS[currentIndex]].activate();
+}
+
+function initTabButtons() {
+  VIEWS.forEach((name, index) => {
+    document.getElementById(`tab-btn-${name}`).addEventListener('click', () => {
+      if (index === currentIndex) return;
+      if (!confirmLeave(currentIndex)) return;
+      commitToIndex(index);
+    });
+  });
+}
+
+// Real-time swipe: the track follows the finger 1:1 during touchmove (no
+// CSS transition while dragging, so there's zero lag), with a small
+// rubber-band damping past the first/last pane. On release, either snaps
+// forward to the next/previous pane (animated) or springs back to the
+// current one, depending on how far the drag went.
 function initSwipeNav() {
-  const THRESHOLD = 70;
-  let startX = null, startY = null, tracking = false;
+  const THRESHOLD_PX = 60;       // minimum drag to consider "intentional"
+  const COMMIT_FRACTION = 0.28;  // or dragged past this fraction of the viewport width
+  let startX = null, startY = null, tracking = false, dragging = false;
+  let viewportWidth = 1;
 
   document.addEventListener('touchstart', (e) => {
     if (e.touches.length !== 1) { tracking = false; return; }
     startX = e.touches[0].clientX;
     startY = e.touches[0].clientY;
+    viewportWidth = document.querySelector('.view-viewport').clientWidth || window.innerWidth;
     tracking = true;
+    dragging = false;
   }, { passive: true });
 
+  document.addEventListener('touchmove', (e) => {
+    if (!tracking) return;
+    const touch = e.touches[0];
+    let dx = touch.clientX - startX;
+    const dy = touch.clientY - startY;
+
+    if (!dragging) {
+      // Decide once per gesture whether this is a horizontal swipe or a
+      // vertical scroll - once it's horizontal, commit to dragging the
+      // track for the rest of this gesture.
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+      if (Math.abs(dx) < Math.abs(dy) * 1.3) { tracking = false; return; }
+      dragging = true;
+      track().classList.add('dragging');
+    }
+
+    // Once we're actually dragging the track horizontally, stop the page
+    // from also scrolling/rubber-banding vertically underneath it - but
+    // only from this point on, so a genuine vertical scroll (the early
+    // returns above) is never touched.
+    e.preventDefault();
+
+    // Rubber-band resistance at the edges instead of a hard stop, so the
+    // drag still visibly responds to the finger even when there's no
+    // adjacent pane to reveal.
+    if ((currentIndex === 0 && dx > 0) || (currentIndex === VIEWS.length - 1 && dx < 0)) {
+      dx *= 0.35;
+    }
+    goToIndex(currentIndex, dx);
+  }, { passive: false });
+
   document.addEventListener('touchend', (e) => {
-    if (!tracking || startX === null) return;
+    if (!tracking) return;
     tracking = false;
+    if (!dragging) return;
+    dragging = false;
+    track().classList.remove('dragging');
+
     const touch = e.changedTouches[0];
     const dx = touch.clientX - startX;
-    const dy = touch.clientY - startY;
-    startX = null; startY = null;
+    const fraction = Math.abs(dx) / viewportWidth;
 
-    if (Math.abs(dx) < THRESHOLD) return;
-    if (Math.abs(dx) < Math.abs(dy) * 1.3) return; // mostly-vertical, treat as scroll
+    let targetIndex = currentIndex;
+    if (Math.abs(dx) > THRESHOLD_PX && fraction > COMMIT_FRACTION) {
+      targetIndex = dx < 0 ? currentIndex + 1 : currentIndex - 1;
+    }
+    targetIndex = Math.max(0, Math.min(VIEWS.length - 1, targetIndex));
 
-    const idx = VIEWS.indexOf(currentView);
-    const targetIdx = dx < 0 ? idx + 1 : idx - 1; // swipe left -> next tab, right -> previous
-    if (targetIdx < 0 || targetIdx >= VIEWS.length) return;
-    switchView(VIEWS[targetIdx]);
+    if (targetIndex !== currentIndex && !confirmLeave(currentIndex)) {
+      targetIndex = currentIndex; // guard declined the swipe away from Config
+    }
+    commitToIndex(targetIndex);
   }, { passive: true });
 }
 
@@ -84,5 +149,5 @@ initConfig();
 initLog();
 
 // Estado starts active on load; the other two only start their polling
-// once the user actually switches to them (see switchView/LIFECYCLE).
+// once the user actually swipes/taps to them (see commitToIndex/LIFECYCLE).
 activateEstado();
