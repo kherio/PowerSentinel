@@ -57,3 +57,38 @@ export async function exportLog() {
 }
 
 export { XbsApiError };
+
+// ---------- Apps (allowlist/denylist picker) ----------
+
+// Mirrors what enable_pwr_save() itself queries ("-3" = third-party only)
+// plus an opt-in for system packages, since some users do want to
+// restrict a preinstalled app.
+export async function listPackages(includeSystem) {
+  const flag = includeSystem ? '' : ' -3';
+  const out = await run(`pm list packages${flag} | cut -d: -f2- | sort`);
+  return out.split('\n').map((s) => s.trim()).filter(Boolean);
+}
+
+// allow/deny-list files are plain one-package-per-line text files, at
+// whatever path the config currently points to (user-editable, so not
+// hardcoded like CONF_FILE/STATUS_FILE).
+export async function readAppListFile(path) {
+  if (!path) return '';
+  return run(`cat '${path}' 2>/dev/null || echo ''`);
+}
+
+export async function writeAppListFile(path, lines) {
+  const text = lines.join('\n') + (lines.length ? '\n' : '');
+  const b64 = btoa(unescape(encodeURIComponent(text)));
+  await run(`echo '${b64}' | XBS-writefile '${path}'`);
+}
+
+// ---------- Manual event control (the "try it now" button) ----------
+
+export async function startEvent(name) {
+  await run(`XBSctl start ${name}`);
+}
+
+export async function stopEvent(name) {
+  await run(`XBSctl stop ${name}`);
+}
