@@ -14,7 +14,6 @@ const LIFECYCLE = {
 let currentIndex = 0;
 let paneWidth = 0; // measured in real px, never a % - see setPaneWidths() below
 const track = () => document.getElementById('view-track');
-const viewport = () => document.querySelector('.view-viewport');
 
 function confirmLeave(fromIndex) {
   // Only Config currently guards against unsaved changes; other views
@@ -23,18 +22,23 @@ function confirmLeave(fromIndex) {
   return true;
 }
 
-// Measures the real, rendered viewport width and applies it as an
-// explicit inline px width to the track (3 panes wide) and each pane -
-// deliberately NOT percentages. A percentage-based flex-basis inside a
-// 300%-wide row rendered inconsistently on-device (each pane wider than
-// the screen), most likely from how the WebView resolved flex sizing
-// against the panes' own content rather than clipping it. Fixed,
-// JS-measured pixel widths remove that ambiguity: every pane's width is
-// deterministic and independent of both flexbox's content-based sizing
-// rules and of the specific engine's rounding behavior.
+// Measures the real viewport width and applies it as an explicit inline
+// px width to the track (3 panes wide) and each pane - deliberately NOT
+// percentages, and deliberately NOT measured from .view-viewport or any
+// element inside this layout.
+//
+// Earlier attempt measured `.view-viewport.clientWidth` here, which
+// seemed reasonable but was actually circular: before any width had
+// been fixed, .view's own content (a metrics grid, core tiles, etc.)
+// could size the flex track wider than the physical screen, and THAT
+// inflated width is what clientWidth would report back - baking the
+// exact bug this function exists to fix into its own measurement.
+// window.innerWidth (with documentElement.clientWidth as a fallback) is
+// the browser's own notion of the layout viewport, established
+// independently of anything this page's CSS does, so it can't be
+// inflated by our own content no matter what state that content is in.
 function setPaneWidths() {
-  const vp = viewport();
-  paneWidth = vp.clientWidth || window.innerWidth;
+  paneWidth = window.innerWidth || document.documentElement.clientWidth;
   const t = track();
   t.style.width = (paneWidth * VIEWS.length) + 'px';
   Array.from(t.children).forEach((child) => {
