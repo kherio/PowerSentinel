@@ -1,4 +1,11 @@
 
+### v2.1.4-kherio1
+  - Forked release: module now updates from this repo directly, no longer depends on DethByte64's update.json/zip
+  - Added XBSconf CLI for terminal-based configuration
+  - Reworked WebUI: shared assets, redesigned Estado/Config/Log tabs, swipe navigation between tabs
+  - Daemon now reports per-core frequency and system load in its status output
+  - action.sh: avoid launching a duplicate httpd instance
+
 ### v2.1.4
   - Improve Wifi handling - Authored by [vikasmistry](https://github.com/vikasmistry)
 
