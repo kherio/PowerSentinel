@@ -1,4 +1,11 @@
 
+### v3.0.0-kherio
+  - **Breaking change**: replaced the local httpd/CGI web interface (`webui/`, `action.sh`) with a native KernelSU WebUI-X `webroot/`, built from a new Vite frontend (`frontend/`). No local server is started anymore; the manager's WebView loads `webroot/` directly and talks to the system through `kernelsu`'s `exec()`.
+  - Added `XBS-writefile`: a hardened helper for writes coming from the webui - base64-encoded content over stdin (never interpolated into a shell command), path allowlisted to XtremeBS's own data dir, atomic write (temp file + `mv`), automatic `.bak` of the previous content.
+  - Security audit of the existing scripts (see `docs/security-audit.md`): found and fixed a real command-injection path in `XtremeBSd`'s `notif()` (reachable via the world-writable control file) and a TOCTOU/insecure-tempfile issue with the default `ctl_file` location; both `XtremeBSd` and `XBSctl` now default `ctl_file` inside XtremeBS's own data dir and refuse to trust a pre-existing file not owned by root.
+  - `customize.sh`: sets explicit permissions for the new `XBS-writefile` binary; documented that `webroot/` permissions/SELinux context are managed by KernelSU itself.
+  - Added `docs/webui-x-migration.md` (rationale/architecture) and `docs/security-audit.md` (full findings + remediations) for future reference.
+
 ### v2.2.1-kherio
   - Version bump only (v2.1.4-kherio -> v2.2.1-kherio), no functional changes since the previous release
 

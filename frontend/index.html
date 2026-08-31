@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>XtremeBS</title>
+</head>
+<body class="app-shell">
+  <header class="app-header">
+    <div class="app-title"><span class="dot"></span> XtremeBS</div>
+    <nav class="tabs">
+      <button id="tab-btn-estado" class="active" data-view="estado">Estado</button>
+      <button id="tab-btn-conf" data-view="conf">Config</button>
+      <button id="tab-btn-log" data-view="log">Log</button>
+    </nav>
+  </header>
+
+  <main>
+    <!-- ================= ESTADO ================= -->
+    <section class="view active" id="view-estado">
+      <div class="toolbar">
+        <span id="e-updated" style="font-size:12px;color:var(--muted);">Cargando…</span>
+        <div class="spacer"></div>
+        <button class="btn ghost" id="e-refresh-btn" title="Actualizar ahora"></button>
+      </div>
+
+      <div class="scroll-area">
+        <div class="hero-card">
+          <div class="gauge-wrap">
+            <svg class="gauge" viewBox="0 0 120 120">
+              <circle class="gauge-track" cx="60" cy="60" r="52"></circle>
+              <circle class="gauge-fill" id="e-gauge-fill" cx="60" cy="60" r="52" stroke-dasharray="326.73" stroke-dashoffset="326.73"></circle>
+            </svg>
+            <div class="gauge-center">
+              <div class="gauge-percent" id="e-gauge-percent">–</div>
+              <div class="gauge-label">en ahorro</div>
+            </div>
+          </div>
+          <div class="hero-text">
+            <div class="hero-title" id="e-hero-title">Cargando estado…</div>
+            <div class="hero-sub" id="e-hero-sub"></div>
+          </div>
+        </div>
+
+        <div class="section-title" style="margin-top:0;">Núcleos de CPU</div>
+        <div id="e-core-counts" style="font-size:12px;color:var(--muted);margin-bottom:8px;"></div>
+        <div class="core-map" id="e-core-map"></div>
+        <div class="core-summary-row" id="e-core-summary">
+          <span class="legend l-active"><span class="dot"></span> Activo</span>
+          <span class="legend l-save"><span class="dot"></span> Ahorro</span>
+          <span class="legend l-off"><span class="dot"></span> Apagado</span>
+        </div>
+        <div class="core-tiles" id="e-core-grid"></div>
+
+        <div class="section-title" id="e-freq-section-title" style="display:none;">Frecuencia y carga</div>
+        <div class="metric-row" id="e-freq-metrics" style="display:none;"></div>
+        <div class="chart-card" id="e-freq-chart-card" style="display:none;">
+          <div class="chart-head">
+            <span class="chart-title">Últimos ~90s</span>
+            <span class="chart-now" id="e-chart-now"></span>
+          </div>
+          <svg id="e-freq-chart" viewBox="0 0 300 64" preserveAspectRatio="none"></svg>
+          <div class="chart-legend">
+            <span><span class="dot freq"></span>Frecuencia media (% del máx.)</span>
+            <span><span class="dot load"></span>Carga (1 min)</span>
+          </div>
+        </div>
+
+        <div class="section-title">Sistema</div>
+        <div class="grid" id="e-sys-grid"></div>
+
+        <div id="e-unmatched-box" class="card" style="margin-top:14px;display:none;">
+          <div class="label" style="font-size:12px;color:var(--muted);margin-bottom:6px;">Otras líneas del estado (sin interpretar)</div>
+          <div class="value2" style="font-size:12px;font-family:var(--mono);"></div>
+        </div>
+
+        <details class="raw">
+          <summary>Ver salida sin procesar</summary>
+          <pre id="e-raw-status">—</pre>
+        </details>
+      </div>
+    </section>
+
+    <!-- ================= CONFIG ================= -->
+    <section class="view" id="view-conf">
+      <div class="toolbar">
+        <button class="btn primary" id="c-save-btn"></button>
+        <button class="btn ghost" id="c-reload-btn"></button>
+        <div class="spacer"></div>
+        <span id="c-dirty-flag" style="visibility:hidden;"></span>
+      </div>
+
+      <div class="subtabs">
+        <button id="c-tab-form" class="active">Formulario</button>
+        <button id="c-tab-text">Texto sin formato</button>
+      </div>
+
+      <div id="c-view-form" class="scroll-area">
+        <div class="card" style="margin-bottom:14px;">
+          <div class="section-title" style="margin-top:0;">General</div>
+          <div style="margin-bottom:14px;">
+            <div style="font-size:13px;font-weight:500;margin-bottom:6px;">Formato de configuración</div>
+            <select class="filter" id="c-version-select">
+              <option value="2">v2 · Eventos (recomendado)</option>
+              <option value="1">v1 · Simple (heredado)</option>
+            </select>
+          </div>
+          <div id="c-global-fields"></div>
+        </div>
+
+        <div id="c-v1-card" class="card" style="margin-bottom:14px; display:none;">
+          <div class="section-title" style="margin-top:0;">Ajustes</div>
+          <div id="c-v1-fields"></div>
+        </div>
+
+        <div id="c-v2-section" style="display:none;">
+          <div class="section-title">Eventos</div>
+          <div id="c-events-list"></div>
+          <div class="card">
+            <div style="font-size:13px;font-weight:500;margin-bottom:8px;">Añadir evento</div>
+            <div class="add-event-row">
+              <select class="filter" id="c-predefined-event-select"></select>
+              <button class="btn" id="c-add-predefined-btn">Añadir</button>
+            </div>
+            <div class="add-event-row">
+              <input class="filter" id="c-custom-event-input" type="text" placeholder="nombre_evento_personalizado" style="flex:1;">
+              <button class="btn" id="c-add-custom-btn">Añadir personalizado</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="c-view-text" class="fill-area" style="display:none;">
+        <div class="editor-wrap">
+          <pre id="c-highlight"><code></code></pre>
+          <textarea id="c-editor" spellcheck="false" wrap="soft"></textarea>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= LOG ================= -->
+    <section class="view" id="view-log">
+      <div class="toolbar">
+        <select class="filter" id="l-level-filter">
+          <option value="ALL">Todos los niveles</option>
+          <option value="INFO">INFO</option>
+          <option value="VERBOSE">VERBOSE</option>
+          <option value="DEBUG">DEBUG</option>
+        </select>
+        <label class="switch">
+          <input type="checkbox" id="l-autoscroll" checked> Auto-scroll
+        </label>
+        <div class="spacer"></div>
+        <button class="btn ghost" id="l-refresh-btn"></button>
+        <button class="btn primary" id="l-save-btn"></button>
+      </div>
+      <div id="l-log-count" style="font-size:12px;color:var(--muted);margin-bottom:8px;"></div>
+
+      <div class="fill-area">
+        <div class="log-wrap" id="l-log-wrap"></div>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast-container"></div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

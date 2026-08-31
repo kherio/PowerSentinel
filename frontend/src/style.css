@@ -61,22 +61,28 @@ body.app-shell.nav-fade-out { opacity: 0; }
   overflow-y: auto;
   overflow-x: hidden;
 }
-.app-shell main > .toolbar,
-.app-shell main > .subtabs { flex: 0 0 auto; }
-.app-shell main > .scroll-area {
+.app-shell main > .view.active {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.app-shell main .view.active > .toolbar,
+.app-shell main .view.active > .subtabs { flex: 0 0 auto; }
+.app-shell main .view.active > .scroll-area {
   flex: 1;
   min-height: 0;
   overflow: auto;
 }
-.app-shell main > .fill-area {
+.app-shell main .view.active > .fill-area {
   flex: 1;
   min-height: 0;
   overflow: auto;
   display: flex;
   flex-direction: column;
 }
-.app-shell main > .fill-area .editor-wrap,
-.app-shell main > .fill-area .log-wrap {
+.app-shell main .view.active > .fill-area .editor-wrap,
+.app-shell main .view.active > .fill-area .log-wrap {
   flex: 1;
   min-height: 0;
   height: auto;
@@ -121,22 +127,27 @@ nav.tabs {
   gap: 4px;
 }
 
-nav.tabs a {
+nav.tabs button {
   flex: 1;
   text-align: center;
   padding: 10px 8px;
   font-size: 13px;
   font-weight: 500;
   color: var(--muted);
-  text-decoration: none;
+  background: none;
+  border: none;
   border-bottom: 2px solid transparent;
+  cursor: pointer;
+  font-family: inherit;
   transition: color 0.15s ease;
 }
 
-nav.tabs a.active {
+nav.tabs button.active {
   color: var(--accent);
   border-bottom-color: var(--accent);
 }
+
+.view { display: none; }
 
 main {
   padding: 16px;
@@ -438,6 +449,7 @@ main {
 .chart-card .chart-legend .dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; margin-right: 5px; vertical-align: 1px; }
 .chart-card .chart-legend .dot.freq { background: var(--accent); }
 .chart-card .chart-legend .dot.load { background: var(--warn); }
+.core-summary-row {
   display: flex;
   align-items: center;
   gap: 10px;

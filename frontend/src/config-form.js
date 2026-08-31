@@ -360,3 +360,8 @@ function renderFieldsForm(container, fields, defs, coreList, onDirty) {
   }
   rerender();
 }
+
+export {
+  PREDEFINED_EVENTS, FIELD_DEFS, GLOBAL_DEFS, V1_TRIGGER_DEF,
+  parseConfig, serializeConfig, renderFieldsForm, renderFieldRow
+};
