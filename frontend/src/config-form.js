@@ -5,18 +5,18 @@ var PREDEFINED_EVENTS = ['boot', 'charging', 'screen_off', 'low_power', 'night',
 var FIELD_DEFS = [
   {
     key: 'night_start', label: 'Hora de inicio', type: 'text', def: '23:00',
-    placeholder: '23:00',
+    placeholder: '23:00', group: 'horario',
     help: 'Formato 24h HH:MM. El perfil nocturno se activa/desactiva por horario, en paralelo a los demás eventos (pantalla, carga, batería baja...).',
     showIf: function (f) { return f.__eventName === 'night'; }
   },
   {
     key: 'night_end', label: 'Hora de fin', type: 'text', def: '07:00',
-    placeholder: '07:00',
+    placeholder: '07:00', group: 'horario',
     help: 'Puede cruzar la medianoche (ej. inicio 23:00, fin 07:00).',
     showIf: function (f) { return f.__eventName === 'night'; }
   },
   {
-    key: 'handle_apps', label: 'Gestión de apps', type: 'select', def: 'false',
+    key: 'handle_apps', label: 'Gestión de apps', type: 'select', def: 'false', group: 'apps',
     options: [
       { value: 'false', label: 'No gestionar' },
       { value: 'kill', label: 'Matar (kill)' },
@@ -26,23 +26,23 @@ var FIELD_DEFS = [
     help: '"Suspender" requiere una allowlist válida o las apps dejarán de funcionar. "Matar" las cierra por completo; "nice" solo baja su prioridad, siguen en segundo plano.'
   },
   {
-    key: 'allowlist', label: 'Lista de apps permitidas (allowlist)', type: 'text',
+    key: 'allowlist', label: 'Lista de apps permitidas (allowlist)', type: 'text', group: 'apps',
     placeholder: '/data/local/tmp/XtremeBS/apps.allow',
     help: 'Apps que NUNCA se tocan, elígelas abajo con el selector.',
     showIf: function (f) { return f.handle_apps === 'suspend'; }
   },
   {
-    key: 'denylist', label: 'Apps del sistema a gestionar (denylist)', type: 'text',
+    key: 'denylist', label: 'Apps del sistema a gestionar (denylist)', type: 'text', group: 'apps',
     placeholder: '/data/local/tmp/XtremeBS/apps.deny',
     help: 'Apps de sistema (preinstaladas) a incluir además de las de terceros. Vacío por defecto.'
   },
-  { key: 'handle_cores', label: 'Núcleos en modo ahorro (powersave)', type: 'cores', def: 'false',
+  { key: 'handle_cores', label: 'Núcleos en modo ahorro (powersave)', type: 'cores', def: 'false', group: 'cpu',
     help: '"Automático" detecta y usa los núcleos de baja potencia del chip. "Personalizado" te deja elegir cuáles.' },
-  { key: 'disable_cores', label: 'Núcleos a desactivar', type: 'cores', def: 'false',
+  { key: 'disable_cores', label: 'Núcleos a desactivar', type: 'cores', def: 'false', group: 'cpu',
     help: 'Apaga núcleos por completo (más agresivo que solo bajarles la frecuencia).',
     warn: 'Evitar en dispositivos Samsung.' },
   {
-    key: 'handle_gms', label: 'Google Mobile Services', type: 'select', def: 'false',
+    key: 'handle_gms', label: 'Google Mobile Services', type: 'select', def: 'false', group: 'sistema',
     options: [
       { value: 'false', label: 'No gestionar' },
       { value: 'nice', label: 'Reducir prioridad' },
@@ -50,19 +50,19 @@ var FIELD_DEFS = [
     ],
     help: 'Servicios de Google en segundo plano; suelen consumir batería incluso sin usar apps de Google.'
   },
-  { key: 'handle_proc', label: 'Reprocesar prioridad de procesos', type: 'toggle', def: 'false',
+  { key: 'handle_proc', label: 'Reprocesar prioridad de procesos', type: 'toggle', def: 'false', group: 'sistema',
     help: 'Aplica la lista de procesos y prioridades definida en "Archivo de procesos".' },
   {
-    key: 'proc_file', label: 'Archivo de procesos', type: 'text',
+    key: 'proc_file', label: 'Archivo de procesos', type: 'text', group: 'sistema',
     placeholder: '/data/local/tmp/XtremeBS/proc.list',
     help: 'Una línea por proceso: "nombre_proceso prioridad" (ej. "com.example.app 15").',
     showIf: function (f) { return f.handle_proc === 'true'; }
   },
-  { key: 'low_ram', label: 'Modo RAM baja', type: 'toggle', def: 'false',
+  { key: 'low_ram', label: 'Modo RAM baja', type: 'toggle', def: 'false', group: 'sistema',
     help: 'Activa la marca de sistema "RAM baja", que hace que Android sea más agresivo cerrando apps en segundo plano.',
     warn: 'Puede causar reinicios aleatorios en algunos OnePlus.' },
   {
-    key: 'doze', label: 'Forzar Doze', type: 'select', def: 'false',
+    key: 'doze', label: 'Forzar Doze', type: 'select', def: 'false', group: 'sistema',
     options: [
       { value: 'false', label: 'Desactivado' },
       { value: 'light', label: 'Ligero' },
@@ -71,9 +71,9 @@ var FIELD_DEFS = [
     help: 'Fuerza el modo de ahorro "Doze" de Android antes de que se active por sí solo.',
     warn: 'Puede retrasar alarmas y notificaciones.'
   },
-  { key: 'kill_wifi', label: 'Desactivar WiFi', type: 'toggle', def: 'false',
+  { key: 'kill_wifi', label: 'Desactivar WiFi', type: 'toggle', def: 'false', group: 'sistema',
     warn: 'También desactiva el interruptor de WiFi en Ajustes.' },
-  { key: 'keep_on_charge', label: 'Mantener ajustes mientras carga', type: 'toggle', def: 'true',
+  { key: 'keep_on_charge', label: 'Mantener ajustes mientras carga', type: 'toggle', def: 'true', group: 'sistema',
     help: 'Si está activado, este evento no se desactiva automáticamente al enchufar el cargador.' }
 ];
 
@@ -305,13 +305,13 @@ function renderFieldRow(def, fields, coreList, onChange) {
 
   var row = document.createElement('div');
   row.className = 'field-row';
-  row.style.marginBottom = '14px';
+  row.style.marginBottom = '20px';
 
   var label = document.createElement('div');
   label.textContent = def.label;
-  label.style.fontSize = '13px';
+  label.style.fontSize = '15px';
   label.style.fontWeight = '500';
-  label.style.marginBottom = '6px';
+  label.style.marginBottom = '8px';
   row.appendChild(label);
 
   var value = fieldValue(fields, def);
@@ -363,35 +363,50 @@ function renderFieldRow(def, fields, coreList, onChange) {
 
   if (def.help) {
     var help = document.createElement('div');
-    help.style.fontSize = '11px';
+    help.style.fontSize = '13px';
+    help.style.lineHeight = '1.4';
     help.style.color = 'var(--muted)';
-    help.style.marginTop = '4px';
+    help.style.marginTop = '6px';
     help.textContent = def.help;
     row.appendChild(help);
   }
   if (def.warn) {
     var warn = document.createElement('div');
-    warn.style.fontSize = '11px';
+    warn.style.fontSize = '13px';
+    warn.style.lineHeight = '1.4';
     warn.style.color = 'var(--warn)';
-    warn.style.marginTop = '4px';
+    warn.style.marginTop = '6px';
     warn.textContent = '⚠ ' + def.warn;
     row.appendChild(warn);
   }
   return row;
 }
 
+var GROUP_LABELS = { horario: 'Horario', apps: 'Apps', cpu: 'CPU', sistema: 'Sistema' };
+
 // Renders the full field set for one "fields" object (a block or v1Fields), re-rendering
 // the container in place whenever a value changes (some fields' visibility depends on others).
+// Fields sharing a consecutive `def.group` get a small subheading above them, so a long
+// list of 10+ fields reads as a few short, labeled clusters instead of one flat wall.
 function renderFieldsForm(container, fields, defs, coreList, onDirty) {
   function rerender() {
     container.innerHTML = '';
+    var lastGroup = null;
     defs.forEach(function (def) {
       var row = renderFieldRow(def, fields, coreList, function (val) {
         fields[def.key] = val;
         onDirty();
         rerender();
       });
-      if (row) container.appendChild(row);
+      if (!row) return;
+      if (def.group && def.group !== lastGroup) {
+        var head = document.createElement('div');
+        head.className = 'field-group-title';
+        head.textContent = GROUP_LABELS[def.group] || def.group;
+        container.appendChild(head);
+      }
+      lastGroup = def.group || null;
+      container.appendChild(row);
     });
   }
   rerender();
