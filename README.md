@@ -50,8 +50,8 @@ Tested primarily on a **Pixel 5** running **ProtonAOSP**. Compatibility varies b
 
 3. **Configure**:
    - A default config file is created at `/data/local/tmp/XtremeBS/XtremeBS.conf`.
-   - Edit the config manually or use the web UI (http://127.0.0.1:8081, launched via `action.sh` in v1.0.6+).
-   - After changes, reload the config with `XBSctl reload` or reboot.
+   - Edit the config from the module's WebUI (open it from your manager app - KernelSU Next, WebUI-X, etc. - via the "Open" / WebUI icon next to the module; no browser or local server involved), or use `XBSconf` from a terminal (see below).
+   - After changes made outside the WebUI (e.g. by hand), reload the config with `XBSctl reload` or reboot.
 
 ---
 
@@ -183,7 +183,7 @@ Control XtremeBS with the `XBSctl` command-line tool (run as root via `su`):
 
 ## XBSconf: configuring without a browser
 
-Besides the web UI, `XtremeBS.conf` can be generated and edited entirely from a terminal (ADB, Termux, or any root shell) — no local httpd or browser needed:
+Besides the WebUI, `XtremeBS.conf` can be generated and edited entirely from a terminal (ADB, Termux, or any root shell):
 
 | Command | Description |
 |---------|-------------|
@@ -195,7 +195,23 @@ Besides the web UI, `XtremeBS.conf` can be generated and edited entirely from a 
 | `XBSconf add-event NAME` | Add an empty v2 event block |
 | `XBSconf rm-event NAME` | Remove a v2 event block |
 
-Run as root, e.g. `su -c XBSconf` or `adb shell su -c "XBSconf set doze light --event screen_off"`. A `.bak` copy of the previous config is kept on every change. Files it writes use the exact same format as the web UI, so you can freely switch between both.
+Run as root, e.g. `su -c XBSconf` or `adb shell su -c "XBSconf set doze light --event screen_off"`. A `.bak` copy of the previous config is kept on every change. Files it writes use the exact same format as the WebUI, so you can freely switch between both.
+
+---
+
+## WebUI development
+
+The module's WebUI lives in `webroot/`, loaded directly by your manager app's WebView (KernelSU Next, WebUI-X, etc.) - there is no local httpd server involved, and it talks to the system through the [`kernelsu`](https://www.npmjs.com/package/kernelsu) JS library's `exec()`, which spawns a root shell.
+
+`webroot/` is a **build output** - don't hand-edit it. The source lives in `frontend/`:
+
+```bash
+cd frontend
+npm install
+npm run build      # writes to ../webroot
+```
+
+For local iteration with hot reload, `npm run dev` starts a Vite dev server, but `kernelsu`'s APIs are only available inside the manager's WebView, so most functionality (status, config load/save, log) will need a real device/emulator to test end to end - see `docs/webui-x-migration.md` for the architecture and rationale, and `docs/security-audit.md` for the write path's security model (`XBS-writefile`).
 
 ---
 
