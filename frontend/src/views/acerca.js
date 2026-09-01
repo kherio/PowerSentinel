@@ -13,11 +13,12 @@ async function loadVersion() {
   const el = document.getElementById('a-version');
   try {
     const text = await readModuleInfo();
-    // module.prop's raw version string carries a "-kherio" suffix
-    // (needed internally so update checkers see a distinct/newer
-    // version than upstream), but that suffix has no place in anything
-    // the user actually reads - only in developer/repo attribution
-    // (the credits below, and the GitHub link).
+    // module.prop's version field no longer carries a "-kherio" suffix
+    // itself (the KernelSU manager reads that field directly on its own
+    // module list/install screen, which we don't control - so removing
+    // it there, not just here, was the actual fix). This strip is kept
+    // as a harmless defensive no-op in case a future release
+    // accidentally reintroduces a suffix on that field.
     const version = parseProp(text, 'version').replace(/-kherio$/i, '');
     const versionCode = parseProp(text, 'versionCode');
     el.textContent = version ? `${version} (code ${versionCode || '?'})` : t('acerca.versionUnavailable');
