@@ -1,0 +1,336 @@
+#!/system/bin/bash
+# XBSconf - terminal-based configurator for XtremeBS.
+#
+# Generates/edits XtremeBS.conf directly on-device, without starting the
+# local httpd or opening a browser. Meant to be run as root:
+#   su -c XBSconf              # from ADB or a terminal emulator (Termux, etc.)
+#   XBSconf                    # if already in a root shell
+#
+# Usage:
+#   XBSconf              interactive wizard, (re)writes the whole config
+#   XBSconf show         print the current effective settings
+#   XBSconf get KEY [--event NAME]
+#   XBSconf set KEY VAL [--event NAME]
+#   XBSconf events                       list configured v2 events
+#   XBSconf add-event NAME               add an empty v2 event block
+#   XBSconf rm-event NAME                remove a v2 event block
+
+CONF_DIR="/data/local/tmp/XtremeBS"
+CONF="$CONF_DIR/XtremeBS.conf"
+
+FIELD_KEYS="handle_apps allowlist denylist handle_cores disable_cores handle_gms handle_proc proc_file low_ram doze kill_wifi keep_on_charge"
+PREDEFINED_EVENTS="boot charging screen_off low_power night thermal manual"
+
+require_root() {
+  if [ "$(id -u 2>/dev/null)" != "0" ]; then
+    echo "XBSconf necesita permisos de root. Prueba: su -c XBSconf" >&2
+    exit 1
+  fi
+}
+
+ensure_conf() {
+  mkdir -p "$CONF_DIR"
+  [ -f "$CONF" ] || : > "$CONF"
+}
+
+backup_conf() {
+  [ -f "$CONF" ] && cp "$CONF" "$CONF.bak" 2>/dev/null
+}
+
+# Collapses runs of 2+ blank lines into a single one, so repeated
+# add-event/rm-event/set cycles don't leave the file growing empty lines.
+normalize_blanks() {
+  awk 'BEGIN{blank=0} /^[[:space:]]*$/{blank++; if(blank>1) next} !/^[[:space:]]*$/{blank=0} {print}' "$CONF" > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"
+}
+
+# ---------- low-level read/write on the real conf file ----------
+
+# getval KEY [EVENT]  -> prints the value or empty
+getval() {
+  local key="$1" event="$2"
+  if [ -z "$event" ]; then
+    awk -F= -v k="$key" '
+      /^[a-zA-Z0-9_-]+=\{[[:space:]]*$/ { inblock=1 }
+      /^\}[[:space:]]*$/ { inblock=0 }
+      !inblock && $1==k { sub(/^[^=]+=/,""); print; found=1 }
+      END { if (!found) exit 1 }
+    ' "$CONF"
+  else
+    awk -F= -v k="$key" -v ev="$event" '
+      $0 ~ "^"ev"=\\{[[:space:]]*$" { inblock=1; next }
+      inblock && /^\}[[:space:]]*$/ { inblock=0 }
+      inblock {
+        line=$0; sub(/^[[:space:]]+/,"",line)
+        split(line,a,"="); if (a[1]==k) { sub(/^[^=]+=/,"",line); print line; found=1 }
+      }
+      END { if (!found) exit 1 }
+    ' "$CONF"
+  fi
+}
+
+# setval KEY VALUE [EVENT] -> updates in place, creating the key/block if needed
+setval() {
+  local key="$1" val="$2" event="$3"
+  backup_conf
+  if [ -z "$event" ]; then
+    if grep -qE "^${key}=" "$CONF" 2>/dev/null; then
+      sed -i -E "s|^${key}=.*|${key}=${val}|" "$CONF"
+    else
+      # Insert right at the end of the top global section: before the first
+      # blank line or the first event block, whichever comes first. Falls
+      # back to appending at the end of the file if there's neither.
+      awk -v k="$key" -v v="$val" '
+        inserted { print; next }
+        /^[[:space:]]*$/ || /^[a-zA-Z0-9_-]+=\{[[:space:]]*$/ {
+          print k"="v; inserted=1; print; next
+        }
+        { print }
+        END { if (!inserted) print k"="v }
+      ' "$CONF" > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"
+    fi
+  else
+    if ! grep -qE "^${event}=\{[[:space:]]*$" "$CONF" 2>/dev/null; then
+      printf '\n%s={\n}\n' "$event" >> "$CONF"
+    fi
+    awk -v ev="$event" -v k="$key" -v v="$val" '
+      $0 ~ "^"ev"=\\{[[:space:]]*$" { print; inblock=1; next }
+      inblock && /^\}[[:space:]]*$/ {
+        if (!seen) print "  "k"="v
+        print; inblock=0; next
+      }
+      inblock {
+        line=$0; t=line; sub(/^[[:space:]]+/,"",t); split(t,a,"=")
+        if (a[1]==k) { print "  "k"="v; seen=1; next }
+      }
+      { print }
+    ' "$CONF" > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"
+  fi
+}
+
+list_events() {
+  grep -oE '^[a-zA-Z0-9_-]+=\{[[:space:]]*$' "$CONF" 2>/dev/null | sed 's/={.*//'
+}
+
+add_event() {
+  local name="$1"
+  name=$(echo "$name" | tr -cd 'a-zA-Z0-9_-')
+  [ -z "$name" ] && { echo "Nombre de evento no válido."; return 1; }
+  if grep -qE "^${name}=\{[[:space:]]*$" "$CONF" 2>/dev/null; then
+    echo "El evento '$name' ya existe."; return 1
+  fi
+  backup_conf
+  printf '\n%s={\n}\n' "$name" >> "$CONF"
+  normalize_blanks
+  echo "Evento '$name' añadido."
+}
+
+rm_event() {
+  local name="$1"
+  backup_conf
+  awk -v ev="$name" '
+    $0 ~ "^"ev"=\\{[[:space:]]*$" { skip=1; next }
+    skip && /^\}[[:space:]]*$/ { skip=0; next }
+    !skip { print }
+  ' "$CONF" > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"
+  normalize_blanks
+  echo "Evento '$name' eliminado (si existía)."
+}
+
+# ---------- interactive prompts ----------
+
+ask() {
+  # ask "Pregunta" "valor_por_defecto"
+  local prompt="$1" def="$2" ans
+  read -rp "$prompt [$def]: " ans
+  echo "${ans:-$def}"
+}
+
+ask_choice() {
+  # ask_choice "Pregunta" "def" "value:Label" "value:Label" ...
+  local prompt="$1" def="$2"; shift 2
+  local opts=("$@") i=1 line val lab
+  echo "$prompt" >&2
+  for line in "${opts[@]}"; do
+    val="${line%%:*}"; lab="${line#*:}"
+    local mark=""
+    [ "$val" = "$def" ] && mark="  (actual: $def)"
+    printf '  %d) %s%s\n' "$i" "$lab" "$mark" >&2
+    i=$((i+1))
+  done
+  local choice
+  read -rp "Elige [1-$((i-1)), enter = mantener actual]: " choice
+  if [ -z "$choice" ]; then echo "$def"; return; fi
+  local sel="${opts[$((choice-1))]}"
+  echo "${sel%%:*}"
+}
+
+ask_yesno() {
+  local prompt="$1" def="$2" ans
+  local defLabel="s/N"; [ "$def" = "true" ] && defLabel="S/n"
+  read -rp "$prompt [$defLabel]: " ans
+  case "$ans" in
+    s|S|si|Si|SI|y|Y) echo "true" ;;
+    n|N|no|No|NO) echo "false" ;;
+    '') echo "$def" ;;
+    *) echo "$def" ;;
+  esac
+}
+
+# Prompts for the shared field set (used for v1 flat settings and for each v2
+# event block). Prints one "key=value" per line (only non-empty), to be
+# captured by the caller.
+prompt_fields() {
+  local ctx="$1"   # label for messages, e.g. "screen_off" or "ajustes generales"
+  local cur_handle_apps cur_allowlist cur_denylist
+  echo >&2
+  echo "--- $ctx ---" >&2
+
+  local handle_apps
+  handle_apps=$(ask_choice "Gestión de apps" "false" \
+    "false:No gestionar" "kill:Matar (kill)" "nice:Reducir prioridad (nice)" "suspend:Suspender")
+  echo "handle_apps=$handle_apps"
+  if [ "$handle_apps" = "suspend" ]; then
+    echo "allowlist=$(ask 'Ruta de la allowlist' "$CONF_DIR/apps.allow")"
+  fi
+  echo "denylist=$(ask 'Ruta de la denylist (apps del sistema)' "$CONF_DIR/apps.deny")"
+
+  local cores
+  cores=$(ask_choice "Núcleos en modo ahorro (handle_cores)" "false" \
+    "false:Desactivado" "auto:Automático" "custom:Personalizado")
+  if [ "$cores" = "custom" ]; then
+    cores=$(ask "Núcleos separados por espacio (ej: cpu4 cpu5)" "")
+  fi
+  echo "handle_cores=$cores"
+
+  local dcores
+  dcores=$(ask_choice "Núcleos a desactivar (disable_cores) — ¡evitar en Samsung!" "false" \
+    "false:Desactivado" "auto:Automático" "custom:Personalizado")
+  if [ "$dcores" = "custom" ]; then
+    dcores=$(ask "Núcleos separados por espacio (ej: cpu6 cpu7)" "")
+  fi
+  echo "disable_cores=$dcores"
+
+  echo "handle_gms=$(ask_choice 'Google Mobile Services' 'false' \
+    'false:No gestionar' 'nice:Reducir prioridad' 'kill:Matar (rompe SafetyNet)')"
+
+  local hproc
+  hproc=$(ask_yesno "¿Reprocesar prioridad de procesos (handle_proc)?" "false")
+  echo "handle_proc=$hproc"
+  if [ "$hproc" = "true" ]; then
+    echo "proc_file=$(ask 'Ruta del archivo de procesos' "$CONF_DIR/proc.list")"
+  fi
+
+  echo "low_ram=$(ask_yesno '¿Modo RAM baja? (puede causar reinicios en OnePlus)' 'false')"
+  echo "doze=$(ask_choice 'Forzar Doze (puede retrasar alarmas)' 'false' \
+    'false:Desactivado' 'light:Ligero' 'deep:Profundo')"
+  echo "kill_wifi=$(ask_yesno '¿Desactivar WiFi?' 'false')"
+  echo "keep_on_charge=$(ask_yesno '¿Mantener ajustes mientras carga?' 'true')"
+}
+
+wizard() {
+  echo "=== Asistente de configuración de XtremeBS ==="
+  echo "Este asistente reescribe $CONF por completo."
+  [ -f "$CONF" ] && echo "(Se guardará una copia de seguridad en $CONF.bak)"
+  echo
+
+  local version
+  version=$(ask_choice "Formato de configuración" "2" \
+    "2:v2 · Eventos (recomendado)" "1:v1 · Simple (heredado)")
+
+  local delay log_file log_level notify
+  delay=$(ask "Intervalo de sondeo en segundos (delay)" "3")
+  log_file=$(ask "Archivo de log" "/sdcard/XtremeBS.log")
+  log_level=$(ask_choice "Nivel de log" "2" "1:INFO" "2:VERBOSE" "3:DEBUG")
+  notify=$(ask_yesno "¿Mostrar notificaciones?" "true")
+
+  backup_conf
+  {
+    echo "version=$version"
+    echo "delay=$delay"
+    echo "log_file=$log_file"
+    echo "log_level=$log_level"
+    echo "notify=$notify"
+  } > "$CONF"
+
+  if [ "$version" = "1" ]; then
+    local trigger
+    trigger=$(ask_choice "Disparador (trigger)" "auto" \
+      "auto:Automático (ahorro de batería)" "boot:Al arrancar" "manual:Manual")
+    echo "trigger=$trigger" >> "$CONF"
+    prompt_fields "ajustes generales" >> "$CONF"
+  else
+    echo
+    echo "Ahora vamos a definir los eventos (screen_off, low_power, boot, etc)."
+    echo "Puedes añadir tantos como quieras, incluidos personalizados."
+    while true; do
+      echo
+      echo "Eventos predefinidos disponibles: $PREDEFINED_EVENTS"
+      local name
+      read -rp "Nombre del evento a añadir (vacío para terminar): " name
+      [ -z "$name" ] && break
+      name=$(echo "$name" | tr -cd 'a-zA-Z0-9_-')
+      [ -z "$name" ] && { echo "Nombre no válido, usa letras/números/_/-"; continue; }
+      {
+        echo
+        echo "${name}={"
+        prompt_fields "$name" | sed 's/^/  /'
+        echo "}"
+      } >> "$CONF"
+      echo "Evento '$name' guardado."
+    done
+  fi
+
+  echo
+  echo "Configuración escrita en $CONF"
+  echo "Aplica los cambios con: su -c 'XBSctl reload'  (o reinicia el dispositivo)"
+}
+
+# ---------- entry point ----------
+
+require_root
+ensure_conf
+
+case "$1" in
+  '')
+    wizard
+    ;;
+  show)
+    cat "$CONF"
+    ;;
+  get)
+    shift
+    key="$1"; shift
+    event=""
+    [ "$1" = "--event" ] && event="$2"
+    getval "$key" "$event"
+    ;;
+  set)
+    shift
+    key="$1"; val="$2"; shift 2
+    event=""
+    [ "$1" = "--event" ] && event="$2"
+    if [ -z "$key" ] || [ -z "$val" ]; then
+      echo "Uso: XBSconf set KEY VALOR [--event NOMBRE]" >&2
+      exit 1
+    fi
+    setval "$key" "$val" "$event"
+    echo "$key=$val actualizado$( [ -n "$event" ] && echo " en el evento $event" )."
+    ;;
+  events)
+    list_events
+    ;;
+  add-event)
+    add_event "$2"
+    ;;
+  rm-event)
+    rm_event "$2"
+    ;;
+  -h|--help)
+    sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'
+    ;;
+  *)
+    echo "Comando desconocido: $1" >&2
+    echo "Ejecuta 'XBSconf -h' para ver el uso." >&2
+    exit 1
+    ;;
+esac
