@@ -56,15 +56,33 @@ const EVENT_ICONS = {
   low_power: ICONS.warn, night: ICONS.moon, manual: ICONS.manual
 };
 
+function summarizeFields(fields) {
+  const bits = [];
+  if (fields.handle_apps && fields.handle_apps !== 'false') bits.push('apps: ' + fields.handle_apps);
+  if (fields.handle_cores && fields.handle_cores !== 'false') bits.push('núcleos: ' + fields.handle_cores);
+  if (fields.disable_cores && fields.disable_cores !== 'false') bits.push('desactiva núcleos');
+  if (fields.handle_gms && fields.handle_gms !== 'false') bits.push('GMS: ' + fields.handle_gms);
+  if (fields.doze && fields.doze !== 'false') bits.push('doze: ' + fields.doze);
+  if (fields.kill_wifi === 'true') bits.push('WiFi off');
+  if (fields.low_ram === 'true') bits.push('low RAM');
+  if (fields.handle_proc === 'true') bits.push('procesos');
+  if (fields.night_start) bits.push(`${fields.night_start}–${fields.night_end || ''}`);
+  return bits.length ? bits.join(' · ') : 'Sin ajustes activos';
+}
+
 function renderEvents() {
   const list = document.getElementById('c-events-list');
   list.innerHTML = '';
   model.blocks.forEach((block, idx) => {
     const card = document.createElement('div');
-    card.className = 'event-card';
+    card.className = 'event-card' + (block.__expanded ? ' expanded' : '');
 
     const head = document.createElement('div');
     head.className = 'event-head';
+    head.addEventListener('click', () => {
+      block.__expanded = !block.__expanded;
+      renderEvents();
+    });
 
     const iconEl = document.createElement('div');
     iconEl.className = 'event-icon';
@@ -81,12 +99,17 @@ function renderEvents() {
       nameEl = document.createElement('input');
       nameEl.className = 'event-name custom-input';
       nameEl.value = block.name;
+      nameEl.addEventListener('click', (e) => e.stopPropagation());
       nameEl.addEventListener('input', () => {
         block.name = nameEl.value.replace(/[^a-zA-Z0-9_-]/g, '');
         markDirty(true);
       });
     }
     head.appendChild(nameEl);
+
+    const actions = document.createElement('div');
+    actions.className = 'event-head-actions';
+    actions.addEventListener('click', (e) => e.stopPropagation());
 
     // Try-it-now: fires the event immediately via XBSctl, without
     // waiting for its real trigger condition (screen off, low battery...)
@@ -98,7 +121,7 @@ function renderEvents() {
       try { await startEvent(block.name); toast(`"${block.name}" aplicado`, 'success'); }
       catch (e) { toast('Error al aplicar: ' + e.message, 'error'); }
     });
-    head.appendChild(applyBtn);
+    actions.appendChild(applyBtn);
 
     const stopBtn = document.createElement('button');
     stopBtn.className = 'btn ghost';
@@ -108,7 +131,7 @@ function renderEvents() {
       try { await stopEvent(block.name); toast(`"${block.name}" detenido`, 'success'); }
       catch (e) { toast('Error al detener: ' + e.message, 'error'); }
     });
-    head.appendChild(stopBtn);
+    actions.appendChild(stopBtn);
 
     const dupBtn = document.createElement('button');
     dupBtn.className = 'btn ghost';
@@ -121,11 +144,11 @@ function renderEvents() {
       while (existing.indexOf(name) !== -1) { name = base + n; n++; }
       const clonedFields = Object.assign({}, block.fields);
       delete clonedFields.__apps; // don't share the (unsaved) apps-picker state between events
-      model.blocks.push({ name, fields: clonedFields, extra: [] });
+      model.blocks.push({ name, fields: clonedFields, extra: [], __expanded: true });
       markDirty(true);
       renderEvents();
     });
-    head.appendChild(dupBtn);
+    actions.appendChild(dupBtn);
 
     const delBtn = document.createElement('button');
     delBtn.className = 'btn ghost';
@@ -136,48 +159,67 @@ function renderEvents() {
       markDirty(true);
       renderEvents();
     });
-    head.appendChild(delBtn);
+    actions.appendChild(delBtn);
+    head.appendChild(actions);
+
+    const chevron = document.createElement('div');
+    chevron.className = 'event-chevron';
+    chevron.innerHTML = ICONS.chevron;
+    head.appendChild(chevron);
+
     card.appendChild(head);
 
-    // Quick-start template row
-    const presetRow = document.createElement('div');
-    presetRow.style.marginBottom = '10px';
-    const presetSelect = document.createElement('select');
-    presetSelect.className = 'filter';
-    presetSelect.style.width = '100%';
-    const noneOpt = document.createElement('option');
-    noneOpt.value = ''; noneOpt.textContent = 'Aplicar plantilla…';
-    presetSelect.appendChild(noneOpt);
-    Object.keys(EVENT_PRESETS).forEach((key) => {
-      const opt = document.createElement('option');
-      opt.value = key; opt.textContent = EVENT_PRESETS[key].label;
-      presetSelect.appendChild(opt);
-    });
-    presetSelect.addEventListener('change', () => {
-      if (!presetSelect.value) return;
-      const preset = EVENT_PRESETS[presetSelect.value];
-      Object.assign(block.fields, preset.fields);
-      markDirty(true);
-      toast(`Plantilla "${preset.label}" aplicada a ${block.name}`, 'success');
-      renderEvents();
-    });
-    presetRow.appendChild(presetSelect);
-    card.appendChild(presetRow);
+    const summary = document.createElement('div');
+    summary.className = 'event-summary';
+    summary.textContent = summarizeFields(block.fields);
+    card.appendChild(summary);
 
-    // __eventName is a hidden marker (not serialized - see serializeConfig,
-    // which only ever writes known FIELD_DEFS keys) so field defs like
-    // night_start/night_end can show themselves only within the "night"
-    // event's own card via showIf, without config-form.js needing to know
-    // about block names at all.
-    block.fields.__eventName = block.name;
+    if (block.__expanded) {
+      const body = document.createElement('div');
+      body.className = 'event-body';
 
-    const fieldsDiv = document.createElement('div');
-    card.appendChild(fieldsDiv);
-    renderFieldsForm(fieldsDiv, block.fields, FIELD_DEFS, coreList, () => markDirty(true));
+      // Quick-start template row
+      const presetRow = document.createElement('div');
+      presetRow.style.marginBottom = '16px';
+      const presetSelect = document.createElement('select');
+      presetSelect.className = 'filter';
+      presetSelect.style.width = '100%';
+      const noneOpt = document.createElement('option');
+      noneOpt.value = ''; noneOpt.textContent = 'Aplicar plantilla…';
+      presetSelect.appendChild(noneOpt);
+      Object.keys(EVENT_PRESETS).forEach((key) => {
+        const opt = document.createElement('option');
+        opt.value = key; opt.textContent = EVENT_PRESETS[key].label;
+        presetSelect.appendChild(opt);
+      });
+      presetSelect.addEventListener('change', () => {
+        if (!presetSelect.value) return;
+        const preset = EVENT_PRESETS[presetSelect.value];
+        Object.assign(block.fields, preset.fields);
+        markDirty(true);
+        toast(`Plantilla "${preset.label}" aplicada a ${block.name}`, 'success');
+        renderEvents();
+      });
+      presetRow.appendChild(presetSelect);
+      body.appendChild(presetRow);
 
-    const appsDiv = document.createElement('div');
-    card.appendChild(appsDiv);
-    mountAppsPicker(appsDiv, block.fields, () => markDirty(true));
+      // __eventName is a hidden marker (not serialized - see serializeConfig,
+      // which only ever writes known FIELD_DEFS keys) so field defs like
+      // night_start/night_end can show themselves only within the "night"
+      // event's own card via showIf, without config-form.js needing to know
+      // about block names at all.
+      block.fields.__eventName = block.name;
+
+      const fieldsDiv = document.createElement('div');
+      body.appendChild(fieldsDiv);
+      renderFieldsForm(fieldsDiv, block.fields, FIELD_DEFS, coreList, () => { markDirty(true); summary.textContent = summarizeFields(block.fields); });
+
+      const appsDiv = document.createElement('div');
+      body.appendChild(appsDiv);
+      mountAppsPicker(appsDiv, block.fields, () => markDirty(true));
+
+      card.appendChild(body);
+    }
 
     list.appendChild(card);
   });
@@ -314,7 +356,7 @@ export function initConfig() {
     const sel = document.getElementById('c-predefined-event-select');
     if (!sel.value) return;
     const fields = sel.value === 'night' ? { night_start: '23:00', night_end: '07:00' } : {};
-    model.blocks.push({ name: sel.value, fields, extra: [] });
+    model.blocks.push({ name: sel.value, fields, extra: [], __expanded: true });
     markDirty(true);
     renderEvents();
   });
@@ -326,7 +368,7 @@ export function initConfig() {
     if (model.blocks.some((b) => b.name === name)) {
       toast('Ese evento ya existe', 'error'); return;
     }
-    model.blocks.push({ name, fields: {}, extra: [] });
+    model.blocks.push({ name, fields: {}, extra: [], __expanded: true });
     input.value = '';
     markDirty(true);
     renderEvents();

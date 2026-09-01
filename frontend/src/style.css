@@ -271,6 +271,18 @@ main {
   margin: 18px 0 8px;
 }
 
+.field-group-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  font-weight: 600;
+  color: var(--accent);
+  margin: 22px 0 10px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.field-group-title:first-child { margin-top: 4px; padding-top: 0; border-top: none; }
+
 /* --- Core map: at-a-glance strip of every core as a colored dot --- */
 .core-map {
   display: flex;
@@ -620,14 +632,18 @@ details.raw pre {
 
 .spacer { flex: 1; }
 
-select.filter {
+.filter,
+select.filter,
+input.filter {
   background: var(--surface-2);
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  padding: 8px 10px;
-  font-size: 13px;
+  padding: 10px 12px;
+  font-size: 15px;
+  font-family: inherit;
 }
+input.filter::placeholder { color: var(--muted); opacity: 0.8; }
 
 label.switch {
   display: inline-flex;
@@ -702,15 +718,25 @@ label.switch input { accent-color: var(--accent); }
 .subtabs button.active { color: var(--accent); border-color: var(--accent); background: var(--accent-dim); }
 
 .event-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
-  padding: 14px; margin-bottom: 12px; opacity: 0; transform: translateY(4px); animation: tile-in 0.3s ease forwards; }
-.event-card .event-head { display: flex; align-items: center; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
-.event-card .event-head .btn { padding: 6px 8px; }
-.event-card .event-icon { width: 26px; height: 26px; border-radius: 50%; background: var(--accent-dim);
+  padding: 16px; margin-bottom: 14px; opacity: 0; transform: translateY(4px); animation: tile-in 0.3s ease forwards; }
+.event-card .event-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; flex-wrap: wrap; cursor: pointer; }
+.event-card .event-head-actions { display: flex; align-items: center; gap: 6px; margin-left: auto; padding-left: 8px; border-left: 1px solid var(--border); }
+.event-card .event-head .btn { padding: 8px 10px; }
+.event-card .event-icon { width: 30px; height: 30px; border-radius: 50%; background: var(--accent-dim);
   color: var(--accent); display: flex; align-items: center; justify-content: center; flex: none; }
-.event-card .event-icon svg { width: 14px; height: 14px; }
-.event-card .event-name { font-weight: 600; font-size: 14px; flex: 1; min-width: 80px; }
+.event-card .event-icon svg { width: 16px; height: 16px; }
+.event-card .event-name { font-weight: 600; font-size: 16px; flex: 1; min-width: 80px; }
 .event-card .event-name.custom-input { background: transparent; border: none; color: var(--text);
-  font-weight: 600; font-size: 14px; width: 100%; outline: none; border-bottom: 1px dashed var(--border); }
+  font-weight: 600; font-size: 16px; width: 100%; outline: none; border-bottom: 1px dashed var(--border); }
+.event-card .event-chevron { flex: none; width: 20px; height: 20px; color: var(--muted);
+  display: flex; align-items: center; justify-content: center; transition: transform 0.2s ease; }
+.event-card .event-chevron svg { width: 16px; height: 16px; }
+.event-card.expanded .event-chevron { transform: rotate(180deg); }
+.event-card .event-summary {
+  font-size: 13px; color: var(--muted); padding: 2px 0 4px 38px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.event-card .event-body { margin-top: 14px; }
 .add-event-row { display: flex; gap: 8px; margin-top: 4px; flex-wrap: wrap; }
 
 /* Log viewer */
