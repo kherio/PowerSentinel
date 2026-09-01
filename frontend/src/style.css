@@ -712,6 +712,7 @@ input.filter {
   padding: 10px 12px;
   font-size: 15px;
   font-family: inherit;
+  color-scheme: dark;
 }
 input.filter::placeholder { color: var(--muted); opacity: 0.8; }
 

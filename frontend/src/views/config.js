@@ -55,7 +55,7 @@ function renderGlobalFields() {
 
 const EVENT_ICONS = {
   boot: ICONS.power, charging: ICONS.plug, screen_off: ICONS.moon,
-  low_power: ICONS.warn, night: ICONS.moon, manual: ICONS.manual
+  low_power: ICONS.warn, night: ICONS.moon, thermal: ICONS.thermometer, manual: ICONS.manual
 };
 
 function summarizeFields(fields) {
@@ -69,6 +69,7 @@ function summarizeFields(fields) {
   if (fields.low_ram === 'true') bits.push(t('config.summaryLowRam'));
   if (fields.handle_proc === 'true') bits.push(t('config.summaryProcesses'));
   if (fields.night_start) bits.push(`${fields.night_start}–${fields.night_end || ''}`);
+  if (fields.thermal_threshold) bits.push(`≥${fields.thermal_threshold}°C`);
   return bits.length ? bits.join(' · ') : t('config.summaryNone');
 }
 
@@ -166,6 +167,7 @@ function renderEvents() {
     delBtn.innerHTML = ICONS.trash;
     delBtn.title = t('config.deleteEvent');
     delBtn.addEventListener('click', () => {
+      if (!window.confirm(t('config.deleteConfirm', { name: block.name }))) return;
       model.blocks.splice(idx, 1);
       markDirty(true);
       renderEvents();
@@ -377,7 +379,8 @@ export function initConfig() {
   document.getElementById('c-add-predefined-btn').addEventListener('click', () => {
     const sel = document.getElementById('c-predefined-event-select');
     if (!sel.value) return;
-    const fields = sel.value === 'night' ? { night_start: '23:00', night_end: '07:00' } : {};
+    const fields = sel.value === 'night' ? { night_start: '23:00', night_end: '07:00' } :
+      sel.value === 'thermal' ? { thermal_threshold: '45' } : {};
     model.blocks.push({ name: sel.value, fields, extra: [], __expanded: true });
     markDirty(true);
     renderEvents();

@@ -1,20 +1,26 @@
 // Parser / serializer / form renderer for XtremeBS.conf (v1 flat + v2 event blocks)
 import { t } from './i18n.js';
 
-var PREDEFINED_EVENTS = ['boot', 'charging', 'screen_off', 'low_power', 'night', 'manual'];
+var PREDEFINED_EVENTS = ['boot', 'charging', 'screen_off', 'low_power', 'night', 'thermal', 'manual'];
 
 var FIELD_DEFS = [
   {
-    key: 'night_start', label: t('field.nightStart.label'), type: 'text', def: '23:00',
+    key: 'night_start', label: t('field.nightStart.label'), type: 'time', def: '23:00',
     placeholder: '23:00', group: 'horario',
     help: t('field.nightStart.help'),
     showIf: function (f) { return f.__eventName === 'night'; }
   },
   {
-    key: 'night_end', label: t('field.nightEnd.label'), type: 'text', def: '07:00',
+    key: 'night_end', label: t('field.nightEnd.label'), type: 'time', def: '07:00',
     placeholder: '07:00', group: 'horario',
     help: t('field.nightEnd.help'),
     showIf: function (f) { return f.__eventName === 'night'; }
+  },
+  {
+    key: 'thermal_threshold', label: t('field.thermalThreshold.label'), type: 'number', def: '45',
+    group: 'temperatura',
+    help: t('field.thermalThreshold.help'),
+    showIf: function (f) { return f.__eventName === 'thermal'; }
   },
   {
     key: 'handle_apps', label: t('field.handleApps.label'), type: 'select', def: 'false', group: 'apps',
@@ -93,7 +99,13 @@ var GLOBAL_DEFS = [
     help: t('global.logLevel.help')
   },
   { key: 'notify', label: t('global.notify.label'), type: 'toggle', def: 'true',
-    help: t('global.notify.help') }
+    help: t('global.notify.help') },
+  { key: 'charge_limit', label: t('global.chargeLimit.label'), type: 'number', def: '0',
+    help: t('global.chargeLimit.help') },
+  { key: 'charge_limit_node', label: t('global.chargeLimitNode.label'), type: 'text', def: '',
+    placeholder: '/sys/class/power_supply/battery/charging_enabled',
+    help: t('global.chargeLimitNode.help'),
+    warn: t('global.chargeLimitNode.warn') }
 ];
 
 // Quick-start templates a user can apply to any event, instead of having
@@ -142,7 +154,19 @@ var KNOWN_FIELD_KEYS = (function () {
   FIELD_DEFS.forEach(function (d) { set[d.key] = true; });
   return set;
 })();
-var KNOWN_GLOBAL_KEYS = { version: 1, delay: 1, log_file: 1, log_level: 1, notify: 1 };
+// Built from GLOBAL_DEFS itself (plus 'version', a special top-level key
+// not in GLOBAL_DEFS) rather than a separately-maintained static list -
+// a static list silently went stale when charge_limit/charge_limit_node
+// were added to GLOBAL_DEFS without updating it, so parseConfig treated
+// them as "known" (correctly recognized, no globalExtra fallback -
+// see below) while never actually copying them onto the returned
+// model, and serializeConfig had no matching model field to read them
+// back from either.
+var KNOWN_GLOBAL_KEYS = (function () {
+  var set = { version: true };
+  GLOBAL_DEFS.forEach(function (d) { set[d.key] = true; });
+  return set;
+})();
 
 function parseConfig(text) {
   var lines = text.split('\n');
@@ -187,15 +211,13 @@ function parseConfig(text) {
     (current ? current.extra : globalExtra).push(raw);
   });
 
-  return {
+  var model = {
     version: '2',
-    delay: top.delay,
-    log_file: top.log_file,
-    log_level: top.log_level,
-    notify: top.notify,
     globalExtra: globalExtra,
     blocks: blocks
   };
+  GLOBAL_DEFS.forEach(function (d) { model[d.key] = top[d.key]; });
+  return model;
 }
 
 function serializeConfig(model) {
@@ -325,9 +347,9 @@ function renderFieldRow(def, fields, coreList, onChange) {
     input.checked = value === 'true';
     input.addEventListener('change', function () { onChange(input.checked ? 'true' : 'false'); });
     lab.appendChild(input);
-    lab.appendChild(document.createTextNode(input.checked ? 'Activado' : 'Desactivado'));
+    lab.appendChild(document.createTextNode(input.checked ? t('toggle.enabled') : t('toggle.disabled')));
     input.addEventListener('change', function () {
-      lab.lastChild.textContent = input.checked ? 'Activado' : 'Desactivado';
+      lab.lastChild.textContent = input.checked ? t('toggle.enabled') : t('toggle.disabled');
     });
     row.appendChild(lab);
   } else if (def.type === 'select') {
@@ -351,6 +373,18 @@ function renderFieldRow(def, fields, coreList, onChange) {
     num.value = value;
     num.addEventListener('input', function () { onChange(num.value); });
     row.appendChild(num);
+  } else if (def.type === 'time') {
+    // Native time picker instead of free text - the input's value format
+    // (HH:MM, 24h) already matches exactly what's stored/parsed
+    // elsewhere (is_night_now() in the daemon), so no conversion needed
+    // in either direction, and it can't produce an unparseable string.
+    var timeInput = document.createElement('input');
+    timeInput.type = 'time';
+    timeInput.className = 'filter';
+    timeInput.style.width = '100%';
+    timeInput.value = value;
+    timeInput.addEventListener('input', function () { onChange(timeInput.value); });
+    row.appendChild(timeInput);
   } else {
     var txt = document.createElement('input');
     txt.type = 'text';
@@ -383,7 +417,10 @@ function renderFieldRow(def, fields, coreList, onChange) {
   return row;
 }
 
-var GROUP_LABELS = { horario: 'Horario', apps: 'Apps', cpu: 'CPU', sistema: 'Sistema' };
+var GROUP_LABELS = {
+  horario: t('group.horario'), apps: t('group.apps'), cpu: t('group.cpu'),
+  sistema: t('group.sistema'), temperatura: t('group.temperatura')
+};
 
 // Renders the full field set for one "fields" object (a block or v1Fields), re-rendering
 // the container in place whenever a value changes (some fields' visibility depends on others).

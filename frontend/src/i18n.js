@@ -3,9 +3,36 @@
 // "use the system's default language" as requested, with English as
 // the fallback for every other language rather than trying to support
 // more locales than we can maintain translations for.
+const LOCALE_OVERRIDE_KEY = 'xbs-locale-override';
+
 function detectLocale() {
+  try {
+    const override = localStorage.getItem(LOCALE_OVERRIDE_KEY);
+    if (override === 'es' || override === 'en') return override;
+  } catch (e) { /* localStorage unavailable - fall through to auto-detect */ }
   const primary = (navigator.languages && navigator.languages.length) ? navigator.languages[0] : (navigator.language || 'en');
   return /^es/i.test(primary) ? 'es' : 'en';
+}
+
+// Used by the language selector in Acerca de/About. Pass null to go back
+// to automatic (system-language) detection. Takes effect after a reload
+// since LOCALE below is resolved once, synchronously, at module load -
+// every other module's strings are already baked in by the time a
+// setting change could happen.
+export function setLocaleOverride(locale) {
+  try {
+    if (locale === 'es' || locale === 'en') localStorage.setItem(LOCALE_OVERRIDE_KEY, locale);
+    else localStorage.removeItem(LOCALE_OVERRIDE_KEY);
+  } catch (e) { /* localStorage unavailable - override just won't persist */ }
+}
+
+export function getLocaleOverride() {
+  try {
+    const v = localStorage.getItem(LOCALE_OVERRIDE_KEY);
+    return (v === 'es' || v === 'en') ? v : null;
+  } catch (e) {
+    return null;
+  }
 }
 
 export const LOCALE = detectLocale();
@@ -144,6 +171,9 @@ const DICT = {
     'apps.deny': 'Restringir',
     'apps.noResults': 'Sin resultados.',
     'apps.readError': 'No se pudieron leer las listas: {msg}',
+    'apps.runningNow': 'En ejecución ahora mismo',
+    'toggle.enabled': 'Activado',
+    'toggle.disabled': 'Desactivado',
 
     'log.allLevels': 'Todos los niveles',
     'log.autoscroll': 'Auto-scroll',
@@ -236,12 +266,38 @@ const DICT = {
     'global.logLevel.help': 'Más alto = más detalle en el log, pero también un fichero que crece más rápido.',
     'global.notify.label': 'Mostrar notificaciones',
     'global.notify.help': 'Notificación del sistema cada vez que XtremeBS activa o desactiva algo.',
+    'global.chargeLimit.label': 'Límite de carga (%)',
+    'global.chargeLimit.help': 'Deja de cargar al alcanzar este porcentaje (cuida la salud de la batería a largo plazo). 0 = desactivado. Requiere configurar también la "Ruta de control de carga" de abajo, específica de tu dispositivo.',
+    'global.chargeLimitNode.label': 'Ruta de control de carga (sysfs)',
+    'global.chargeLimitNode.help': 'Ruta del sistema que controla si el dispositivo carga (varía según el fabricante/kernel; debes buscar la de tu modelo). XtremeBS escribe 0 para pausar la carga y 1 para reanudarla en esta ruta.',
+    'global.chargeLimitNode.warn': 'Si la ruta es incorrecta, el límite de carga simplemente no hará nada (no debería dañar el dispositivo), pero compruébala con cuidado antes de confiar en ella.',
 
     'preset.balanced.label': 'Equilibrado',
     'preset.aggressive.label': 'Ahorro agresivo',
     'cores.optDisabled': 'Desactivado',
     'cores.optAuto': 'Automático',
-    'cores.optCustom': 'Personalizado'
+    'cores.optCustom': 'Personalizado',
+
+    'group.horario': 'Horario',
+    'group.apps': 'Apps',
+    'group.cpu': 'CPU',
+    'group.sistema': 'Sistema',
+    'group.temperatura': 'Temperatura',
+
+    'field.thermalThreshold.label': 'Umbral de temperatura (°C)',
+    'field.thermalThreshold.help': 'El perfil térmico se activa cuando la batería alcanza esta temperatura, en paralelo a los demás eventos. Se desactiva 3°C por debajo para evitar activaciones/desactivaciones seguidas.',
+
+    'config.deleteConfirm': '¿Eliminar el evento "{name}"? Esta acción no se puede deshacer (hasta que pulses Guardar).',
+
+    'acerca.language': 'Idioma',
+    'acerca.languageAuto': 'Automático (idioma del sistema)',
+    'acerca.languageEs': 'Español',
+    'acerca.languageEn': 'English',
+    'acerca.diagnostics': 'Diagnóstico',
+    'acerca.copyDiagnostics': 'Copiar diagnóstico',
+    'acerca.diagnosticsCopied': 'Diagnóstico copiado al portapapeles',
+    'acerca.diagnosticsCopyFailed': 'No se pudo copiar automáticamente; selecciona y copia el texto de abajo',
+    'acerca.diagnosticsError': 'No se pudo generar el diagnóstico: {msg}'
   },
 
   en: {
@@ -377,6 +433,9 @@ const DICT = {
     'apps.deny': 'Restrict',
     'apps.noResults': 'No results.',
     'apps.readError': 'Could not read the lists: {msg}',
+    'apps.runningNow': 'Currently running',
+    'toggle.enabled': 'Enabled',
+    'toggle.disabled': 'Disabled',
 
     'log.allLevels': 'All levels',
     'log.autoscroll': 'Auto-scroll',
@@ -469,12 +528,38 @@ const DICT = {
     'global.logLevel.help': 'Higher = more detail in the log, but also a file that grows faster.',
     'global.notify.label': 'Show notifications',
     'global.notify.help': 'System notification every time XtremeBS enables or disables something.',
+    'global.chargeLimit.label': 'Charge limit (%)',
+    'global.chargeLimit.help': 'Stops charging once this percentage is reached (helps long-term battery health). 0 = disabled. Also requires setting the "Charge control path" below, which is device-specific.',
+    'global.chargeLimitNode.label': 'Charge control path (sysfs)',
+    'global.chargeLimitNode.help': "System path that controls whether the device charges (varies by manufacturer/kernel - you'll need to look up the one for your model). XtremeBS writes 0 to pause charging and 1 to resume it at this path.",
+    'global.chargeLimitNode.warn': "If the path is wrong, the charge limit will simply do nothing (it shouldn't damage the device), but verify it carefully before relying on it.",
 
     'preset.balanced.label': 'Balanced',
     'preset.aggressive.label': 'Aggressive saving',
     'cores.optDisabled': 'Disabled',
     'cores.optAuto': 'Automatic',
-    'cores.optCustom': 'Custom'
+    'cores.optCustom': 'Custom',
+
+    'group.horario': 'Schedule',
+    'group.apps': 'Apps',
+    'group.cpu': 'CPU',
+    'group.sistema': 'System',
+    'group.temperatura': 'Temperature',
+
+    'field.thermalThreshold.label': 'Temperature threshold (°C)',
+    'field.thermalThreshold.help': 'The thermal profile activates once the battery reaches this temperature, in parallel with the other events. Deactivates 3°C below it to avoid rapidly flipping on/off.',
+
+    'config.deleteConfirm': 'Delete event "{name}"? This cannot be undone (until you press Save).',
+
+    'acerca.language': 'Language',
+    'acerca.languageAuto': 'Automatic (system language)',
+    'acerca.languageEs': 'Español',
+    'acerca.languageEn': 'English',
+    'acerca.diagnostics': 'Diagnostics',
+    'acerca.copyDiagnostics': 'Copy diagnostics',
+    'acerca.diagnosticsCopied': 'Diagnostics copied to clipboard',
+    'acerca.diagnosticsCopyFailed': "Couldn't copy automatically; select and copy the text below",
+    'acerca.diagnosticsError': 'Could not generate diagnostics: {msg}'
   }
 };
 
