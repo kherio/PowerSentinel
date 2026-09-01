@@ -10,7 +10,6 @@ permissions:
 
 jobs:
   release:
-    if: ${{ !startsWith(github.event.head_commit.message, 'release: publish PowerSentinel v3.7.1') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout main
