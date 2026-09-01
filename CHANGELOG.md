@@ -1,4 +1,10 @@
 
+### v3.7.0
+  - **Magisk support**: the module now works on Magisk, which has no native WebUI-X support. `action.sh` starts a local httpd server (the pre-v3.0.0 architecture, revived) and opens the *same* `webroot/` a KernelSU-family manager would load natively - `frontend/src/api.js` detects at runtime which transport actually works (`backend-ksu.js`'s native `exec()` bridge, or the new `backend-cgi.js` talking to `webui/cgi-bin/*.cgi` over `fetch()`) and switches transparently. Every view is written once and works either way.
+  - **Hardened against the httpd reintroduction's real cost**: unlike the KernelSU bridge (only callable by the manager app itself), a loopback socket on Android is reachable by any app holding the extremely common `INTERNET` permission. Every CGI endpoint now requires a per-session token that `action.sh` generates fresh each run and passes only via the URL it opens - never served as a static file. Verified standalone: token mismatch/absence/no-session all fail closed, and two consecutive `action.sh` runs produce different tokens (invalidating old sessions). `applist_read.cgi` and the event/profile endpoints independently re-validate paths and names server-side rather than trusting the client. Full write-up in `docs/security-audit.md`.
+  - Fixed a design bug caught while building this: both new backends briefly defined their own identically-named-but-distinct `XbsApiError` class, which would have silently broken any future `instanceof` check depending on which backend happened to be active - consolidated into one shared class (`errors.js`).
+  - `README.md` updated: Magisk and KernelSU are both first-class now, with an explanation of how the WebUI opens on each.
+
 ### v3.6.0
   - **Delete-event confirmation** in Config, matching what profile deletion already had - previously one accidental tap could wipe an event's whole configuration with no warning.
   - **Native time picker** for the night profile's start/end hours, replacing free text.

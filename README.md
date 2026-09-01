@@ -29,9 +29,11 @@
 
 ## Supported Root Managers
 
-- **Magisk** (Confirmed)
-- **KernelSU** (Confirmed)
-- **APatch** (Likely compatible; please report results on [GitHub Issues](https://github.com/DethByte64/Xtreme-Battery-Saver/issues))
+- **KernelSU** (and KernelSU Next, SukiSU Ultra, etc.) — full native WebUI, opened via the "Open" / WebUI icon next to the module in your manager.
+- **Magisk** — full WebUI too, via a local httpd server (Magisk has no native WebUI support): tap the module's **Action** button to open it in your browser. Same interface, same features, just a different way in.
+- **APatch** (Likely compatible via the Magisk path; please report results on [GitHub Issues](https://github.com/kherio/Xtreme-Battery-Saver/issues))
+
+The WebUI detects automatically which path it's running under - nothing to configure.
 
 ---
 
@@ -205,7 +207,12 @@ Run as root, e.g. `su -c XBSconf` or `adb shell su -c "XBSconf set doze light --
 
 ## WebUI development
 
-The module's WebUI lives in `webroot/`, loaded directly by your manager app's WebView (KernelSU Next, WebUI-X, etc.) - there is no local httpd server involved, and it talks to the system through the [`kernelsu`](https://www.npmjs.com/package/kernelsu) JS library's `exec()`, which spawns a root shell.
+The module's WebUI (`frontend/`, built to `webroot/`) runs the same on both KernelSU-family managers and Magisk - `frontend/src/api.js` detects at runtime which transport actually works and picks it automatically:
+
+- **`backend-ksu.js`**: talks to the system through the [`kernelsu`](https://www.npmjs.com/package/kernelsu) JS library's `exec()` (spawns a root shell), used when the page is loaded natively by a WebUI-X-capable manager's WebView.
+- **`backend-cgi.js`**: talks to a local httpd server (`webui/cgi-bin/*.cgi`, started by `action.sh`) over `fetch()`, used on Magisk. Every request is authenticated with a per-session token `action.sh` generates and passes in the URL - see `docs/security-audit.md` for why (loopback sockets are reachable by any app on the device, unlike the KernelSU bridge).
+
+Both backends export the exact same function set, so every view module (`estado.js`, `config.js`, etc.) is written once and works either way.
 
 `webroot/` is a **build output** - don't hand-edit it. The source lives in `frontend/`:
 
@@ -215,7 +222,7 @@ npm install
 npm run build      # writes to ../webroot
 ```
 
-For local iteration with hot reload, `npm run dev` starts a Vite dev server, but `kernelsu`'s APIs are only available inside the manager's WebView, so most functionality (status, config load/save, log) will need a real device/emulator to test end to end - see `docs/webui-x-migration.md` for the architecture and rationale, and `docs/security-audit.md` for the write path's security model (`XBS-writefile`).
+For local iteration with hot reload, `npm run dev` starts a Vite dev server, but neither backend's APIs are available outside a real manager/device, so most functionality (status, config load/save, log) will need a real device/emulator to test end to end - see `docs/webui-x-migration.md` for the architecture and rationale, and `docs/security-audit.md` for the write path's security model (`XBS-writefile`).
 
 ---
 
