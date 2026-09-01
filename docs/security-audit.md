@@ -42,11 +42,11 @@ shell command safely).
 
 ### 2. Insecure/racy `ctl_file` location — High — Fixed
 
-`ctl_file` defaulted to `/data/local/tmp/xbs` - directly inside
+`ctl_file` defaulted to `/data/local/tmp/powersentinel` - directly inside
 `/data/local/tmp`, which is world-writable (`drwxrwxrwt`, mode 1777) on
 Android. The sticky bit stops other users from deleting/renaming files
 they don't own, but **not** from creating a new file first. Any
-unprivileged app can pre-create `/data/local/tmp/xbs` before the daemon
+unprivileged app can pre-create `/data/local/tmp/powersentinel` before the daemon
 ever runs (e.g. immediately after boot, racing the daemon's own startup),
 keeping ownership and permissions of its choosing - including
 world-writable - indefinitely. From then on, every `cat "$ctl_file"` the
@@ -54,7 +54,7 @@ daemon does reads attacker-controlled content, feeding directly into
 `handle_event "$cmd_event" 1` and finding #1 above.
 
 **Fix applied**:
-- Default `ctl_file` moved to `/data/local/tmp/PowerSentinel/xbs` (inside the
+- Default `ctl_file` moved to `/data/local/tmp/PowerSentinel/powersentinel` (inside the
   module's own data directory, created by the daemon with normal root
   ownership - not the world-writable `/data/local/tmp` root) in both
   `PowerSentineld` and `PowerSentinelctl`.

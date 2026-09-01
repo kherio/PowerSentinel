@@ -1,4 +1,4 @@
-import { XbsApiError } from './errors.js';
+import { PowerSentinelApiError } from './errors.js';
 
 // Talks to the httpd/CGI backend (webui/cgi-bin/*.cgi) that action.sh
 // starts, used when the page isn't running inside a WebUI-X-capable
@@ -21,7 +21,7 @@ async function cgiGet(path) {
   const res = await fetch(withToken(path));
   const text = await res.text();
   if (!res.ok || text.startsWith('Error:')) {
-    throw new XbsApiError(text.replace(/^Error:\s*/, '') || `Request failed (${res.status})`);
+    throw new PowerSentinelApiError(text.replace(/^Error:\s*/, '') || `Request failed (${res.status})`);
   }
   return text;
 }
@@ -30,7 +30,7 @@ async function cgiPost(path, body) {
   const res = await fetch(withToken(path), { method: 'POST', body: body || '' });
   const text = await res.text();
   if (!res.ok || text.startsWith('Error:')) {
-    throw new XbsApiError(text.replace(/^Error:\s*/, '') || `Request failed (${res.status})`);
+    throw new PowerSentinelApiError(text.replace(/^Error:\s*/, '') || `Request failed (${res.status})`);
   }
   return text;
 }
@@ -97,7 +97,7 @@ export async function stopEvent(name) {
 
 function sanitizeProfileName(name) {
   const clean = (name || '').replace(/[^a-zA-Z0-9_-]/g, '');
-  if (!clean) throw new XbsApiError('Invalid profile name');
+  if (!clean) throw new PowerSentinelApiError('Invalid profile name');
   return clean;
 }
 

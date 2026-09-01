@@ -1,5 +1,5 @@
 import { exec } from 'kernelsu';
-import { XbsApiError } from './errors.js';
+import { PowerSentinelApiError } from './errors.js';
 
 // Used by api.js to decide, once at startup, whether this backend is
 // actually usable - the 'kernelsu' package itself always imports fine,
@@ -28,7 +28,7 @@ const RESOLVE_LOG_PATH =
 async function run(command) {
   const { errno, stdout, stderr } = await exec(command);
   if (errno !== 0) {
-    throw new XbsApiError((stderr && stderr.trim()) || `Command failed (errno ${errno})`);
+    throw new PowerSentinelApiError((stderr && stderr.trim()) || `Command failed (errno ${errno})`);
   }
   return stdout;
 }
@@ -112,7 +112,7 @@ const PROFILES_DIR = `${DATA_DIR}/profiles`;
 // posture as event names elsewhere in this codebase.
 function sanitizeProfileName(name) {
   const clean = (name || '').replace(/[^a-zA-Z0-9_-]/g, '');
-  if (!clean) throw new XbsApiError('Invalid profile name');
+  if (!clean) throw new PowerSentinelApiError('Invalid profile name');
   return clean;
 }
 

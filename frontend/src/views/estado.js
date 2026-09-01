@@ -5,7 +5,7 @@ import { t } from '../i18n.js';
 
 const GAUGE_C = 2 * Math.PI * 52;
 const HISTORY_MAX = 30; // ~90s at 3s polling
-const HISTORY_KEY = 'xbs-estado-history';
+const HISTORY_KEY = 'powersentinel-estado-history';
 const BATT_WINDOW_MS = 3 * 60 * 60 * 1000; // keep up to 3h of battery samples for the drain-rate estimate
 
 function loadPersisted() {

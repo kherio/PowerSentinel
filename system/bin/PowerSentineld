@@ -1289,7 +1289,7 @@ log_level=$(getconf log_level 3) # set debug by default
 # from creating a same-named file first). ensure_ctl_file() below also
 # refuses to trust a pre-existing file it doesn't own, as defense in
 # depth for anyone who has overridden ctl_file back into a shared path.
-ctl_file=$(getconf ctl_file "/data/local/tmp/PowerSentinel/xbs")
+ctl_file=$(getconf ctl_file "/data/local/tmp/PowerSentinel/powersentinel")
 ensure_ctl_file "$ctl_file"
 
 # persistent safe mode
