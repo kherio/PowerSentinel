@@ -1,4 +1,15 @@
 
+### v3.4.0-kherio
+  - **Bottom navigation bar** replaces the old top tab strip - icon + label per section, scales cleanly to the two new sections below instead of feeling cramped. The header is now just the app title.
+  - **Battery info on Estado**: level, charging state, temperature, voltage (`dumpsys battery`, added to `XtremeBSd`'s status output alongside a new anchored-regex parser to avoid matching the wrong `voltage:`/`level:` line), plus a rough remaining-time estimate from the battery-level samples collected across the browsing session (persisted in `localStorage`, so it survives a page reload).
+  - **Currently-active event(s) shown on Estado**: the daemon now reports `ActiveEvents:` in its status (tracking the existing internal `active_events[]` array), rendered as chips under the savings gauge - previously you could see a savings % with no way to tell *which* event caused it.
+  - Frequency/load chart history now persists across page reloads (was previously wiped on every reload).
+  - **Config tab**: a search box filters the (collapsed) event list by name or by whatever appears in its one-line summary; each event card also shows an "Activo" badge (pulsing dot on the icon) when it's the one currently applied, cross-referencing the same `ActiveEvents` data Estado uses.
+  - **New: Perfiles tab** - save the current `XtremeBS.conf` as a named profile, and load or delete saved profiles later. Profiles are plain files under `XtremeBS/profiles/`, written through the same hardened `XBS-writefile` path as the main config.
+  - **New: Acerca de tab** - shows the installed module version (read live from `module.prop`) and links to the repo, changelog, and issue tracker.
+  - **Pull-to-refresh** added to Estado and Log (in addition to the existing toolbar refresh button) - drag down from the top of either list to refresh.
+  - Verified: the daemon's `dumpsys battery` parsing against a realistic sample dump (correctly ignores "Max charging voltage:" when looking for "voltage:"), and the battery-parsing/remaining-time-estimate JS logic against several synthetic histories (normal drain, too-short window, level going up, no data) - all matched expectations.
+
 ### v3.3.1-kherio
   - **Closed the two remaining low-severity findings from `docs/security-audit.md`** (both left deliberately open in the original audit, now fixed):
     - `system/bin/XtremeBSd`'s app-handling loops (`enable_pwr_save()` and `disable_pwr_save()`) used an unquoted `for app in $(...)`, which both word-splits and glob-expands every line - a denylist entry containing a shell glob character (e.g. `*`) could expand to filenames in the daemon's working directory instead of being read as a literal package name. Rewrote as a hardened `while IFS= read -r app; do ... done < <(...)`. Verified with a standalone repro: the old loop expanded a `*` denylist line to every file in a test directory; the new one preserves it as the literal string `*`.
