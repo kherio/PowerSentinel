@@ -6,8 +6,8 @@ import { t } from '../i18n.js';
 let rawLog = '';
 let pollTimer = null;
 
-const LEVEL_KEY = 'xbs-log-level';
-const SCROLL_KEY = 'xbs-log-autoscroll';
+const LEVEL_KEY = 'powersentinel-log-level';
+const SCROLL_KEY = 'powersentinel-log-autoscroll';
 
 function renderLog() {
   const logWrap = document.getElementById('l-log-wrap');
