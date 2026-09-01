@@ -1,15 +1,21 @@
 import './style.css';
+import { ICONS } from './icons.js';
 import { initViewportFix } from './helpers.js';
-import { initEstado, activateEstado, deactivateEstado } from './views/estado.js';
+import { initEstado, activateEstado, deactivateEstado, refreshEstado } from './views/estado.js';
 import { initConfig, activateConfig, deactivateConfig, confirmLeaveConfig } from './views/config.js';
-import { initLog, activateLog, deactivateLog } from './views/log.js';
+import { initLog, activateLog, deactivateLog, refreshLog } from './views/log.js';
+import { initPerfiles, activatePerfiles, deactivatePerfiles } from './views/perfiles.js';
+import { initAcerca, activateAcerca, deactivateAcerca } from './views/acerca.js';
 
-const VIEWS = ['estado', 'conf', 'log'];
+const VIEWS = ['estado', 'conf', 'log', 'perfiles', 'acerca'];
 const LIFECYCLE = {
   estado: { activate: activateEstado, deactivate: deactivateEstado },
   conf: { activate: activateConfig, deactivate: deactivateConfig },
-  log: { activate: activateLog, deactivate: deactivateLog }
+  log: { activate: activateLog, deactivate: deactivateLog },
+  perfiles: { activate: activatePerfiles, deactivate: deactivatePerfiles },
+  acerca: { activate: activateAcerca, deactivate: deactivateAcerca }
 };
+const NAV_ICONS = { estado: ICONS.gauge, conf: ICONS.settings, log: ICONS.list, perfiles: ICONS.layers, acerca: ICONS.info };
 
 let currentIndex = 0;
 
@@ -38,6 +44,7 @@ function commitToIndex(newIndex) {
 
 function initTabButtons() {
   VIEWS.forEach((name, index) => {
+    document.getElementById(`bn-icon-${name}`).innerHTML = NAV_ICONS[name];
     document.getElementById(`tab-btn-${name}`).addEventListener('click', () => {
       if (index === currentIndex) return;
       if (!confirmLeave(currentIndex)) return;
@@ -83,6 +90,53 @@ function initSwipeNav() {
   }, { passive: true });
 }
 
+// Generic pull-to-refresh: only engages when the scrollable area is
+// already scrolled to the very top (so it never fights a normal scroll
+// gesture), grows an indicator proportionally to the drag, and fires
+// `onRefresh` once the user releases past the threshold.
+function initPullToRefresh(areaId, indicatorId, onRefresh) {
+  const area = document.getElementById(areaId);
+  const indicator = document.getElementById(indicatorId);
+  if (!area || !indicator) return;
+  const THRESHOLD = 60;
+  let startY = null, dragging = false, refreshing = false;
+
+  area.addEventListener('touchstart', (e) => {
+    if (e.touches.length !== 1 || area.scrollTop > 0 || refreshing) { startY = null; return; }
+    startY = e.touches[0].clientY;
+    dragging = false;
+  }, { passive: true });
+
+  area.addEventListener('touchmove', (e) => {
+    if (startY === null || refreshing) return;
+    const dy = e.touches[0].clientY - startY;
+    if (dy <= 0) return;
+    dragging = true;
+    const pull = Math.min(dy * 0.5, 70);
+    indicator.style.height = pull + 'px';
+    indicator.classList.toggle('ready', pull >= THRESHOLD);
+    indicator.innerHTML = (pull >= THRESHOLD ? ICONS.reload : ICONS.chevron) +
+      (pull >= THRESHOLD ? ' Suelta para actualizar' : ' Desliza para actualizar');
+  }, { passive: true });
+
+  area.addEventListener('touchend', () => {
+    if (!dragging) { startY = null; return; }
+    dragging = false;
+    const wasReady = indicator.classList.contains('ready');
+    indicator.style.height = wasReady ? '40px' : '0';
+    startY = null;
+    if (!wasReady) return;
+    refreshing = true;
+    indicator.classList.add('spinning');
+    indicator.innerHTML = ICONS.reload + ' Actualizando…';
+    Promise.resolve(onRefresh()).finally(() => {
+      indicator.classList.remove('spinning', 'ready');
+      indicator.style.height = '0';
+      refreshing = false;
+    });
+  }, { passive: true });
+}
+
 initViewportFix();
 initTabButtons();
 initSwipeNav();
@@ -90,7 +144,12 @@ initSwipeNav();
 initEstado();
 initConfig();
 initLog();
+initPerfiles();
+initAcerca();
 
-// Estado starts active on load; the other two only start their polling
-// once the user actually swipes/taps to them (see commitToIndex/LIFECYCLE).
+initPullToRefresh('e-pull-area', 'e-pull-indicator', refreshEstado);
+initPullToRefresh('l-pull-area', 'l-pull-indicator', refreshLog);
+
+// Estado starts active on load; the rest only start their polling once
+// the user actually swipes/taps to them (see commitToIndex/LIFECYCLE).
 activateEstado();

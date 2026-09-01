@@ -59,6 +59,7 @@ body.app-shell {
   flex-direction: column;
   overflow: hidden;
 }
+.app-shell > nav.bottom-nav { flex: 0 0 auto; }
 
 /* --- Tab panes: after three failed attempts at a live-dragging
    carousel (transform-based positioning kept overflowing the screen
@@ -126,7 +127,7 @@ header.app-header {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 14px 16px 10px;
+  padding: 14px 16px;
   font-size: 15px;
   font-weight: 600;
   letter-spacing: 0.2px;
@@ -147,31 +148,37 @@ header.app-header {
   100% { box-shadow: 0 0 0 0 rgba(95, 214, 140, 0); }
 }
 
-nav.tabs {
+/* --- Bottom navigation: replaces the old top tab bar. Fixed height,
+   icon + label per item, scales to more sections later (Perfiles,
+   Acerca de) without feeling cramped the way stacking more text tabs
+   at the top would. --- */
+nav.bottom-nav {
   display: flex;
-  padding: 0 12px;
-  gap: 4px;
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
-nav.tabs button {
+nav.bottom-nav button {
   flex: 1;
-  text-align: center;
-  padding: 10px 8px;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 8px 2px 7px;
   background: none;
   border: none;
-  border-bottom: 2px solid transparent;
-  cursor: pointer;
+  color: var(--muted);
   font-family: inherit;
+  font-size: 10.5px;
+  cursor: pointer;
   transition: color 0.15s ease;
 }
 
-nav.tabs button.active {
-  color: var(--accent);
-  border-bottom-color: var(--accent);
-}
+nav.bottom-nav .bn-icon { width: 21px; height: 21px; display: flex; align-items: center; justify-content: center; }
+nav.bottom-nav .bn-icon svg { width: 21px; height: 21px; }
+nav.bottom-nav button.active { color: var(--accent); }
+nav.bottom-nav button:active { opacity: 0.7; }
 
 
 main {
@@ -270,6 +277,16 @@ main {
   color: var(--muted);
   margin: 18px 0 8px;
 }
+
+.section-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 18px 0 8px;
+  flex-wrap: wrap;
+}
+.section-title-row .c-event-search { max-width: 180px; padding: 6px 10px; font-size: 13px; }
 
 .field-group-title {
   font-size: 11px;
@@ -562,6 +579,59 @@ main {
 .hero-title { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
 .hero-sub { font-size: 12.5px; color: var(--muted); line-height: 1.5; }
 
+.active-events-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.active-events-row .ae-chip {
+  font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 999px;
+  background: var(--accent-dim); color: var(--accent);
+}
+
+/* --- Battery card: level, charging state, temperature, estimated
+   remaining time. Shown only once the daemon reports Battery: in the
+   status file (older installs upgrading won't see a blank/broken card,
+   just no card until the daemon side updates too). --- */
+.battery-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 14px;
+}
+.battery-level-wrap { flex: none; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.battery-shell {
+  width: 44px; height: 22px; border: 2px solid var(--border); border-radius: 5px;
+  position: relative; padding: 2px; box-sizing: border-box;
+}
+.battery-shell::after {
+  content: ''; position: absolute; right: -5px; top: 50%; transform: translateY(-50%);
+  width: 3px; height: 10px; background: var(--border); border-radius: 0 2px 2px 0;
+}
+.battery-fill { height: 100%; border-radius: 2px; background: var(--accent); transition: width 0.4s ease, background 0.4s ease; }
+.battery-fill.low { background: var(--danger); }
+.battery-fill.mid { background: var(--warn); }
+.battery-pct { font-size: 13px; font-weight: 700; }
+.battery-details { min-width: 0; flex: 1; }
+.battery-status { font-size: 15px; font-weight: 600; }
+.battery-sub { font-size: 12.5px; color: var(--muted); margin-top: 2px; line-height: 1.5; }
+
+/* --- Pull-to-refresh: a small spinner-ish indicator that grows as the
+   user drags down past the top of an already-scrolled-to-top list, then
+   triggers the same refresh the toolbar button does. --- */
+.pull-indicator {
+  height: 0;
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  transition: height 0.15s ease;
+}
+.pull-indicator.ready { color: var(--accent); }
+.pull-indicator svg { width: 16px; height: 16px; margin-right: 6px; transition: transform 0.15s ease; }
+.pull-indicator.spinning svg { animation: spin 0.7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
 .icon {
   width: 14px;
   height: 14px;
@@ -737,6 +807,13 @@ label.switch input { accent-color: var(--accent); }
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .event-card .event-body { margin-top: 14px; }
+.event-card.is-active-now .event-icon { position: relative; }
+.event-card.is-active-now .event-icon::after {
+  content: ''; position: absolute; top: -1px; right: -1px;
+  width: 8px; height: 8px; border-radius: 50%; background: var(--accent);
+  animation: core-pulse 2s infinite; border: 2px solid var(--surface);
+}
+.event-active-badge { font-size: 10px; padding: 2px 8px; flex: none; }
 .add-event-row { display: flex; gap: 8px; margin-top: 4px; flex-wrap: wrap; }
 
 /* Log viewer */
@@ -810,3 +887,37 @@ label.switch input { accent-color: var(--accent); }
   0% { background-position: 100% 50%; }
   100% { background-position: 0 50%; }
 }
+
+/* --- Perfiles: saved-profile list --- */
+.profile-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  margin-bottom: 10px;
+}
+.profile-item .profile-name { flex: 1; font-size: 14px; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.profile-item .btn { padding: 7px 9px; }
+
+/* --- Acerca de --- */
+.about-logo {
+  width: 56px; height: 56px; margin: 0 auto;
+  border-radius: 16px;
+  background: linear-gradient(155deg, var(--accent-dim) 0%, var(--surface-2) 100%);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--accent);
+}
+.about-logo svg { width: 30px; height: 30px; }
+.about-link {
+  display: flex; align-items: center; gap: 10px;
+  padding: 11px 4px;
+  color: var(--text);
+  text-decoration: none;
+  font-size: 14px;
+  border-bottom: 1px solid var(--border);
+}
+.about-link:last-child { border-bottom: none; }
+.about-link svg { width: 17px; height: 17px; color: var(--muted); flex: none; }

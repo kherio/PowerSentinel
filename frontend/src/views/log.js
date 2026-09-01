@@ -93,3 +93,8 @@ export function activateLog() {
 export function deactivateLog() {
   if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
 }
+
+// Used by main.js's pull-to-refresh gesture.
+export function refreshLog() {
+  return loadLog(false);
+}
