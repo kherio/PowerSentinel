@@ -160,3 +160,60 @@ mind rather than audited after the fact:
 `XBSconf` was reviewed and found clean (uses `awk -v` for all
 variable-into-pattern cases, no `eval`/`sh -c`/`su -c` with interpolated
 untrusted content) - no findings there.
+
+## Addendum: the Magisk httpd/CGI backend's threat model
+
+Magisk has no native WebUI-X support, so `backend-cgi.js` +
+`webui/cgi-bin/*.cgi` (revived from the pre-v3.0.0 architecture) exist
+specifically for it. This reintroduces the exact attack surface
+`docs/webui-x-migration.md` originally moved away from: **on Android, a
+loopback socket (`127.0.0.1`) is reachable by any app on the device that
+merely holds the `INTERNET` permission** - one of the most common,
+least-scrutinized permissions there is. This is fundamentally different
+from the KernelSU `exec()` bridge, which only the manager app itself
+(already holding actual root-grant privileges) can invoke.
+
+**Mitigation**: every CGI endpoint requires a per-session token
+(`webui/cgi-bin/cgi-common.sh`'s `require_token()`), generated fresh by
+`action.sh` each time it starts httpd and opens the browser:
+
+- The token is never served as a static file from `DOCUMENT_ROOT` - it's
+  written to `/data/local/tmp/XtremeBS/.token` (mode 600, root-owned,
+  outside the served directory) and only ever appears in the URL
+  `action.sh` opens (`?token=...`), read from `location.search` by
+  `backend-cgi.js` and attached to every subsequent request.
+- A fresh, unpredictable token (`/proc/sys/kernel/random/uuid`) is
+  generated on every `action.sh` run, invalidating any previously-open
+  session - verified with a standalone test that two consecutive runs
+  produce different tokens.
+- `require_token()` was verified against all four cases: correct token
+  (passes), wrong token, no token at all, and no active session (`.token`
+  missing) - the latter three all fail closed with the same generic
+  error, not distinguishing *why* a request was rejected.
+- Only `webroot/` and `webui/cgi-bin/` are ever exposed via httpd -
+  `action.sh` builds a dedicated serving directory
+  (`/data/local/tmp/XtremeBS/.serve/`) containing just symlinks to
+  those two, rather than pointing httpd at the module's own directory
+  (which also holds the daemon binary, `module.prop`, etc.).
+- `applist_read.cgi` independently re-implements `XBS-writefile`'s path
+  allowlist (must be under `/data/local/tmp/XtremeBS/`, no `..`, not a
+  symlink) for *reads*, since reads don't go through `XBS-writefile` at
+  all - without this, a valid token would otherwise make this endpoint
+  an arbitrary-file-read oracle (any root-readable file on the device,
+  not just XtremeBS's own data).
+- `event.cgi`, `profile_*.cgi` re-validate event/profile names
+  server-side (`sanitize_name()`, same `[a-zA-Z0-9_-]` charset the
+  frontend already enforces) rather than trusting the client - the
+  token proves the *request* is legitimate, not that its *parameters*
+  are safe to use unchecked.
+
+**Residual risk, stated plainly**: this is still a materially larger
+attack surface than the KernelSU path. A malicious app that can read
+another app's *currently displayed URL* (which requires either an
+accessibility-service grant or a compromised WebView/browser - not a
+default capability) could in principle capture a live token during the
+brief window the WebUI is open. This is a meaningfully higher bar than
+"any app with INTERNET permission," but it is not zero. Users who want
+the KernelSU-level security posture should prefer a WebUI-X-capable
+manager; the Magisk path is offered as a real, hardened option, not
+represented as risk-equivalent to the native one.
