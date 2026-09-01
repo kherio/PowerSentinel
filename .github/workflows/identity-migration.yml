@@ -24,21 +24,15 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Remove the legacy prebuilt archive. It embeds the old XtremeBS
-          # layout and must not remain the canonical package artifact.
           if [ -f XtremeBS.zip ]; then
             git rm -- XtremeBS.zip
           fi
 
-          # Rename any remaining executable/configuration entry points that
-          # still carry the legacy product name.
           [ ! -e system/bin/XtremeBSd ] || git mv system/bin/XtremeBSd system/bin/PowerSentineld
           [ ! -e system/bin/XBS-writefile ] || git mv system/bin/XBS-writefile system/bin/PowerSentinel-writefile
           [ ! -e system/bin/XBSctl ] || git mv system/bin/XBSctl system/bin/PowerSentinelctl
           [ ! -e system/bin/XBSconf ] || git mv system/bin/XBSconf system/bin/PowerSentinelconf
 
-          # Rewrite UTF-8 text files only; binary artifacts are intentionally
-          # excluded. Keep DethByte64 attribution/history intact.
           mapfile -t files < <(git grep -Il -e 'Xtreme-Battery-Saver' -e 'Xtreme Battery Saver' -e 'XtremeBS' -e 'XBSctl' -e 'XBSconf' -e 'XBS-writefile' -e 'XBSd' -e 'XBS' -e 'xbs-locale-override' || true)
           if [ "${#files[@]}" -gt 0 ]; then
             perl -pi -e \
@@ -54,14 +48,15 @@ jobs:
                s#xbs-locale-override#powersentinel-locale-override#g' "${files[@]}"
           fi
 
-          # Keep the repository's user-facing identity consistent.
           if [ -f module.prop ]; then
             sed -i 's/^id=XtremeBS$/id=PowerSentinel/; s/^name=Xtreme Battery Saver$/name=PowerSentinel/; s/^author=kherio (fork of DethByte64\/Xtreme-Battery-Saver)$/author=kherio/' module.prop
           fi
 
           git config user.name 'PowerSentinel migration bot'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -A
+          # Do not stage this workflow itself: the GitHub App token cannot
+          # push workflow-file changes without the separate workflows scope.
+          git add -A -- . ':(exclude).github/workflows/identity-migration.yml'
           if git diff --cached --quiet; then
             exit 0
           fi
