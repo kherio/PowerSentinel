@@ -11,7 +11,7 @@ name=$(get_param "$QUERY_STRING" name)
 clean_name="$(sanitize_name "$name")"
 [ -n "$clean_name" ] || fail "invalid event name"
 case "$action" in
-  start) XBSctl start "$clean_name" && echo "OK" || fail "could not start event" ;;
-  stop) XBSctl stop "$clean_name" && echo "OK" || fail "could not stop event" ;;
+  start) PowerSentinelctl start "$clean_name" && echo "OK" || fail "could not start event" ;;
+  stop) PowerSentinelctl stop "$clean_name" && echo "OK" || fail "could not stop event" ;;
   *) fail "invalid action" ;;
 esac

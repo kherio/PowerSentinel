@@ -4,12 +4,12 @@ require_token
 echo ""
 path=$(get_param "$QUERY_STRING" path)
 [ -z "$path" ] && { echo ""; exit 0; }
-# Defense in depth: reads aren't routed through XBS-writefile (which only
+# Defense in depth: reads aren't routed through PowerSentinel-writefile (which only
 # handles writes), so this endpoint enforces the same allowlist itself -
 # otherwise it would be an arbitrary-file-read oracle for anyone who
 # somehow obtained a valid session token.
 case "$path" in
-  "$XBS_DATA"/*) ;;
+  "$PowerSentinel_DATA"/*) ;;
   *) fail "path not allowed" ;;
 esac
 case "$path" in *..*) fail "path traversal rejected" ;; esac

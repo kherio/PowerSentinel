@@ -1,5 +1,5 @@
 #!/system/bin/bash
-conf="/data/local/tmp/XtremeBS/XtremeBS.conf"
+conf="/data/local/tmp/PowerSentinel/PowerSentinel.conf"
 declare -a active_events
 declare -a cpus
 declare -a cpu_freqs
@@ -31,7 +31,7 @@ is_device() {
   fi
 }
 
-# SECURITY: creates/repairs the control file the webui/XBSctl write
+# SECURITY: creates/repairs the control file the webui/PowerSentinelctl write
 # commands into. Any world-writable directory (like /data/local/tmp
 # itself) lets an unprivileged app pre-create a file with our exact name
 # before we do, keeping ownership/permissions of their choosing forever
@@ -158,7 +158,7 @@ notif() {
     # the original message contained.
     local b64
     b64="$(printf '%s' "$1" | base64 | tr -d '\n')"
-    su -lp 2000 -c "cmd notification post -S bigtext -t 'XtremeBS' 'STATUS' \"\$(echo $b64 | base64 -d)\"" >/dev/null
+    su -lp 2000 -c "cmd notification post -S bigtext -t 'PowerSentinel' 'STATUS' \"\$(echo $b64 | base64 -d)\"" >/dev/null
   fi
 }
 
@@ -188,7 +188,7 @@ migrate() {
   fi
   delay="$(getconf delay 3)"
   echo "delay=$delay" >> "$conf-v2"
-  log_file="$(getconf log_file "$(dirname "$conf")/XtremeBS.log")"
+  log_file="$(getconf log_file "$(dirname "$conf")/PowerSentinel.log")"
   echo "log_file=$log_file" >> "$conf-v2"
   log_level="$(getconf log_level 1)"
   echo "log_level=$log_level" >> "$conf-v2"
@@ -230,11 +230,11 @@ migrate() {
   echo "handle_cores=$(getconf handle_cores false)" >> "$conf-v2"
   echo "disable_cores=$(getconf disable_cores false)" >> "$conf-v2"
   echo "handle_apps=$(getconf handle_apps false)" >> "$conf-v2"
-  echo "allowlist=$(getconf allowlist /sdcard/XtremeBS/apps.allow)" >> "$conf-v2"
-  echo "denylist=$(getconf denylist /sdcard/XtremeBS/apps.deny)" >> "$conf-v2"
+  echo "allowlist=$(getconf allowlist /sdcard/PowerSentinel/apps.allow)" >> "$conf-v2"
+  echo "denylist=$(getconf denylist /sdcard/PowerSentinel/apps.deny)" >> "$conf-v2"
   echo "handle_gms=$(getconf handle_gms false)" >> "$conf-v2"
   echo "handle_proc=$(getconf handle_proc false)" >> "$conf-v2"
-  echo "proc_file=$(getconf proc_file /sdcard/XtremeBS/proc.list)" >> "$conf-v2"
+  echo "proc_file=$(getconf proc_file /sdcard/PowerSentinel/proc.list)" >> "$conf-v2"
   echo "low_ram=$(getconf low_ram false)" >> "$conf-v2"
   echo "doze=$(getconf doze false)" >> "$conf-v2"
   echo "kill_wifi=$(getconf kill_wifi false)" >> "$conf-v2"
@@ -313,7 +313,7 @@ find_rfkill_command() {
 }
 
 update_status() {
-  status_file="/data/local/tmp/XtremeBS/XtremeBS.status"
+  status_file="/data/local/tmp/PowerSentinel/PowerSentinel.status"
   echo -n > "$status_file"
   # CPU Map
   for i in ${!cpus[@]}; do
@@ -410,8 +410,8 @@ read_config() {
   handle_apps=$(getconf handle_apps false)
 
   # allowlist (user apps)
-  # a path /data/local/tmp/XtremeBS/apps.allow
-  allowlist=$(getconf "allowlist" "/data/local/tmp/XtremeBS/apps.allow")
+  # a path /data/local/tmp/PowerSentinel/apps.allow
+  allowlist=$(getconf "allowlist" "/data/local/tmp/PowerSentinel/apps.allow")
 
   # sanity check. Not allow user to suspend
   # everything without an allowlist. Will make
@@ -421,8 +421,8 @@ read_config() {
   # log error here
 
   # denylist (system apps)
-  # a path /data/local/tmp/XtremeBS/apps.deny
-  denylist=$(getconf "denylist" "/data/local/tmp/XtremeBS/apps.deny")
+  # a path /data/local/tmp/PowerSentinel/apps.deny
+  denylist=$(getconf "denylist" "/data/local/tmp/PowerSentinel/apps.deny")
 
   # handle_cores
   # auto|false|"cpu4 cpu5"
@@ -441,8 +441,8 @@ read_config() {
   handle_proc=$(getconf "handle_proc" false)
 
   # proc_file
-  # a path /data/local/tmp/XtremeBS/proc.list
-  proc_file=$(getconf "proc_file" "/data/local/tmp/XtremeBS/proc.list")
+  # a path /data/local/tmp/PowerSentinel/proc.list
+  proc_file=$(getconf "proc_file" "/data/local/tmp/PowerSentinel/proc.list")
   [ ! -s "$proc_file" ] && handle_proc="false"
 
   # set low_ram
@@ -469,9 +469,9 @@ read_config() {
 enable_pwr_save() {
   if [ "$version" != "2" ]; then
     lock="1"
-    echo -n "Enabling XtremeBS"
-    notif "Enabling XtremeBS..."
-    log_msg 1 "Enabling XtremeBS"
+    echo -n "Enabling PowerSentinel"
+    notif "Enabling PowerSentinel..."
+    log_msg 1 "Enabling PowerSentinel"
   fi
   # Handle Apps
   if [ "$handle_apps" != "false" ]; then
@@ -609,7 +609,7 @@ enable_pwr_save() {
   if [ "$version" != "2" ]; then
     echo " - [done]"
     notif "status: Enabled"
-    log_msg 1 "Enabled XtremeBS"
+    log_msg 1 "Enabled PowerSentinel"
   fi
 
   update_status
@@ -617,9 +617,9 @@ enable_pwr_save() {
 
 disable_pwr_save() {
   if [ "$version" != "2" ]; then
-    echo -n "Disabling XtremeBS"
-    notif "Disabling XtremeBS..."
-    log_msg 1 "Disabling XtremeBS"
+    echo -n "Disabling PowerSentinel"
+    notif "Disabling PowerSentinel..."
+    log_msg 1 "Disabling PowerSentinel"
   fi
   # Handle Cores
 
@@ -737,7 +737,7 @@ disable_pwr_save() {
     lock="0"
     echo " - [done]"
     notif "status: Disabled"
-    log_msg 1 "Disabled XtremeBS"
+    log_msg 1 "Disabled PowerSentinel"
   fi
 
   update_status
@@ -1108,7 +1108,7 @@ init_v1() {
             fi
             disable_pwr_save
           fi
-          log_msg 1 "Stopped XtremeBS"
+          log_msg 1 "Stopped PowerSentinel"
           ;;
         start)
           log_msg 1 "Start command received"
@@ -1125,7 +1125,7 @@ init_v1() {
             fi
             enable_pwr_save
           fi
-          log_msg 1 "Started XtremeBS"
+          log_msg 1 "Started PowerSentinel"
           ;;
         pause)
           log_msg 1 "Pause command received"
@@ -1190,7 +1190,7 @@ init_v1() {
 
 # setup config (v1 is default... for now...)
 
-[ ! -d /data/local/tmp/XtremeBS/ ] && mkdir /data/local/tmp/XtremeBS/
+[ ! -d /data/local/tmp/PowerSentinel/ ] && mkdir /data/local/tmp/PowerSentinel/
 
 if [ ! -s "$conf" ]; then
   cat << EOF > "$conf"
@@ -1202,7 +1202,7 @@ trigger=auto
 version=2
 
 # log file
-log_file=/sdcard/XtremeBS.log
+log_file=/sdcard/PowerSentinel.log
 
 # log level
 log_level=1
@@ -1229,12 +1229,12 @@ disable_cores=false
 handle_apps=false
 
 # allowlist (user apps)
-# a path /data/local/tmp/XtremeBS/apps.allow
-allowlist=/data/local/tmp/XtremeBS/apps.allow
+# a path /data/local/tmp/PowerSentinel/apps.allow
+allowlist=/data/local/tmp/PowerSentinel/apps.allow
 
 # denylist (system apps)
-# a path /data/local/tmp/XtremeBS/apps.deny
-denylist=/data/local/tmp/XtremeBS/apps.deny
+# a path /data/local/tmp/PowerSentinel/apps.deny
+denylist=/data/local/tmp/PowerSentinel/apps.deny
 
 # handle_gms
 # false|kill|nice
@@ -1245,8 +1245,8 @@ handle_gms=false
 handle_proc=false
 
 # process list
-# a path /data/local/tmp/XtremeBS/proc.list
-proc_file=/data/local/tmp/XtremeBS/proc.list
+# a path /data/local/tmp/PowerSentinel/proc.list
+proc_file=/data/local/tmp/PowerSentinel/proc.list
 
 # low_ram
 # true|false
@@ -1272,7 +1272,7 @@ if [ "$(grep ".*={" "$conf" | head -n 1)" == "" ] && [ "$version" = "2" ]; then
 fi
 
 # setup logging
-log_file=$(getconf log_file "/sdcard/XtremeBS.log")
+log_file=$(getconf log_file "/sdcard/PowerSentinel.log")
 log_level=$(getconf log_level 3) # set debug by default
 
 # this fixes the infinite growth issue
@@ -1280,7 +1280,7 @@ log_level=$(getconf log_level 3) # set debug by default
 
 # set ctl_file
 #
-# SECURITY: default lives inside /data/local/tmp/XtremeBS/ (created below
+# SECURITY: default lives inside /data/local/tmp/PowerSentinel/ (created below
 # with normal root-owned permissions), not directly in /data/local/tmp
 # itself. /data/local/tmp is world-writable (mode 1777) on Android, so a
 # file placed straight in it can be pre-created by any unprivileged app
@@ -1289,7 +1289,7 @@ log_level=$(getconf log_level 3) # set debug by default
 # from creating a same-named file first). ensure_ctl_file() below also
 # refuses to trust a pre-existing file it doesn't own, as defense in
 # depth for anyone who has overridden ctl_file back into a shared path.
-ctl_file=$(getconf ctl_file "/data/local/tmp/XtremeBS/xbs")
+ctl_file=$(getconf ctl_file "/data/local/tmp/PowerSentinel/xbs")
 ensure_ctl_file "$ctl_file"
 
 # persistent safe mode
@@ -1316,10 +1316,10 @@ find_rfkill_command
 
 # check version and init
 if [ "$version" = 2 ]; then
-  log_msg 1 "Starting XtremeBS"
+  log_msg 1 "Starting PowerSentinel"
   init_v2
 else
-  log_msg 1 "Starting XtremeBS in compatibility mode"
+  log_msg 1 "Starting PowerSentinel in compatibility mode"
   log_msg 1 "You should consider migrating to v2 of the config"
   log_msg 1 "You can migrate by putting version=2 in your config"
 

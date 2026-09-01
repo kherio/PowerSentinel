@@ -7,7 +7,7 @@ ui_print "  Settings permissions"
 set_perm_recursive $MODPATH 0 0 0755 0755
 set_perm $MODPATH/system/bin/bash 0 0 0755
 set_perm $MODPATH/system/bin/bc 0 0 0755
-set_perm $MODPATH/system/bin/XBS-writefile 0 0 0755
+set_perm $MODPATH/system/bin/PowerSentinel-writefile 0 0 0755
 
 # action.sh + the CGI scripts are the Magisk path (no native WebUI-X
 # support there): action.sh starts a local httpd for the same webroot/

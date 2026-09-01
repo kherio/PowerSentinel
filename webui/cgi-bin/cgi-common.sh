@@ -11,11 +11,11 @@
 # these endpoints - not just any app that happens to guess the port.
 #
 # The token is never served as a static file from webroot (it lives
-# outside DOCUMENT_ROOT, at $XBS_DATA/.token, mode 600) - it only ever
+# outside DOCUMENT_ROOT, at $PowerSentinel_DATA/.token, mode 600) - it only ever
 # appears in the URL action.sh opens and in requests the page's own JS
 # makes back to the server with it.
-XBS_DATA="/data/local/tmp/XtremeBS"
-TOKEN_FILE="$XBS_DATA/.token"
+PowerSentinel_DATA="/data/local/tmp/PowerSentinel"
+TOKEN_FILE="$PowerSentinel_DATA/.token"
 
 echo "Content-type: text/plain"
 
