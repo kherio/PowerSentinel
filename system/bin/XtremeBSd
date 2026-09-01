@@ -313,6 +313,23 @@ update_status() {
   load="$(cut -d' ' -f1-3 /proc/loadavg 2>/dev/null)"
   [ -n "$load" ] && echo "Load: $load" >> "$status_file"
   unset doze wifi load
+
+  # Battery - anchored patterns (^[[:space:]]*key:) so e.g. "level:" never
+  # matches an unrelated line like "Max charging voltage:".
+  batt_dump="$(dumpsys battery 2>/dev/null)"
+  batt_level="$(echo "$batt_dump" | grep -m1 -oE '^[[:space:]]*level:[[:space:]]*[0-9]+' | grep -oE '[0-9]+$')"
+  batt_temp_raw="$(echo "$batt_dump" | grep -m1 -oE '^[[:space:]]*temperature:[[:space:]]*[0-9]+' | grep -oE '[0-9]+$')"
+  batt_voltage="$(echo "$batt_dump" | grep -m1 -oE '^[[:space:]]*voltage:[[:space:]]*[0-9]+' | grep -oE '[0-9]+$')"
+  batt_charging="false"
+  echo "$batt_dump" | grep -qE '^[[:space:]]*(AC|USB|Wireless) powered:[[:space:]]*true' && batt_charging="true"
+  if [ -n "$batt_level" ]; then
+    echo "Battery: level=${batt_level} temp=${batt_temp_raw:-0} voltage=${batt_voltage:-0} charging=${batt_charging}" >> "$status_file"
+  fi
+  unset batt_dump batt_level batt_temp_raw batt_voltage batt_charging
+
+  # Currently-active events (empty list if none), for the WebUI to show
+  # "what's applied right now" instead of just the aggregate savings %.
+  echo "ActiveEvents: ${active_events[*]}" >> "$status_file"
 }
 
 # V1 read_config
