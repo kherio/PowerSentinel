@@ -1,6 +1,7 @@
 import { ICONS } from '../icons.js';
 import { listPackages, readAppListFile, writeAppListFile } from '../api.js';
 import { toast } from '../helpers.js';
+import { t } from '../i18n.js';
 
 // Cache the installed-package list across renders/events within one
 // session - it doesn't change while the user is editing config, and
@@ -10,7 +11,7 @@ function getPackages(includeSystem) {
   if (!pkgCachePromise || getPackages._sys !== includeSystem) {
     getPackages._sys = includeSystem;
     pkgCachePromise = listPackages(includeSystem).catch((e) => {
-      toast('No se pudo listar las apps instaladas: ' + e.message, 'error');
+      toast(t('apps.listError', { msg: e.message }), 'error');
       return [];
     });
   }
@@ -19,9 +20,9 @@ function getPackages(includeSystem) {
 
 function parseListFile(text) {
   const set = new Set();
-  text.split('\n').forEach((l) => {
-    const t = l.trim();
-    if (t && t.charAt(0) !== '#') set.add(t);
+  text.split('\n').forEach((line) => {
+    const trimmed = line.trim();
+    if (trimmed && trimmed.charAt(0) !== '#') set.add(trimmed);
   });
   return set;
 }
@@ -38,8 +39,8 @@ export function mountAppsPicker(container, fields, onDirty) {
   const box = document.createElement('div');
   box.className = 'card';
   box.style.marginTop = '4px';
-  box.innerHTML = `<div style="font-size:13px;font-weight:500;margin-bottom:8px;">Elegir apps</div>
-    <div id="ap-status" style="font-size:12px;color:var(--muted);">Cargando apps instaladas…</div>`;
+  box.innerHTML = `<div style="font-size:13px;font-weight:500;margin-bottom:8px;">${t('apps.chooseApps')}</div>
+    <div id="ap-status" style="font-size:12px;color:var(--muted);">${t('apps.loading')}</div>`;
   container.appendChild(box);
 
   const allowPath = fields.allowlist || '/data/local/tmp/XtremeBS/apps.allow';
@@ -50,7 +51,7 @@ export function mountAppsPicker(container, fields, onDirty) {
 
   function warnBox() {
     if (fields.handle_apps === 'suspend' && state.allow.size === 0) {
-      return `<div class="event-name" style="color:var(--warn);font-weight:500;font-size:12px;margin-bottom:8px;">${ICONS.warn} Sin ninguna app en la allowlist, XtremeBS desactivará "Suspender" automáticamente.</div>`;
+      return `<div class="event-name" style="color:var(--warn);font-weight:500;font-size:12px;margin-bottom:8px;">${ICONS.warn} ${t('config.suspendWarn')}</div>`;
     }
     return '';
   }
@@ -65,7 +66,7 @@ export function mountAppsPicker(container, fields, onDirty) {
       const shown = pkgs.filter((p) => p.toLowerCase().indexOf(q) !== -1);
 
       if (!shown.length) {
-        list.innerHTML = '<div class="log-empty">Sin resultados.</div>';
+        list.innerHTML = `<div class="log-empty">${t('apps.noResults')}</div>`;
       } else {
         shown.forEach((pkg) => {
           const row = document.createElement('div');
@@ -96,7 +97,7 @@ export function mountAppsPicker(container, fields, onDirty) {
           allowBtn.className = 'btn' + (isAllow ? ' primary' : ' ghost');
           allowBtn.style.padding = '4px 8px';
           allowBtn.style.fontSize = '11px';
-          allowBtn.textContent = 'Permitir';
+          allowBtn.textContent = t('apps.allow');
           allowBtn.addEventListener('click', () => {
             state.deny.delete(pkg);
             if (isAllow) state.allow.delete(pkg); else state.allow.add(pkg);
@@ -109,7 +110,7 @@ export function mountAppsPicker(container, fields, onDirty) {
           denyBtn.className = 'btn' + (isDeny ? ' primary' : ' ghost');
           denyBtn.style.padding = '4px 8px';
           denyBtn.style.fontSize = '11px';
-          denyBtn.textContent = 'Restringir';
+          denyBtn.textContent = t('apps.deny');
           denyBtn.addEventListener('click', () => {
             state.allow.delete(pkg);
             if (isDeny) state.deny.delete(pkg); else state.deny.add(pkg);
@@ -133,14 +134,14 @@ export function mountAppsPicker(container, fields, onDirty) {
   }
 
   function renderLoaded() {
-    box.innerHTML = `<div style="font-size:13px;font-weight:500;margin-bottom:8px;">Elegir apps</div>
+    box.innerHTML = `<div style="font-size:13px;font-weight:500;margin-bottom:8px;">${t('apps.chooseApps')}</div>
       ${warnBox()}
       <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
-        <input class="filter" id="ap-search" type="text" placeholder="Buscar app…" style="flex:1;">
-        <label class="switch" style="font-size:12px;"><input type="checkbox" id="ap-system"${state.includeSystem ? ' checked' : ''}> Incluir sistema</label>
+        <input class="filter" id="ap-search" type="text" placeholder="${t('apps.searchPlaceholder')}" style="flex:1;">
+        <label class="switch" style="font-size:12px;"><input type="checkbox" id="ap-system"${state.includeSystem ? ' checked' : ''}> ${t('apps.includeSystem')}</label>
       </div>
       <div style="font-size:11px;color:var(--muted);margin-bottom:4px;">
-        ${state.allow.size} permitidas · ${state.deny.size} restringidas
+        ${t('apps.summary', { allow: state.allow.size, deny: state.deny.size })}
       </div>`;
 
     box.querySelector('#ap-search').addEventListener('input', (e) => renderList(e.target.value));
@@ -164,7 +165,7 @@ export function mountAppsPicker(container, fields, onDirty) {
       renderLoaded();
     })
     .catch((e) => {
-      box.querySelector('#ap-status').textContent = 'No se pudieron leer las listas: ' + e.message;
+      box.querySelector('#ap-status').textContent = t('apps.readError', { msg: e.message });
     });
 }
 

@@ -1,6 +1,7 @@
 import { ICONS } from '../icons.js';
 import { readConfig, writeConfig, readStatus, startEvent, stopEvent } from '../api.js';
 import { toast, escapeHtml } from '../helpers.js';
+import { t } from '../i18n.js';
 import { mountAppsPicker, persistAppsPicker } from './apps-picker.js';
 import {
   PREDEFINED_EVENTS, FIELD_DEFS, GLOBAL_DEFS, EVENT_PRESETS,
@@ -59,16 +60,16 @@ const EVENT_ICONS = {
 
 function summarizeFields(fields) {
   const bits = [];
-  if (fields.handle_apps && fields.handle_apps !== 'false') bits.push('apps: ' + fields.handle_apps);
-  if (fields.handle_cores && fields.handle_cores !== 'false') bits.push('núcleos: ' + fields.handle_cores);
-  if (fields.disable_cores && fields.disable_cores !== 'false') bits.push('desactiva núcleos');
-  if (fields.handle_gms && fields.handle_gms !== 'false') bits.push('GMS: ' + fields.handle_gms);
-  if (fields.doze && fields.doze !== 'false') bits.push('doze: ' + fields.doze);
-  if (fields.kill_wifi === 'true') bits.push('WiFi off');
-  if (fields.low_ram === 'true') bits.push('low RAM');
-  if (fields.handle_proc === 'true') bits.push('procesos');
+  if (fields.handle_apps && fields.handle_apps !== 'false') bits.push(t('config.summaryApps', { v: fields.handle_apps }));
+  if (fields.handle_cores && fields.handle_cores !== 'false') bits.push(t('config.summaryCores', { v: fields.handle_cores }));
+  if (fields.disable_cores && fields.disable_cores !== 'false') bits.push(t('config.summaryDisableCores'));
+  if (fields.handle_gms && fields.handle_gms !== 'false') bits.push(t('config.summaryGms', { v: fields.handle_gms }));
+  if (fields.doze && fields.doze !== 'false') bits.push(t('config.summaryDoze', { v: fields.doze }));
+  if (fields.kill_wifi === 'true') bits.push(t('config.summaryWifiOff'));
+  if (fields.low_ram === 'true') bits.push(t('config.summaryLowRam'));
+  if (fields.handle_proc === 'true') bits.push(t('config.summaryProcesses'));
   if (fields.night_start) bits.push(`${fields.night_start}–${fields.night_end || ''}`);
-  return bits.length ? bits.join(' · ') : 'Sin ajustes activos';
+  return bits.length ? bits.join(' · ') : t('config.summaryNone');
 }
 
 function renderEvents() {
@@ -89,7 +90,7 @@ function renderEvents() {
     const iconEl = document.createElement('div');
     iconEl.className = 'event-icon';
     iconEl.innerHTML = EVENT_ICONS[block.name] || ICONS.bolt;
-    if (isActiveNow) iconEl.title = 'Activo ahora mismo';
+    if (isActiveNow) iconEl.title = t('config.activeNowTitle');
     head.appendChild(iconEl);
 
     const isPredefined = PREDEFINED_EVENTS.indexOf(block.name) !== -1;
@@ -113,7 +114,7 @@ function renderEvents() {
     if (isActiveNow) {
       const activeBadge = document.createElement('span');
       activeBadge.className = 'badge on event-active-badge';
-      activeBadge.innerHTML = '<span class="b-dot"></span>Activo';
+      activeBadge.innerHTML = '<span class="b-dot"></span>' + t('config.activeNow');
       head.appendChild(activeBadge);
     }
 
@@ -126,27 +127,27 @@ function renderEvents() {
     const applyBtn = document.createElement('button');
     applyBtn.className = 'btn ghost';
     applyBtn.innerHTML = ICONS.bolt;
-    applyBtn.title = 'Aplicar ahora (probar el evento)';
+    applyBtn.title = t('config.applyNow');
     applyBtn.addEventListener('click', async () => {
-      try { await startEvent(block.name); toast(`"${block.name}" aplicado`, 'success'); }
-      catch (e) { toast('Error al aplicar: ' + e.message, 'error'); }
+      try { await startEvent(block.name); toast(t('config.applied', { name: block.name }), 'success'); }
+      catch (e) { toast(t('config.applyError', { msg: e.message }), 'error'); }
     });
     actions.appendChild(applyBtn);
 
     const stopBtn = document.createElement('button');
     stopBtn.className = 'btn ghost';
     stopBtn.innerHTML = ICONS.power;
-    stopBtn.title = 'Detener (deshacer la prueba)';
+    stopBtn.title = t('config.stop');
     stopBtn.addEventListener('click', async () => {
-      try { await stopEvent(block.name); toast(`"${block.name}" detenido`, 'success'); }
-      catch (e) { toast('Error al detener: ' + e.message, 'error'); }
+      try { await stopEvent(block.name); toast(t('config.stopped', { name: block.name }), 'success'); }
+      catch (e) { toast(t('config.stopError', { msg: e.message }), 'error'); }
     });
     actions.appendChild(stopBtn);
 
     const dupBtn = document.createElement('button');
     dupBtn.className = 'btn ghost';
     dupBtn.innerHTML = ICONS.plus;
-    dupBtn.title = 'Duplicar como evento personalizado';
+    dupBtn.title = t('config.duplicate');
     dupBtn.addEventListener('click', () => {
       let base = block.name.replace(/_copy\d*$/, '') + '_copy';
       let name = base, n = 2;
@@ -163,7 +164,7 @@ function renderEvents() {
     const delBtn = document.createElement('button');
     delBtn.className = 'btn ghost';
     delBtn.innerHTML = ICONS.trash;
-    delBtn.title = 'Eliminar evento';
+    delBtn.title = t('config.deleteEvent');
     delBtn.addEventListener('click', () => {
       model.blocks.splice(idx, 1);
       markDirty(true);
@@ -195,7 +196,7 @@ function renderEvents() {
       presetSelect.className = 'filter';
       presetSelect.style.width = '100%';
       const noneOpt = document.createElement('option');
-      noneOpt.value = ''; noneOpt.textContent = 'Aplicar plantilla…';
+      noneOpt.value = ''; noneOpt.textContent = t('config.applyTemplate');
       presetSelect.appendChild(noneOpt);
       Object.keys(EVENT_PRESETS).forEach((key) => {
         const opt = document.createElement('option');
@@ -207,7 +208,7 @@ function renderEvents() {
         const preset = EVENT_PRESETS[presetSelect.value];
         Object.assign(block.fields, preset.fields);
         markDirty(true);
-        toast(`Plantilla "${preset.label}" aplicada a ${block.name}`, 'success');
+        toast(t('config.templateApplied', { label: preset.label, name: block.name }), 'success');
         renderEvents();
       });
       presetRow.appendChild(presetSelect);
@@ -237,7 +238,7 @@ function renderEvents() {
   if (!model.blocks.length) {
     const empty = document.createElement('div');
     empty.className = 'log-empty';
-    empty.textContent = 'Sin eventos configurados todavía.';
+    empty.textContent = t('config.noEvents');
     list.appendChild(empty);
   }
 
@@ -247,7 +248,7 @@ function renderEvents() {
   const available = PREDEFINED_EVENTS.filter((e) => existing.indexOf(e) === -1);
   if (!available.length) {
     const opt = document.createElement('option');
-    opt.textContent = 'Todos los eventos predefinidos añadidos';
+    opt.textContent = t('config.allPredefinedAdded');
     opt.disabled = true;
     predefSelect.appendChild(opt);
     document.getElementById('c-add-predefined-btn').disabled = true;
@@ -290,7 +291,7 @@ function switchSubTab(view) {
     try {
       model = parseConfig(editor.value);
     } catch (e) {
-      toast('No se pudo interpretar el texto, revisa el formato', 'error');
+      toast(t('config.parseError'), 'error');
       return;
     }
     renderVersionView();
@@ -315,10 +316,10 @@ async function loadFile(showToast) {
     refreshHighlight();
     renderVersionView();
     markDirty(false);
-    if (showToast) toast('Configuración recargada', 'success');
+    if (showToast) toast(t('config.reloaded'), 'success');
     loaded = true;
   } catch (e) {
-    toast('No se pudo cargar la configuración: ' + e.message, 'error');
+    toast(t('config.loadError', { msg: e.message }), 'error');
   }
 }
 
@@ -333,18 +334,14 @@ async function saveFile() {
     original = content;
     if (activeView === 'form') { editor.value = content; refreshHighlight(); }
     markDirty(false);
-    toast('Configuración guardada', 'success');
+    toast(t('config.saved'), 'success');
   } catch (e) {
-    toast('Error al guardar la configuración: ' + e.message, 'error');
+    toast(t('config.saveError', { msg: e.message }), 'error');
   }
 }
 
 async function restoreRecommended() {
-  const ok = window.confirm(
-    'Esto reemplaza el formulario por una configuración recomendada de partida ' +
-    '(boot, charging, screen_off, low_power y night con ajustes equilibrados). ' +
-    'No se escribe nada en el dispositivo hasta que pulses Guardar. ¿Continuar?'
-  );
+  const ok = window.confirm(t('config.restoreConfirm'));
   if (!ok) return;
   model = buildRecommendedModel();
   activeView = 'form';
@@ -354,7 +351,7 @@ async function restoreRecommended() {
   document.getElementById('c-tab-text').classList.remove('active');
   renderVersionView();
   markDirty(true);
-  toast('Valores recomendados cargados - revisa y pulsa Guardar', 'success');
+  toast(t('config.restoreApplied'), 'success');
 }
 
 export function initConfig() {
@@ -371,11 +368,11 @@ export function initConfig() {
     markDirty(editor.value !== original);
   });
 
-  document.getElementById('c-save-btn').innerHTML = ICONS.save + ' Guardar';
-  document.getElementById('c-reload-btn').innerHTML = ICONS.reload + ' Recargar';
-  document.getElementById('c-restore-btn').innerHTML = ICONS.leaf + ' Recomendados';
+  document.getElementById('c-save-btn').innerHTML = ICONS.save + ' ' + t('config.save');
+  document.getElementById('c-reload-btn').innerHTML = ICONS.reload + ' ' + t('config.reload');
+  document.getElementById('c-restore-btn').innerHTML = ICONS.leaf + ' ' + t('config.restore');
   document.getElementById('c-dirty-flag').innerHTML =
-    '<span class="badge warn"><span class="b-dot"></span>Cambios sin guardar</span>';
+    '<span class="badge warn"><span class="b-dot"></span>' + t('config.unsaved') + '</span>';
 
   document.getElementById('c-add-predefined-btn').addEventListener('click', () => {
     const sel = document.getElementById('c-predefined-event-select');
@@ -389,9 +386,9 @@ export function initConfig() {
   document.getElementById('c-add-custom-btn').addEventListener('click', () => {
     const input = document.getElementById('c-custom-event-input');
     const name = input.value.trim().replace(/[^a-zA-Z0-9_-]/g, '');
-    if (!name) { toast('Escribe un nombre de evento válido', 'error'); return; }
+    if (!name) { toast(t('config.invalidEventName'), 'error'); return; }
     if (model.blocks.some((b) => b.name === name)) {
-      toast('Ese evento ya existe', 'error'); return;
+      toast(t('config.eventExists'), 'error'); return;
     }
     model.blocks.push({ name, fields: {}, extra: [], __expanded: true });
     input.value = '';
@@ -408,7 +405,7 @@ export function initConfig() {
 
   // Detect core count + currently-active events from the live status so
   // cores in the form get real chips and event cards can show an
-  // "activo ahora" badge (best-effort - fine if it stays empty at first).
+  // "active now" badge (best-effort - fine if it stays empty at first).
   refreshLiveStatus();
 
   loadFile(false);
@@ -445,5 +442,5 @@ export function deactivateConfig() {}
 // it's fine to leave (no changes, or the user confirmed discarding them).
 export function confirmLeaveConfig() {
   if (!loaded || !isDirty) return true;
-  return window.confirm('Tienes cambios sin guardar en la configuración. ¿Salir sin guardar?');
+  return window.confirm(t('config.leaveConfirm'));
 }

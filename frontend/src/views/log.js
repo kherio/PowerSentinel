@@ -1,6 +1,7 @@
 import { ICONS } from '../icons.js';
 import { readLog, exportLog } from '../api.js';
 import { toast, escapeHtml } from '../helpers.js';
+import { t } from '../i18n.js';
 
 let rawLog = '';
 let pollTimer = null;
@@ -16,7 +17,7 @@ function renderLog() {
   const lines = rawLog.split('\n').filter((l) => l.length);
 
   if (!lines.length) {
-    logWrap.innerHTML = '<div class="log-empty">Sin entradas de log.</div>';
+    logWrap.innerHTML = `<div class="log-empty">${t('log.noEntries')}</div>`;
     document.getElementById('l-log-count').textContent = '';
     return;
   }
@@ -31,7 +32,7 @@ function renderLog() {
   }).join('');
 
   document.getElementById('l-log-count').textContent = filter === 'ALL' ?
-    `${lines.length} líneas` : `${shownCount} de ${lines.length} líneas (filtro ${filter})`;
+    t('log.linesCount', { n: lines.length }) : t('log.linesFiltered', { shown: shownCount, total: lines.length, level: filter });
 
   if (autoscroll.checked) logWrap.scrollTop = logWrap.scrollHeight;
 }
@@ -40,18 +41,18 @@ async function loadLog(showToast) {
   try {
     rawLog = await readLog();
     renderLog();
-    if (showToast) toast('Log actualizado', 'success');
+    if (showToast) toast(t('log.updated'), 'success');
   } catch (e) {
-    toast('No se pudo cargar el log', 'error');
+    toast(t('log.loadError'), 'error');
   }
 }
 
 async function doExportLog() {
   try {
     const dest = await exportLog();
-    toast('Log exportado a ' + dest, 'success');
+    toast(t('log.exportedTo', { dest }), 'success');
   } catch (e) {
-    toast('Error al exportar el log: ' + e.message, 'error');
+    toast(t('log.exportError', { msg: e.message }), 'error');
   }
 }
 
@@ -67,8 +68,8 @@ export function initLog() {
   } catch (e) { /* localStorage may be unavailable/cleared - fall back to defaults */ }
 
   document.getElementById('l-refresh-btn').innerHTML = ICONS.reload;
-  document.getElementById('l-refresh-btn').title = 'Actualizar ahora';
-  document.getElementById('l-save-btn').innerHTML = ICONS.download + ' Exportar';
+  document.getElementById('l-refresh-btn').title = t('common.updateNow');
+  document.getElementById('l-save-btn').innerHTML = ICONS.download + ' ' + t('log.export');
 
   levelFilter.addEventListener('change', () => {
     try { localStorage.setItem(LEVEL_KEY, levelFilter.value); } catch (e) {}

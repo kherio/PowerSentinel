@@ -1,98 +1,99 @@
 // Parser / serializer / form renderer for XtremeBS.conf (v1 flat + v2 event blocks)
+import { t } from './i18n.js';
 
 var PREDEFINED_EVENTS = ['boot', 'charging', 'screen_off', 'low_power', 'night', 'manual'];
 
 var FIELD_DEFS = [
   {
-    key: 'night_start', label: 'Hora de inicio', type: 'text', def: '23:00',
+    key: 'night_start', label: t('field.nightStart.label'), type: 'text', def: '23:00',
     placeholder: '23:00', group: 'horario',
-    help: 'Formato 24h HH:MM. El perfil nocturno se activa/desactiva por horario, en paralelo a los demás eventos (pantalla, carga, batería baja...).',
+    help: t('field.nightStart.help'),
     showIf: function (f) { return f.__eventName === 'night'; }
   },
   {
-    key: 'night_end', label: 'Hora de fin', type: 'text', def: '07:00',
+    key: 'night_end', label: t('field.nightEnd.label'), type: 'text', def: '07:00',
     placeholder: '07:00', group: 'horario',
-    help: 'Puede cruzar la medianoche (ej. inicio 23:00, fin 07:00).',
+    help: t('field.nightEnd.help'),
     showIf: function (f) { return f.__eventName === 'night'; }
   },
   {
-    key: 'handle_apps', label: 'Gestión de apps', type: 'select', def: 'false', group: 'apps',
+    key: 'handle_apps', label: t('field.handleApps.label'), type: 'select', def: 'false', group: 'apps',
     options: [
-      { value: 'false', label: 'No gestionar' },
-      { value: 'kill', label: 'Matar (kill)' },
-      { value: 'nice', label: 'Reducir prioridad (nice)' },
-      { value: 'suspend', label: 'Suspender' }
+      { value: 'false', label: t('field.handleApps.optFalse') },
+      { value: 'kill', label: t('field.handleApps.optKill') },
+      { value: 'nice', label: t('field.handleApps.optNice') },
+      { value: 'suspend', label: t('field.handleApps.optSuspend') }
     ],
-    help: '"Suspender" requiere una allowlist válida o las apps dejarán de funcionar. "Matar" las cierra por completo; "nice" solo baja su prioridad, siguen en segundo plano.'
+    help: t('field.handleApps.help')
   },
   {
-    key: 'allowlist', label: 'Lista de apps permitidas (allowlist)', type: 'text', group: 'apps',
+    key: 'allowlist', label: t('field.allowlist.label'), type: 'text', group: 'apps',
     placeholder: '/data/local/tmp/XtremeBS/apps.allow',
-    help: 'Apps que NUNCA se tocan, elígelas abajo con el selector.',
+    help: t('field.allowlist.help'),
     showIf: function (f) { return f.handle_apps === 'suspend'; }
   },
   {
-    key: 'denylist', label: 'Apps del sistema a gestionar (denylist)', type: 'text', group: 'apps',
+    key: 'denylist', label: t('field.denylist.label'), type: 'text', group: 'apps',
     placeholder: '/data/local/tmp/XtremeBS/apps.deny',
-    help: 'Apps de sistema (preinstaladas) a incluir además de las de terceros. Vacío por defecto.'
+    help: t('field.denylist.help')
   },
-  { key: 'handle_cores', label: 'Núcleos en modo ahorro (powersave)', type: 'cores', def: 'false', group: 'cpu',
-    help: '"Automático" detecta y usa los núcleos de baja potencia del chip. "Personalizado" te deja elegir cuáles.' },
-  { key: 'disable_cores', label: 'Núcleos a desactivar', type: 'cores', def: 'false', group: 'cpu',
-    help: 'Apaga núcleos por completo (más agresivo que solo bajarles la frecuencia).',
-    warn: 'Evitar en dispositivos Samsung.' },
+  { key: 'handle_cores', label: t('field.handleCores.label'), type: 'cores', def: 'false', group: 'cpu',
+    help: t('field.handleCores.help') },
+  { key: 'disable_cores', label: t('field.disableCores.label'), type: 'cores', def: 'false', group: 'cpu',
+    help: t('field.disableCores.help'),
+    warn: t('field.disableCores.warn') },
   {
-    key: 'handle_gms', label: 'Google Mobile Services', type: 'select', def: 'false', group: 'sistema',
+    key: 'handle_gms', label: t('field.handleGms.label'), type: 'select', def: 'false', group: 'sistema',
     options: [
-      { value: 'false', label: 'No gestionar' },
-      { value: 'nice', label: 'Reducir prioridad' },
-      { value: 'kill', label: 'Matar (rompe SafetyNet / Play Integrity)' }
+      { value: 'false', label: t('field.handleGms.optFalse') },
+      { value: 'nice', label: t('field.handleGms.optNice') },
+      { value: 'kill', label: t('field.handleGms.optKill') }
     ],
-    help: 'Servicios de Google en segundo plano; suelen consumir batería incluso sin usar apps de Google.'
+    help: t('field.handleGms.help')
   },
-  { key: 'handle_proc', label: 'Reprocesar prioridad de procesos', type: 'toggle', def: 'false', group: 'sistema',
-    help: 'Aplica la lista de procesos y prioridades definida en "Archivo de procesos".' },
+  { key: 'handle_proc', label: t('field.handleProc.label'), type: 'toggle', def: 'false', group: 'sistema',
+    help: t('field.handleProc.help') },
   {
-    key: 'proc_file', label: 'Archivo de procesos', type: 'text', group: 'sistema',
+    key: 'proc_file', label: t('field.procFile.label'), type: 'text', group: 'sistema',
     placeholder: '/data/local/tmp/XtremeBS/proc.list',
-    help: 'Una línea por proceso: "nombre_proceso prioridad" (ej. "com.example.app 15").',
+    help: t('field.procFile.help'),
     showIf: function (f) { return f.handle_proc === 'true'; }
   },
-  { key: 'low_ram', label: 'Modo RAM baja', type: 'toggle', def: 'false', group: 'sistema',
-    help: 'Activa la marca de sistema "RAM baja", que hace que Android sea más agresivo cerrando apps en segundo plano.',
-    warn: 'Puede causar reinicios aleatorios en algunos OnePlus.' },
+  { key: 'low_ram', label: t('field.lowRam.label'), type: 'toggle', def: 'false', group: 'sistema',
+    help: t('field.lowRam.help'),
+    warn: t('field.lowRam.warn') },
   {
-    key: 'doze', label: 'Forzar Doze', type: 'select', def: 'false', group: 'sistema',
+    key: 'doze', label: t('field.doze.label'), type: 'select', def: 'false', group: 'sistema',
     options: [
-      { value: 'false', label: 'Desactivado' },
-      { value: 'light', label: 'Ligero' },
-      { value: 'deep', label: 'Profundo' }
+      { value: 'false', label: t('field.doze.optFalse') },
+      { value: 'light', label: t('field.doze.optLight') },
+      { value: 'deep', label: t('field.doze.optDeep') }
     ],
-    help: 'Fuerza el modo de ahorro "Doze" de Android antes de que se active por sí solo.',
-    warn: 'Puede retrasar alarmas y notificaciones.'
+    help: t('field.doze.help'),
+    warn: t('field.doze.warn')
   },
-  { key: 'kill_wifi', label: 'Desactivar WiFi', type: 'toggle', def: 'false', group: 'sistema',
-    warn: 'También desactiva el interruptor de WiFi en Ajustes.' },
-  { key: 'keep_on_charge', label: 'Mantener ajustes mientras carga', type: 'toggle', def: 'true', group: 'sistema',
-    help: 'Si está activado, este evento no se desactiva automáticamente al enchufar el cargador.' }
+  { key: 'kill_wifi', label: t('field.killWifi.label'), type: 'toggle', def: 'false', group: 'sistema',
+    warn: t('field.killWifi.warn') },
+  { key: 'keep_on_charge', label: t('field.keepOnCharge.label'), type: 'toggle', def: 'true', group: 'sistema',
+    help: t('field.keepOnCharge.help') }
 ];
 
 var GLOBAL_DEFS = [
-  { key: 'delay', label: 'Intervalo de sondeo (segundos)', type: 'number', def: '3',
-    help: 'Valores altos ahorran CPU pero detectan eventos más despacio.' },
-  { key: 'log_file', label: 'Archivo de log', type: 'text', def: '/sdcard/XtremeBS.log',
-    help: 'Dónde escribe el demonio su registro de actividad (visible en la pestaña Log).' },
+  { key: 'delay', label: t('global.delay.label'), type: 'number', def: '3',
+    help: t('global.delay.help') },
+  { key: 'log_file', label: t('global.logFile.label'), type: 'text', def: '/sdcard/XtremeBS.log',
+    help: t('global.logFile.help') },
   {
-    key: 'log_level', label: 'Nivel de log', type: 'select', def: '2',
+    key: 'log_level', label: t('global.logLevel.label'), type: 'select', def: '2',
     options: [
       { value: '1', label: '1 · INFO' },
       { value: '2', label: '2 · VERBOSE' },
       { value: '3', label: '3 · DEBUG' }
     ],
-    help: 'Más alto = más detalle en el log, pero también un fichero que crece más rápido.'
+    help: t('global.logLevel.help')
   },
-  { key: 'notify', label: 'Mostrar notificaciones', type: 'toggle', def: 'true',
-    help: 'Notificación del sistema cada vez que XtremeBS activa o desactiva algo.' }
+  { key: 'notify', label: t('global.notify.label'), type: 'toggle', def: 'true',
+    help: t('global.notify.help') }
 ];
 
 // Quick-start templates a user can apply to any event, instead of having
@@ -102,11 +103,11 @@ var GLOBAL_DEFS = [
 // only set fields that work safely with zero extra setup.
 var EVENT_PRESETS = {
   balanced: {
-    label: 'Equilibrado',
+    label: t('preset.balanced.label'),
     fields: { handle_cores: 'auto', handle_apps: 'nice', handle_gms: 'nice', low_ram: 'false', doze: 'false', kill_wifi: 'false' }
   },
   aggressive: {
-    label: 'Ahorro agresivo',
+    label: t('preset.aggressive.label'),
     fields: { handle_cores: 'auto', disable_cores: 'auto', handle_apps: 'kill', handle_gms: 'kill', low_ram: 'true', doze: 'deep', kill_wifi: 'true' }
   }
 };
@@ -233,7 +234,7 @@ function renderCoresControl(value, coreList, onChange) {
 
   var select = document.createElement('select');
   select.className = 'filter';
-  [['false', 'Desactivado'], ['auto', 'Automático'], ['custom', 'Personalizado']].forEach(function (o) {
+  [['false', t('cores.optDisabled')], ['auto', t('cores.optAuto')], ['custom', t('cores.optCustom')]].forEach(function (o) {
     var opt = document.createElement('option');
     opt.value = o[0]; opt.textContent = o[1];
     if (o[0] === mode) opt.selected = true;

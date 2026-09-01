@@ -16,9 +16,9 @@
     <!-- ================= ESTADO ================= -->
     <section class="view active" id="view-estado">
       <div class="toolbar">
-        <span id="e-updated" style="font-size:12px;color:var(--muted);">Cargando…</span>
+        <span id="e-updated" style="font-size:12px;color:var(--muted);" data-i18n="common.loading">Cargando…</span>
         <div class="spacer"></div>
-        <button class="btn ghost" id="e-refresh-btn" title="Actualizar ahora"></button>
+        <button class="btn ghost" id="e-refresh-btn" data-i18n-title="common.updateNow"></button>
       </div>
 
       <div class="scroll-area" id="e-pull-area">
@@ -30,7 +30,7 @@
             <div class="battery-pct" id="e-battery-pct">–</div>
           </div>
           <div class="battery-details">
-            <div class="battery-status" id="e-battery-status">Cargando batería…</div>
+            <div class="battery-status" id="e-battery-status" data-i18n="estado.batteryLoading">Cargando batería…</div>
             <div class="battery-sub" id="e-battery-sub"></div>
           </div>
         </div>
@@ -43,50 +43,50 @@
             </svg>
             <div class="gauge-center">
               <div class="gauge-percent" id="e-gauge-percent">–</div>
-              <div class="gauge-label">en ahorro</div>
+              <div class="gauge-label" data-i18n="estado.savingLabel">en ahorro</div>
             </div>
           </div>
           <div class="hero-text">
-            <div class="hero-title" id="e-hero-title">Cargando estado…</div>
+            <div class="hero-title" id="e-hero-title" data-i18n="estado.loadingStatus">Cargando estado…</div>
             <div class="hero-sub" id="e-hero-sub"></div>
             <div class="active-events-row" id="e-active-events"></div>
           </div>
         </div>
 
-        <div class="section-title" style="margin-top:0;">Núcleos de CPU</div>
+        <div class="section-title" style="margin-top:0;" data-i18n="estado.coresTitle">Núcleos de CPU</div>
         <div id="e-core-counts" style="font-size:12px;color:var(--muted);margin-bottom:8px;"></div>
         <div class="core-map" id="e-core-map"></div>
         <div class="core-summary-row" id="e-core-summary">
-          <span class="legend l-active"><span class="dot"></span> Activo</span>
-          <span class="legend l-save"><span class="dot"></span> Ahorro</span>
-          <span class="legend l-off"><span class="dot"></span> Apagado</span>
+          <span class="legend l-active"><span class="dot"></span> <span data-i18n="estado.legendActive">Activo</span></span>
+          <span class="legend l-save"><span class="dot"></span> <span data-i18n="estado.legendSave">Ahorro</span></span>
+          <span class="legend l-off"><span class="dot"></span> <span data-i18n="estado.legendOff">Apagado</span></span>
         </div>
         <div class="core-tiles" id="e-core-grid"></div>
 
-        <div class="section-title" id="e-freq-section-title" style="display:none;">Frecuencia y carga</div>
+        <div class="section-title" id="e-freq-section-title" style="display:none;" data-i18n="estado.freqTitle">Frecuencia y carga</div>
         <div class="metric-row" id="e-freq-metrics" style="display:none;"></div>
         <div class="chart-card" id="e-freq-chart-card" style="display:none;">
           <div class="chart-head">
-            <span class="chart-title">Últimos ~90s</span>
+            <span class="chart-title" data-i18n="estado.last90s">Últimos ~90s</span>
             <span class="chart-now" id="e-chart-now"></span>
           </div>
           <svg id="e-freq-chart" viewBox="0 0 300 64" preserveAspectRatio="none"></svg>
           <div class="chart-legend">
-            <span><span class="dot freq"></span>Frecuencia media (% del máx.)</span>
-            <span><span class="dot load"></span>Carga (1 min)</span>
+            <span><span class="dot freq"></span><span data-i18n="estado.avgFreqPct">Frecuencia media (% del máx.)</span></span>
+            <span><span class="dot load"></span><span data-i18n="estado.load1min">Carga (1 min)</span></span>
           </div>
         </div>
 
-        <div class="section-title">Sistema</div>
+        <div class="section-title" data-i18n="estado.systemTitle">Sistema</div>
         <div class="grid" id="e-sys-grid"></div>
 
         <div id="e-unmatched-box" class="card" style="margin-top:14px;display:none;">
-          <div class="label" style="font-size:12px;color:var(--muted);margin-bottom:6px;">Otras líneas del estado (sin interpretar)</div>
+          <div class="label" style="font-size:12px;color:var(--muted);margin-bottom:6px;" data-i18n="estado.unmatchedTitle">Otras líneas del estado (sin interpretar)</div>
           <div class="value2" style="font-size:12px;font-family:var(--mono);"></div>
         </div>
 
         <details class="raw">
-          <summary>Ver salida sin procesar</summary>
+          <summary data-i18n="estado.viewRaw">Ver salida sin procesar</summary>
           <pre id="e-raw-status">—</pre>
         </details>
       </div>
@@ -103,31 +103,31 @@
       </div>
 
       <div class="subtabs">
-        <button id="c-tab-form" class="active">Formulario</button>
-        <button id="c-tab-text">Texto sin formato</button>
+        <button id="c-tab-form" class="active" data-i18n="config.tabForm">Formulario</button>
+        <button id="c-tab-text" data-i18n="config.tabText">Texto sin formato</button>
       </div>
 
       <div id="c-view-form" class="scroll-area">
         <div class="card" style="margin-bottom:14px;">
-          <div class="section-title" style="margin-top:0;">General</div>
+          <div class="section-title" style="margin-top:0;" data-i18n="config.general">General</div>
           <div id="c-global-fields"></div>
         </div>
 
         <div id="c-v2-section">
           <div class="section-title-row">
-            <div class="section-title" style="margin:0;">Eventos</div>
-            <input class="filter c-event-search" id="c-event-search" type="text" placeholder="Buscar campo…">
+            <div class="section-title" style="margin:0;" data-i18n="config.events">Eventos</div>
+            <input class="filter c-event-search" id="c-event-search" type="text" data-i18n-placeholder="config.searchPlaceholder" placeholder="Buscar campo…">
           </div>
           <div id="c-events-list"></div>
           <div class="card">
-            <div style="font-size:13px;font-weight:500;margin-bottom:8px;">Añadir evento</div>
+            <div style="font-size:13px;font-weight:500;margin-bottom:8px;" data-i18n="config.addEvent">Añadir evento</div>
             <div class="add-event-row">
               <select class="filter" id="c-predefined-event-select"></select>
-              <button class="btn" id="c-add-predefined-btn">Añadir</button>
+              <button class="btn" id="c-add-predefined-btn" data-i18n="config.add">Añadir</button>
             </div>
             <div class="add-event-row">
-              <input class="filter" id="c-custom-event-input" type="text" placeholder="nombre_evento_personalizado" style="flex:1;">
-              <button class="btn" id="c-add-custom-btn">Añadir personalizado</button>
+              <input class="filter" id="c-custom-event-input" type="text" data-i18n-placeholder="config.addCustomPlaceholder" placeholder="nombre_evento_personalizado" style="flex:1;">
+              <button class="btn" id="c-add-custom-btn" data-i18n="config.addCustom">Añadir personalizado</button>
             </div>
           </div>
         </div>
@@ -145,13 +145,13 @@
     <section class="view" id="view-log">
       <div class="toolbar">
         <select class="filter" id="l-level-filter">
-          <option value="ALL">Todos los niveles</option>
+          <option value="ALL" data-i18n="log.allLevels">Todos los niveles</option>
           <option value="INFO">INFO</option>
           <option value="VERBOSE">VERBOSE</option>
           <option value="DEBUG">DEBUG</option>
         </select>
         <label class="switch">
-          <input type="checkbox" id="l-autoscroll" checked> Auto-scroll
+          <input type="checkbox" id="l-autoscroll" checked> <span data-i18n="log.autoscroll">Auto-scroll</span>
         </label>
         <div class="spacer"></div>
         <button class="btn ghost" id="l-refresh-btn"></button>
@@ -168,20 +168,20 @@
     <!-- ================= PERFILES ================= -->
     <section class="view" id="view-perfiles">
       <div class="toolbar">
-        <span style="font-size:12px;color:var(--muted);">Configuraciones completas guardadas</span>
+        <span style="font-size:12px;color:var(--muted);" data-i18n="perfiles.savedConfigs">Configuraciones completas guardadas</span>
         <div class="spacer"></div>
         <button class="btn ghost" id="p-refresh-btn"></button>
       </div>
       <div class="scroll-area">
         <div class="card" style="margin-bottom:14px;">
-          <div style="font-size:13px;font-weight:500;margin-bottom:8px;">Guardar configuración actual como perfil</div>
+          <div style="font-size:13px;font-weight:500;margin-bottom:8px;" data-i18n="perfiles.saveAsProfile">Guardar configuración actual como perfil</div>
           <div class="add-event-row">
-            <input class="filter" id="p-name-input" type="text" placeholder="nombre_del_perfil" style="flex:1;">
-            <button class="btn primary" id="p-save-btn">Guardar</button>
+            <input class="filter" id="p-name-input" type="text" data-i18n-placeholder="perfiles.namePlaceholder" placeholder="nombre_del_perfil" style="flex:1;">
+            <button class="btn primary" id="p-save-btn" data-i18n="common.save">Guardar</button>
           </div>
-          <div style="font-size:12px;color:var(--muted);margin-top:8px;">Guarda una copia de tu <code>XtremeBS.conf</code> actual con ese nombre, para poder recuperarla más tarde.</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:8px;" data-i18n="perfiles.saveHint">Guarda una copia de tu <code>XtremeBS.conf</code> actual con ese nombre, para poder recuperarla más tarde.</div>
         </div>
-        <div class="section-title" style="margin-top:0;">Perfiles guardados</div>
+        <div class="section-title" style="margin-top:0;" data-i18n="perfiles.savedTitle">Perfiles guardados</div>
         <div id="p-list"></div>
       </div>
     </section>
@@ -189,23 +189,23 @@
     <!-- ================= ACERCA DE ================= -->
     <section class="view" id="view-acerca">
       <div class="toolbar">
-        <span style="font-size:12px;color:var(--muted);">Información del módulo</span>
+        <span style="font-size:12px;color:var(--muted);" data-i18n="acerca.moduleInfo">Información del módulo</span>
       </div>
       <div class="scroll-area">
         <div class="card" style="margin-bottom:14px;text-align:center;padding:24px 16px;">
           <div class="about-logo"></div>
           <div style="font-size:18px;font-weight:700;margin-top:12px;">Xtreme Battery Saver</div>
-          <div id="a-version" style="font-size:13px;color:var(--muted);margin-top:4px;">Cargando versión…</div>
+          <div id="a-version" style="font-size:13px;color:var(--muted);margin-top:4px;" data-i18n="acerca.loadingVersion">Cargando versión…</div>
         </div>
         <div class="card" style="margin-bottom:14px;">
-          <div class="section-title" style="margin-top:0;">Enlaces</div>
+          <div class="section-title" style="margin-top:0;" data-i18n="acerca.links">Enlaces</div>
           <a class="about-link" href="https://github.com/kherio/Xtreme-Battery-Saver" target="_blank" rel="noopener"></a>
           <a class="about-link" href="https://github.com/kherio/Xtreme-Battery-Saver/blob/main/CHANGELOG.md" target="_blank" rel="noopener"></a>
           <a class="about-link" href="https://github.com/kherio/Xtreme-Battery-Saver/issues" target="_blank" rel="noopener"></a>
         </div>
         <div class="card">
-          <div class="section-title" style="margin-top:0;">Créditos</div>
-          <div style="font-size:13px;color:var(--muted);line-height:1.6;">
+          <div class="section-title" style="margin-top:0;" data-i18n="acerca.credits">Créditos</div>
+          <div style="font-size:13px;color:var(--muted);line-height:1.6;" data-i18n="acerca.creditsText" data-i18n-html>
             Fork mantenido por <strong>kherio</strong>, basado en el trabajo original de <strong>DethByte64</strong>.
           </div>
         </div>
@@ -218,23 +218,23 @@
   <nav class="bottom-nav">
     <button id="tab-btn-estado" class="active" data-view="estado">
       <span class="bn-icon" id="bn-icon-estado"></span>
-      <span class="bn-label">Estado</span>
+      <span class="bn-label" data-i18n="nav.estado">Estado</span>
     </button>
     <button id="tab-btn-conf" data-view="conf">
       <span class="bn-icon" id="bn-icon-conf"></span>
-      <span class="bn-label">Config</span>
+      <span class="bn-label" data-i18n="nav.config">Config</span>
     </button>
     <button id="tab-btn-log" data-view="log">
       <span class="bn-icon" id="bn-icon-log"></span>
-      <span class="bn-label">Log</span>
+      <span class="bn-label" data-i18n="nav.log">Log</span>
     </button>
     <button id="tab-btn-perfiles" data-view="perfiles">
       <span class="bn-icon" id="bn-icon-perfiles"></span>
-      <span class="bn-label">Perfiles</span>
+      <span class="bn-label" data-i18n="nav.perfiles">Perfiles</span>
     </button>
     <button id="tab-btn-acerca" data-view="acerca">
       <span class="bn-icon" id="bn-icon-acerca"></span>
-      <span class="bn-label">Acerca de</span>
+      <span class="bn-label" data-i18n="nav.acerca">Acerca de</span>
     </button>
   </nav>
 
