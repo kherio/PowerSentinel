@@ -1,5 +1,5 @@
 import { ICONS } from '../icons.js';
-import { listPackages, readAppListFile, writeAppListFile } from '../api.js';
+import { listPackages, listRunningPackages, readAppListFile, writeAppListFile } from '../api.js';
 import { toast } from '../helpers.js';
 import { t } from '../i18n.js';
 
@@ -16,6 +16,14 @@ function getPackages(includeSystem) {
     });
   }
   return pkgCachePromise;
+}
+
+// "Currently running" is just a helpful hint, not critical data - fail
+// silently (empty set) rather than bothering the user with a toast if it
+// can't be read, and re-fetch it fresh each time the picker mounts
+// (unlike the package list, this genuinely changes moment to moment).
+function getRunningPackages() {
+  return listRunningPackages().catch(() => new Set());
 }
 
 function parseListFile(text) {
@@ -57,7 +65,7 @@ export function mountAppsPicker(container, fields, onDirty) {
   }
 
   function renderList(filter) {
-    getPackages(state.includeSystem).then((pkgs) => {
+    Promise.all([getPackages(state.includeSystem), getRunningPackages()]).then(([pkgs, running]) => {
       const list = document.createElement('div');
       list.style.maxHeight = '260px';
       list.style.overflowY = 'auto';
@@ -78,12 +86,21 @@ export function mountAppsPicker(container, fields, onDirty) {
 
           const name = document.createElement('div');
           name.textContent = pkg;
+          name.title = running.has(pkg) ? t('apps.runningNow') : '';
           name.style.flex = '1';
           name.style.fontSize = '12px';
           name.style.fontFamily = 'var(--mono)';
           name.style.overflow = 'hidden';
           name.style.textOverflow = 'ellipsis';
           name.style.whiteSpace = 'nowrap';
+          if (running.has(pkg)) {
+            name.style.display = 'flex';
+            name.style.alignItems = 'center';
+            name.style.gap = '6px';
+            const dot = document.createElement('span');
+            dot.style.cssText = 'width:6px;height:6px;border-radius:50%;background:var(--accent);flex:none;';
+            name.prepend(dot);
+          }
           row.appendChild(name);
 
           const group = document.createElement('div');

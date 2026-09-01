@@ -134,3 +134,18 @@ export async function deleteProfile(name) {
 export async function readModuleInfo() {
   return run(`cat "$(find /data/adb -maxdepth 2 -type d -name XtremeBS 2>/dev/null | head -1)/module.prop" 2>/dev/null || echo ''`);
 }
+
+// ---------- Currently-running packages (apps picker "running now" hint) ----------
+
+// Deliberately NOT parsing `dumpsys batterystats` here: its output format
+// is notoriously complex and has changed across Android versions, and a
+// wrong parse could point someone at the wrong app to restrict - worse
+// than no suggestion at all. `ps -A`'s last column is the process name,
+// which for a regular app process IS its package name (or
+// "package:service" for a secondary process) - a much simpler, more
+// reliable signal for "this is doing something right now", even if it's
+// not a full battery-drain ranking.
+export async function listRunningPackages() {
+  const out = await run(`ps -A -o NAME 2>/dev/null | tail -n +2`);
+  return new Set(out.split('\n').map((s) => s.trim()).filter(Boolean));
+}
