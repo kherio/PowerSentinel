@@ -28,6 +28,18 @@ jobs:
             git rm -- XtremeBS.zip
           fi
 
+          # Recreate the two legacy controller/config tools from the common
+          # ancestor when they are absent on the migration branch, then let
+          # the identity pass rename their internals safely.
+          if [ ! -e system/bin/PowerSentinelctl ]; then
+            git show origin/main:system/bin/XBSctl > system/bin/PowerSentinelctl
+            chmod 0755 system/bin/PowerSentinelctl
+          fi
+          if [ ! -e system/bin/PowerSentinelconf ]; then
+            git show origin/main:system/bin/XBSconf > system/bin/PowerSentinelconf
+            chmod 0755 system/bin/PowerSentinelconf
+          fi
+
           [ ! -e system/bin/XtremeBSd ] || git mv system/bin/XtremeBSd system/bin/PowerSentineld
           [ ! -e system/bin/XBS-writefile ] || git mv system/bin/XBS-writefile system/bin/PowerSentinel-writefile
           [ ! -e system/bin/XBSctl ] || git mv system/bin/XBSctl system/bin/PowerSentinelctl
