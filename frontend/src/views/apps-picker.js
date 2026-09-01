@@ -51,8 +51,8 @@ export function mountAppsPicker(container, fields, onDirty) {
     <div id="ap-status" style="font-size:12px;color:var(--muted);">${t('apps.loading')}</div>`;
   container.appendChild(box);
 
-  const allowPath = fields.allowlist || '/data/local/tmp/XtremeBS/apps.allow';
-  const denyPath = fields.denylist || '/data/local/tmp/XtremeBS/apps.deny';
+  const allowPath = fields.allowlist || '/data/local/tmp/PowerSentinel/apps.allow';
+  const denyPath = fields.denylist || '/data/local/tmp/PowerSentinel/apps.deny';
 
   if (!fields.__apps) fields.__apps = { loaded: false, dirty: false, allow: new Set(), deny: new Set(), includeSystem: false };
   const state = fields.__apps;
@@ -203,12 +203,12 @@ export function mountAppsPicker(container, fields, onDirty) {
 }
 
 // Called from config.js's saveFile() for every block/v1Fields whose
-// picker was touched, alongside the main XtremeBS.conf write.
+// picker was touched, alongside the main PowerSentinel.conf write.
 export async function persistAppsPicker(fields) {
   const state = fields.__apps;
   if (!state || !state.dirty) return;
-  const allowPath = fields.allowlist || '/data/local/tmp/XtremeBS/apps.allow';
-  const denyPath = fields.denylist || '/data/local/tmp/XtremeBS/apps.deny';
+  const allowPath = fields.allowlist || '/data/local/tmp/PowerSentinel/apps.allow';
+  const denyPath = fields.denylist || '/data/local/tmp/PowerSentinel/apps.deny';
   await writeAppListFile(allowPath, Array.from(state.allow).sort());
   await writeAppListFile(denyPath, Array.from(state.deny).sort());
   state.dirty = false;

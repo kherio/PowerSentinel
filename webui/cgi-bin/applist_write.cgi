@@ -4,5 +4,5 @@ require_token
 echo ""
 path=$(get_param "$QUERY_STRING" path)
 [ -z "$path" ] && fail "missing path"
-read_post_body | XBS-writefile "$path" || fail "could not write app list"
+read_post_body | PowerSentinel-writefile "$path" || fail "could not write app list"
 echo "OK"

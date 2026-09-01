@@ -1,20 +1,20 @@
-# Security audit — XtremeBS scripts
+# Security audit — PowerSentinel scripts
 
-Scope: `system/bin/XtremeBSd`, `system/bin/XBSctl`, `system/bin/XBSconf`,
-and the new `system/bin/XBS-writefile` + `frontend/src/api.js`. Everything
+Scope: `system/bin/PowerSentineld`, `system/bin/PowerSentinelctl`, `system/bin/PowerSentinelconf`,
+and the new `system/bin/PowerSentinel-writefile` + `frontend/src/api.js`. Everything
 here runs as root (the daemon directly; the CLI tools and the WebUI's
 `exec()` calls via `su`), so the threat model is: **what can an
 unprivileged app on the same device do to influence what root executes?**
 
 ## Findings
 
-### 1. Command injection in `XtremeBSd`'s `notif()` — Critical — Fixed
+### 1. Command injection in `PowerSentineld`'s `notif()` — Critical — Fixed
 
 ```sh
 # before
 notif() {
   if [ "$(getconf notify true)" = "true" ]; then
-    su -lp 2000 -c "cmd notification post -S bigtext -t 'XtremeBS' 'STATUS' \"$1\"" >/dev/null
+    su -lp 2000 -c "cmd notification post -S bigtext -t 'PowerSentinel' 'STATUS' \"$1\"" >/dev/null
   fi
 }
 ```
@@ -33,20 +33,20 @@ could write to), this was a real, remotely-triggerable path to command
 execution as UID 2000 (system) - not merely a theoretical one.
 
 **Fix applied**: the message is base64-encoded before being placed in the
-`su -c` string, and decoded inside the invoked shell (`system/bin/XtremeBSd`,
+`su -c` string, and decoded inside the invoked shell (`system/bin/PowerSentineld`,
 `notif()`). Base64's alphabet contains no shell metacharacters, so no
 content can break out of the quoting regardless of what the original
-message contains. Same technique used for `XBS-writefile`'s config writes
+message contains. Same technique used for `PowerSentinel-writefile`'s config writes
 (finding is structurally identical: untrusted content that must reach a
 shell command safely).
 
 ### 2. Insecure/racy `ctl_file` location — High — Fixed
 
-`ctl_file` defaulted to `/data/local/tmp/xbs` - directly inside
+`ctl_file` defaulted to `/data/local/tmp/powersentinel` - directly inside
 `/data/local/tmp`, which is world-writable (`drwxrwxrwt`, mode 1777) on
 Android. The sticky bit stops other users from deleting/renaming files
 they don't own, but **not** from creating a new file first. Any
-unprivileged app can pre-create `/data/local/tmp/xbs` before the daemon
+unprivileged app can pre-create `/data/local/tmp/powersentinel` before the daemon
 ever runs (e.g. immediately after boot, racing the daemon's own startup),
 keeping ownership and permissions of its choosing - including
 world-writable - indefinitely. From then on, every `cat "$ctl_file"` the
@@ -54,10 +54,10 @@ daemon does reads attacker-controlled content, feeding directly into
 `handle_event "$cmd_event" 1` and finding #1 above.
 
 **Fix applied**:
-- Default `ctl_file` moved to `/data/local/tmp/XtremeBS/xbs` (inside the
+- Default `ctl_file` moved to `/data/local/tmp/PowerSentinel/powersentinel` (inside the
   module's own data directory, created by the daemon with normal root
   ownership - not the world-writable `/data/local/tmp` root) in both
-  `XtremeBSd` and `XBSctl`.
+  `PowerSentineld` and `PowerSentinelctl`.
 - A new `ensure_ctl_file()` helper (duplicated in both scripts, since they
   don't share a library) checks the file's owner via `stat -c '%u'` before
   trusting it; if it exists and isn't owned by root (uid 0), it's deleted
@@ -78,7 +78,7 @@ unprivileged app can write to it again.
 if grep -q -E "$app" "$allowlist"; then
 ```
 
-(`system/bin/XtremeBSd`, both `enable_pwr_save()` and `disable_pwr_save()`)
+(`system/bin/PowerSentineld`, both `enable_pwr_save()` and `disable_pwr_save()`)
 
 `$app` comes from `pm list packages` output or the denylist file, and was
 used as an **extended regex** against the allowlist, not a literal
@@ -133,7 +133,7 @@ files, no dev server involved). Noted here so it isn't mistaken for a
 runtime finding; not fixed because the available fix (`vite@8`) is a
 breaking major-version jump untested against this project.
 
-## What `XBS-writefile` and `frontend/src/api.js` do differently by design
+## What `PowerSentinel-writefile` and `frontend/src/api.js` do differently by design
 
 These are new in this release, built with the above findings already in
 mind rather than audited after the fact:
@@ -141,23 +141,23 @@ mind rather than audited after the fact:
 - **Content never touches a shell command line as raw text.** The config
   editor accepts arbitrary text (including quotes, backticks, `$(...)`,
   newlines); `writeConfig()` base64-encodes it client-side and
-  `XBS-writefile` decodes it server-side. The only thing interpolated into
+  `PowerSentinel-writefile` decodes it server-side. The only thing interpolated into
   a shell command is the base64 string itself, whose alphabet
   (`A-Za-z0-9+/=`) contains no shell metacharacters.
-- **Path allowlisting.** `XBS-writefile` only accepts targets under
-  `/data/local/tmp/XtremeBS/`, rejects any path containing `..`, and
+- **Path allowlisting.** `PowerSentinel-writefile` only accepts targets under
+  `/data/local/tmp/PowerSentinel/`, rejects any path containing `..`, and
   refuses to write through a symlink (`-L` check) - even though today's
-  only caller (`api.js`) only ever asks it to write `XtremeBS.conf`, this
+  only caller (`api.js`) only ever asks it to write `PowerSentinel.conf`, this
   means a bug in a future caller can't turn into an arbitrary-file-write.
 - **Atomic writes.** Write to `*.tmp.$$`, then `mv` into place, so a crash
-  or killed WebView mid-write can't leave `XtremeBS.conf` truncated or
+  or killed WebView mid-write can't leave `PowerSentinel.conf` truncated or
   half-written for the daemon to read next.
 - **Automatic backup.** One `.bak` of the previous content is kept before
-  every write, matching what `XBSconf` already did.
+  every write, matching what `PowerSentinelconf` already did.
 
 ## Not in scope
 
-`XBSconf` was reviewed and found clean (uses `awk -v` for all
+`PowerSentinelconf` was reviewed and found clean (uses `awk -v` for all
 variable-into-pattern cases, no `eval`/`sh -c`/`su -c` with interpolated
 untrusted content) - no findings there.
 
@@ -178,7 +178,7 @@ from the KernelSU `exec()` bridge, which only the manager app itself
 `action.sh` each time it starts httpd and opens the browser:
 
 - The token is never served as a static file from `DOCUMENT_ROOT` - it's
-  written to `/data/local/tmp/XtremeBS/.token` (mode 600, root-owned,
+  written to `/data/local/tmp/PowerSentinel/.token` (mode 600, root-owned,
   outside the served directory) and only ever appears in the URL
   `action.sh` opens (`?token=...`), read from `location.search` by
   `backend-cgi.js` and attached to every subsequent request.
@@ -192,15 +192,15 @@ from the KernelSU `exec()` bridge, which only the manager app itself
   error, not distinguishing *why* a request was rejected.
 - Only `webroot/` and `webui/cgi-bin/` are ever exposed via httpd -
   `action.sh` builds a dedicated serving directory
-  (`/data/local/tmp/XtremeBS/.serve/`) containing just symlinks to
+  (`/data/local/tmp/PowerSentinel/.serve/`) containing just symlinks to
   those two, rather than pointing httpd at the module's own directory
   (which also holds the daemon binary, `module.prop`, etc.).
-- `applist_read.cgi` independently re-implements `XBS-writefile`'s path
-  allowlist (must be under `/data/local/tmp/XtremeBS/`, no `..`, not a
-  symlink) for *reads*, since reads don't go through `XBS-writefile` at
+- `applist_read.cgi` independently re-implements `PowerSentinel-writefile`'s path
+  allowlist (must be under `/data/local/tmp/PowerSentinel/`, no `..`, not a
+  symlink) for *reads*, since reads don't go through `PowerSentinel-writefile` at
   all - without this, a valid token would otherwise make this endpoint
   an arbitrary-file-read oracle (any root-readable file on the device,
-  not just XtremeBS's own data).
+  not just PowerSentinel's own data).
 - `event.cgi`, `profile_*.cgi` re-validate event/profile names
   server-side (`sanitize_name()`, same `[a-zA-Z0-9_-]` charset the
   frontend already enforces) rather than trusting the client - the

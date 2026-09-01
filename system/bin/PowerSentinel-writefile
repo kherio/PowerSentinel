@@ -1,5 +1,5 @@
 #!/system/bin/bash
-# XBS-writefile <target-path>
+# PowerSentinel-writefile <target-path>
 #
 # Reads base64-encoded content from stdin and writes it to <target-path>,
 # used by the webroot frontend (via `kernelsu`'s exec()) instead of a raw
@@ -13,20 +13,20 @@
 #      caller (webroot JS, or anything acting on its behalf) is somehow
 #      compromised or buggy.
 #   3. The write is atomic (temp file + mv) and keeps one .bak of the
-#      previous content, matching what XBSconf already does for
-#      XtremeBS.conf.
+#      previous content, matching what PowerSentinelconf already does for
+#      PowerSentinel.conf.
 
 set -u
 
 TARGET="${1:-}"
 
-# Allowlist: only files inside XtremeBS's own data dir, matching the
+# Allowlist: only files inside PowerSentinel's own data dir, matching the
 # small, fixed set of files the webui ever needs to write. Reject
 # anything else outright - including attempts to escape via "..",
 # symlink-looking paths, or writing into system/adb directories.
-ALLOWED_DIR="/data/local/tmp/XtremeBS"
+ALLOWED_DIR="/data/local/tmp/PowerSentinel"
 
-fail() { echo "XBS-writefile: $1" >&2; exit 1; }
+fail() { echo "PowerSentinel-writefile: $1" >&2; exit 1; }
 
 [ -n "$TARGET" ] || fail "missing target path"
 case "$TARGET" in
@@ -43,9 +43,6 @@ mkdir -p "$ALLOWED_DIR" 2>/dev/null
 TMP_FILE="${TARGET}.tmp.$$"
 DECODE_OK=1
 
-# base64 -d reads from stdin; toybox/busybox and coreutils-style base64
-# both support this. Fail loudly instead of silently writing empty/
-# partial content if decoding fails for any reason.
 base64 -d > "$TMP_FILE" 2>/dev/null || DECODE_OK=0
 if [ "$DECODE_OK" != "1" ] || [ ! -s "$TMP_FILE" ]; then
   rm -f "$TMP_FILE"

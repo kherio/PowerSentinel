@@ -1,11 +1,11 @@
-MODDIR="$(find /data/adb -type d -name XtremeBS)"
-XBS_DATA="/data/local/tmp/XtremeBS"
-SERVE_DIR="$XBS_DATA/.serve"
-TOKEN_FILE="$XBS_DATA/.token"
+MODDIR="$(find /data/adb -type d -name PowerSentinel)"
+PowerSentinel_DATA="/data/local/tmp/PowerSentinel"
+SERVE_DIR="$PowerSentinel_DATA/.serve"
+TOKEN_FILE="$PowerSentinel_DATA/.token"
 
 echo "Please Wait..."
 
-mkdir -p "$XBS_DATA"
+mkdir -p "$PowerSentinel_DATA"
 
 # Only expose exactly two things via httpd - the built frontend and the
 # CGI scripts - never the whole module directory (which also holds the

@@ -1,4 +1,4 @@
-// Parser / serializer / form renderer for XtremeBS.conf (v1 flat + v2 event blocks)
+// Parser / serializer / form renderer for PowerSentinel.conf (v1 flat + v2 event blocks)
 import { t } from './i18n.js';
 
 var PREDEFINED_EVENTS = ['boot', 'charging', 'screen_off', 'low_power', 'night', 'thermal', 'manual'];
@@ -34,13 +34,13 @@ var FIELD_DEFS = [
   },
   {
     key: 'allowlist', label: t('field.allowlist.label'), type: 'text', group: 'apps',
-    placeholder: '/data/local/tmp/XtremeBS/apps.allow',
+    placeholder: '/data/local/tmp/PowerSentinel/apps.allow',
     help: t('field.allowlist.help'),
     showIf: function (f) { return f.handle_apps === 'suspend'; }
   },
   {
     key: 'denylist', label: t('field.denylist.label'), type: 'text', group: 'apps',
-    placeholder: '/data/local/tmp/XtremeBS/apps.deny',
+    placeholder: '/data/local/tmp/PowerSentinel/apps.deny',
     help: t('field.denylist.help')
   },
   { key: 'handle_cores', label: t('field.handleCores.label'), type: 'cores', def: 'false', group: 'cpu',
@@ -61,7 +61,7 @@ var FIELD_DEFS = [
     help: t('field.handleProc.help') },
   {
     key: 'proc_file', label: t('field.procFile.label'), type: 'text', group: 'sistema',
-    placeholder: '/data/local/tmp/XtremeBS/proc.list',
+    placeholder: '/data/local/tmp/PowerSentinel/proc.list',
     help: t('field.procFile.help'),
     showIf: function (f) { return f.handle_proc === 'true'; }
   },
@@ -87,7 +87,7 @@ var FIELD_DEFS = [
 var GLOBAL_DEFS = [
   { key: 'delay', label: t('global.delay.label'), type: 'number', def: '3',
     help: t('global.delay.help') },
-  { key: 'log_file', label: t('global.logFile.label'), type: 'text', def: '/sdcard/XtremeBS.log',
+  { key: 'log_file', label: t('global.logFile.label'), type: 'text', def: '/sdcard/PowerSentinel.log',
     help: t('global.logFile.help') },
   {
     key: 'log_level', label: t('global.logLevel.label'), type: 'select', def: '2',
@@ -133,7 +133,7 @@ function buildRecommendedModel() {
   return {
     version: '2',
     delay: '3',
-    log_file: '/sdcard/XtremeBS.log',
+    log_file: '/sdcard/PowerSentinel.log',
     log_level: '2',
     notify: 'true',
     globalExtra: [],

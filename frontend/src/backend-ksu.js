@@ -1,5 +1,5 @@
 import { exec } from 'kernelsu';
-import { XbsApiError } from './errors.js';
+import { PowerSentinelApiError } from './errors.js';
 
 // Used by api.js to decide, once at startup, whether this backend is
 // actually usable - the 'kernelsu' package itself always imports fine,
@@ -12,15 +12,15 @@ export async function __probe() {
   if (errno !== 0) throw new Error('kernelsu bridge not usable');
 }
 
-// Same on-disk layout the daemon (XtremeBSd) and XBSconf already use -
+// Same on-disk layout the daemon (PowerSentineld) and PowerSentinelconf already use -
 // unchanged from the httpd/CGI era, only the transport changed.
-const DATA_DIR = '/data/local/tmp/XtremeBS';
-const CONF_FILE = `${DATA_DIR}/XtremeBS.conf`;
-const STATUS_FILE = `${DATA_DIR}/XtremeBS.status`;
-const DEFAULT_LOG_FILE = `${DATA_DIR}/XtremeBS.log`;
+const DATA_DIR = '/data/local/tmp/PowerSentinel';
+const CONF_FILE = `${DATA_DIR}/PowerSentinel.conf`;
+const STATUS_FILE = `${DATA_DIR}/PowerSentinel.status`;
+const DEFAULT_LOG_FILE = `${DATA_DIR}/PowerSentinel.log`;
 
 // Resolves the log_file path from the config the same way load_log.cgi
-// (and XtremeBSd's own getconf()) did, since it's user-overridable.
+// (and PowerSentineld's own getconf()) did, since it's user-overridable.
 const RESOLVE_LOG_PATH =
   `f=$(grep '^log_file=' '${CONF_FILE}' 2>/dev/null | cut -d= -f2); ` +
   `echo "\${f:-${DEFAULT_LOG_FILE}}"`;
@@ -28,7 +28,7 @@ const RESOLVE_LOG_PATH =
 async function run(command) {
   const { errno, stdout, stderr } = await exec(command);
   if (errno !== 0) {
-    throw new XbsApiError((stderr && stderr.trim()) || `Command failed (errno ${errno})`);
+    throw new PowerSentinelApiError((stderr && stderr.trim()) || `Command failed (errno ${errno})`);
   }
   return stdout;
 }
@@ -41,7 +41,7 @@ export async function readConfig() {
   return run(`cat '${CONF_FILE}' 2>/dev/null || echo ''`);
 }
 
-// Writes go through XBS-writefile instead of a raw shell redirect: it
+// Writes go through PowerSentinel-writefile instead of a raw shell redirect: it
 // only accepts paths under an allowlisted prefix, writes atomically
 // (temp file + mv) and keeps a .bak of the previous content. The config
 // text itself is never interpolated into the shell command line - it's
@@ -49,8 +49,8 @@ export async function readConfig() {
 // the user typed into the raw-text editor.
 export async function writeConfig(text) {
   const b64 = btoa(unescape(encodeURIComponent(text)));
-  await run(`echo '${b64}' | XBS-writefile '${CONF_FILE}'`);
-  await run('XBSctl reload');
+  await run(`echo '${b64}' | PowerSentinel-writefile '${CONF_FILE}'`);
+  await run('PowerSentinelctl reload');
 }
 
 export async function readLog() {
@@ -61,7 +61,7 @@ export async function readLog() {
 // content (as save_log.cgi used to) - simpler and avoids re-encoding a
 // potentially large file through the command line.
 export async function exportLog() {
-  const dest = `/sdcard/Download/XtremeBS-log-${Date.now()}.txt`;
+  const dest = `/sdcard/Download/PowerSentinel-log-${Date.now()}.txt`;
   await run(`logf=$(${RESOLVE_LOG_PATH}); cp "$logf" '${dest}'`);
   return dest;
 }
@@ -89,17 +89,17 @@ export async function readAppListFile(path) {
 export async function writeAppListFile(path, lines) {
   const text = lines.join('\n') + (lines.length ? '\n' : '');
   const b64 = btoa(unescape(encodeURIComponent(text)));
-  await run(`echo '${b64}' | XBS-writefile '${path}'`);
+  await run(`echo '${b64}' | PowerSentinel-writefile '${path}'`);
 }
 
 // ---------- Manual event control (the "try it now" button) ----------
 
 export async function startEvent(name) {
-  await run(`XBSctl start ${name}`);
+  await run(`PowerSentinelctl start ${name}`);
 }
 
 export async function stopEvent(name) {
-  await run(`XBSctl stop ${name}`);
+  await run(`PowerSentinelctl stop ${name}`);
 }
 
 // ---------- Saved profiles (whole event-config snapshots) ----------
@@ -112,7 +112,7 @@ const PROFILES_DIR = `${DATA_DIR}/profiles`;
 // posture as event names elsewhere in this codebase.
 function sanitizeProfileName(name) {
   const clean = (name || '').replace(/[^a-zA-Z0-9_-]/g, '');
-  if (!clean) throw new XbsApiError('Invalid profile name');
+  if (!clean) throw new PowerSentinelApiError('Invalid profile name');
   return clean;
 }
 
@@ -130,7 +130,7 @@ export async function saveProfile(name, content) {
   const clean = sanitizeProfileName(name);
   const b64 = btoa(unescape(encodeURIComponent(content)));
   await run(`mkdir -p '${PROFILES_DIR}'`);
-  await run(`echo '${b64}' | XBS-writefile '${PROFILES_DIR}/${clean}.conf'`);
+  await run(`echo '${b64}' | PowerSentinel-writefile '${PROFILES_DIR}/${clean}.conf'`);
 }
 
 export async function deleteProfile(name) {
@@ -141,7 +141,7 @@ export async function deleteProfile(name) {
 // ---------- Installed module info (for the "Acerca de" screen) ----------
 
 export async function readModuleInfo() {
-  return run(`cat "$(find /data/adb -maxdepth 2 -type d -name XtremeBS 2>/dev/null | head -1)/module.prop" 2>/dev/null || echo ''`);
+  return run(`cat "$(find /data/adb -maxdepth 2 -type d -name PowerSentinel 2>/dev/null | head -1)/module.prop" 2>/dev/null || echo ''`);
 }
 
 // ---------- Currently-running packages (apps picker "running now" hint) ----------

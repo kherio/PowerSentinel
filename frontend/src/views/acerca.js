@@ -59,7 +59,7 @@ async function copyDiagnostics() {
     const logTail = log.split('\n').filter(Boolean).slice(-40).join('\n');
 
     const report = [
-      `XtremeBS ${version} (code ${versionCode})`,
+      `PowerSentinel ${version} (code ${versionCode})`,
       `--- Status ---`,
       status.trim(),
       `--- Log (last 40 lines) ---`,

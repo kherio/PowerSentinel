@@ -59,4 +59,4 @@ export const {
 // Both backends throw this same error class for request failures, so
 // callers can keep doing `catch (e) { toast(e.message) }` without
 // caring which backend actually ran.
-export { XbsApiError } from './errors.js';
+export { PowerSentinelApiError } from './errors.js';

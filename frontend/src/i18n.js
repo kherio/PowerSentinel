@@ -3,7 +3,7 @@
 // "use the system's default language" as requested, with English as
 // the fallback for every other language rather than trying to support
 // more locales than we can maintain translations for.
-const LOCALE_OVERRIDE_KEY = 'xbs-locale-override';
+const LOCALE_OVERRIDE_KEY = 'powersentinel-locale-override';
 
 function detectLocale() {
   try {
@@ -39,7 +39,7 @@ export const LOCALE = detectLocale();
 
 const DICT = {
   es: {
-    'app.name': 'XtremeBS',
+    'app.name': 'PowerSentinel',
 
     'nav.estado': 'Estado',
     'nav.config': 'Config',
@@ -87,7 +87,7 @@ const DICT = {
     'estado.noData': 'Sin datos',
     'estado.daemonUnavailable': 'No disponible',
     'estado.serviceUnavailable': 'Servicio no disponible',
-    'estado.daemonNotRunningHint': 'comprueba que el demonio de XtremeBS esté corriendo.',
+    'estado.daemonNotRunningHint': 'comprueba que el demonio de PowerSentinel esté corriendo.',
     'estado.pctOfMax': 'del máx.',
     'estado.loadWord': 'carga',
     'estado.daemonLabel': 'Demonio',
@@ -150,7 +150,7 @@ const DICT = {
     'config.restoreConfirm': 'Esto reemplaza el formulario por una configuración recomendada de partida (boot, charging, screen_off, low_power y night con ajustes equilibrados). No se escribe nada en el dispositivo hasta que pulses Guardar. ¿Continuar?',
     'config.restoreApplied': 'Valores recomendados cargados - revisa y pulsa Guardar',
     'config.leaveConfirm': 'Tienes cambios sin guardar en la configuración. ¿Salir sin guardar?',
-    'config.suspendWarn': 'Sin ninguna app en la allowlist, XtremeBS desactivará "Suspender" automáticamente.',
+    'config.suspendWarn': 'Sin ninguna app en la allowlist, PowerSentinel desactivará "Suspender" automáticamente.',
     'config.summaryApps': 'apps: {v}',
     'config.summaryCores': 'núcleos: {v}',
     'config.summaryDisableCores': 'desactiva núcleos',
@@ -189,7 +189,7 @@ const DICT = {
     'perfiles.savedConfigs': 'Configuraciones completas guardadas',
     'perfiles.saveAsProfile': 'Guardar configuración actual como perfil',
     'perfiles.namePlaceholder': 'nombre_del_perfil',
-    'perfiles.saveHint': 'Guarda una copia de tu XtremeBS.conf actual con ese nombre, para poder recuperarla más tarde.',
+    'perfiles.saveHint': 'Guarda una copia de tu PowerSentinel.conf actual con ese nombre, para poder recuperarla más tarde.',
     'perfiles.savedTitle': 'Perfiles guardados',
     'perfiles.noneYet': 'Todavía no has guardado ningún perfil.',
     'perfiles.loadTitle': 'Cargar este perfil (sustituye la configuración actual)',
@@ -265,11 +265,11 @@ const DICT = {
     'global.logLevel.label': 'Nivel de log',
     'global.logLevel.help': 'Más alto = más detalle en el log, pero también un fichero que crece más rápido.',
     'global.notify.label': 'Mostrar notificaciones',
-    'global.notify.help': 'Notificación del sistema cada vez que XtremeBS activa o desactiva algo.',
+    'global.notify.help': 'Notificación del sistema cada vez que PowerSentinel activa o desactiva algo.',
     'global.chargeLimit.label': 'Límite de carga (%)',
     'global.chargeLimit.help': 'Deja de cargar al alcanzar este porcentaje (cuida la salud de la batería a largo plazo). 0 = desactivado. Requiere configurar también la "Ruta de control de carga" de abajo, específica de tu dispositivo.',
     'global.chargeLimitNode.label': 'Ruta de control de carga (sysfs)',
-    'global.chargeLimitNode.help': 'Ruta del sistema que controla si el dispositivo carga (varía según el fabricante/kernel; debes buscar la de tu modelo). XtremeBS escribe 0 para pausar la carga y 1 para reanudarla en esta ruta.',
+    'global.chargeLimitNode.help': 'Ruta del sistema que controla si el dispositivo carga (varía según el fabricante/kernel; debes buscar la de tu modelo). PowerSentinel escribe 0 para pausar la carga y 1 para reanudarla en esta ruta.',
     'global.chargeLimitNode.warn': 'Si la ruta es incorrecta, el límite de carga simplemente no hará nada (no debería dañar el dispositivo), pero compruébala con cuidado antes de confiar en ella.',
 
     'preset.balanced.label': 'Equilibrado',
@@ -301,7 +301,7 @@ const DICT = {
   },
 
   en: {
-    'app.name': 'XtremeBS',
+    'app.name': 'PowerSentinel',
 
     'nav.estado': 'Status',
     'nav.config': 'Config',
@@ -349,7 +349,7 @@ const DICT = {
     'estado.noData': 'No data',
     'estado.daemonUnavailable': 'Unavailable',
     'estado.serviceUnavailable': 'Service unavailable',
-    'estado.daemonNotRunningHint': 'check that the XtremeBS daemon is running.',
+    'estado.daemonNotRunningHint': 'check that the PowerSentinel daemon is running.',
     'estado.pctOfMax': 'of max',
     'estado.loadWord': 'load',
     'estado.daemonLabel': 'Daemon',
@@ -412,7 +412,7 @@ const DICT = {
     'config.restoreConfirm': 'This replaces the form with a sensible starting config (boot, charging, screen_off, low_power and night with balanced settings). Nothing is written to the device until you press Save. Continue?',
     'config.restoreApplied': 'Recommended defaults loaded - review and press Save',
     'config.leaveConfirm': 'You have unsaved changes in the config. Leave without saving?',
-    'config.suspendWarn': 'With no apps in the allowlist, XtremeBS will automatically disable "Suspend".',
+    'config.suspendWarn': 'With no apps in the allowlist, PowerSentinel will automatically disable "Suspend".',
     'config.summaryApps': 'apps: {v}',
     'config.summaryCores': 'cores: {v}',
     'config.summaryDisableCores': 'disables cores',
@@ -451,7 +451,7 @@ const DICT = {
     'perfiles.savedConfigs': 'Saved full configurations',
     'perfiles.saveAsProfile': 'Save current config as a profile',
     'perfiles.namePlaceholder': 'profile_name',
-    'perfiles.saveHint': 'Saves a copy of your current XtremeBS.conf under that name, so you can restore it later.',
+    'perfiles.saveHint': 'Saves a copy of your current PowerSentinel.conf under that name, so you can restore it later.',
     'perfiles.savedTitle': 'Saved profiles',
     'perfiles.noneYet': "You haven't saved any profiles yet.",
     'perfiles.loadTitle': 'Load this profile (replaces the current config)',
@@ -527,11 +527,11 @@ const DICT = {
     'global.logLevel.label': 'Log level',
     'global.logLevel.help': 'Higher = more detail in the log, but also a file that grows faster.',
     'global.notify.label': 'Show notifications',
-    'global.notify.help': 'System notification every time XtremeBS enables or disables something.',
+    'global.notify.help': 'System notification every time PowerSentinel enables or disables something.',
     'global.chargeLimit.label': 'Charge limit (%)',
     'global.chargeLimit.help': 'Stops charging once this percentage is reached (helps long-term battery health). 0 = disabled. Also requires setting the "Charge control path" below, which is device-specific.',
     'global.chargeLimitNode.label': 'Charge control path (sysfs)',
-    'global.chargeLimitNode.help': "System path that controls whether the device charges (varies by manufacturer/kernel - you'll need to look up the one for your model). XtremeBS writes 0 to pause charging and 1 to resume it at this path.",
+    'global.chargeLimitNode.help': "System path that controls whether the device charges (varies by manufacturer/kernel - you'll need to look up the one for your model). PowerSentinel writes 0 to pause charging and 1 to resume it at this path.",
     'global.chargeLimitNode.warn': "If the path is wrong, the charge limit will simply do nothing (it shouldn't damage the device), but verify it carefully before relying on it.",
 
     'preset.balanced.label': 'Balanced',
