@@ -87,6 +87,64 @@ is_night_now() {
   fi
 }
 
+# Independent, temperature-based profile (companion to "night" above,
+# same idea: an event that isn't tied to charging/screen state, active
+# whenever the battery is at or above a configured temperature). Reads
+# its threshold from the "thermal" event block's thermal_threshold field
+# (whole degrees Celsius). Hysteresis (3C below the threshold) avoids
+# rapidly flapping on/off when the temperature hovers right at the line.
+get_thermal_threshold() {
+  thermal_threshold=$(grep -F -A99 "thermal={" "$conf" 2>/dev/null | grep '^\s*thermal_threshold=' | head -1 | cut -d= -f2 | tr -d ' \r')
+}
+
+is_thermal_now() {
+  if [ -z "$thermal_threshold" ]; then
+    echo false
+    return
+  fi
+  local temp_raw temp_c hysteresis_c
+  temp_raw=$(dumpsys battery 2>/dev/null | grep -m1 -oE '^[[:space:]]*temperature:[[:space:]]*[0-9]+' | grep -oE '[0-9]+$')
+  [ -z "$temp_raw" ] && { echo false; return; }
+  temp_c=$(( temp_raw / 10 ))
+  if [ "$was_thermal" = "true" ]; then
+    hysteresis_c=$(( thermal_threshold - 3 ))
+    [ "$temp_c" -ge "$hysteresis_c" ] && echo true || echo false
+  else
+    [ "$temp_c" -ge "$thermal_threshold" ] && echo true || echo false
+  fi
+}
+
+# Optional charge limiter: stops charging once the battery reaches
+# $charge_limit%, resumes 5% below it (hysteresis, same idea as the
+# thermal profile above). Entirely opt-in - both charge_limit and
+# charge_limit_node must be set, since the sysfs path that actually
+# controls charging varies by device/kernel and there's no universal
+# one. Writes "0"/"1" (the most common convention for a
+# "charging_enabled"-style node); if the path is wrong the write simply
+# fails silently rather than touching anything else.
+was_charge_paused="false"
+check_charge_limit() {
+  local charge_limit charge_limit_node batt_dump level charging
+  charge_limit=$(getconf charge_limit 0)
+  charge_limit_node=$(getconf charge_limit_node "")
+  [ "$charge_limit" -gt 0 ] 2>/dev/null || return
+  [ -n "$charge_limit_node" ] && [ -w "$charge_limit_node" ] || return
+
+  batt_dump="$(dumpsys battery 2>/dev/null)"
+  level=$(echo "$batt_dump" | grep -m1 -oE '^[[:space:]]*level:[[:space:]]*[0-9]+' | grep -oE '[0-9]+$')
+  charging="false"
+  echo "$batt_dump" | grep -qE '^[[:space:]]*(AC|USB|Wireless) powered:[[:space:]]*true' && charging="true"
+  [ -z "$level" ] && return
+
+  if [ "$charging" = "true" ] && [ "$level" -ge "$charge_limit" ]; then
+    if [ "$was_charge_paused" != "true" ]; then
+      echo 0 > "$charge_limit_node" 2>/dev/null && was_charge_paused="true" && log_msg 2 "Charge limit reached (${level}%) - pausing charging"
+    fi
+  elif [ "$was_charge_paused" = "true" ] && { [ "$charging" != "true" ] || [ "$level" -le "$((charge_limit - 5))" ]; }; then
+    echo 1 > "$charge_limit_node" 2>/dev/null && was_charge_paused="false" && log_msg 2 "Resuming charging (${level}%)"
+  fi
+}
+
 notif() {
   if [ "$(getconf notify true)" = "true" ]; then
     # SECURITY: "$1" is interpolated into a string that su -c hands to a
@@ -868,6 +926,14 @@ if [ "$night_now" = "true" ]; then
 fi
 was_night="$night_now"
 
+was_thermal="false"
+get_thermal_threshold
+thermal_now="$(is_thermal_now)"
+if [ "$thermal_now" = "true" ]; then
+  handle_event thermal 1
+fi
+was_thermal="$thermal_now"
+
 while true; do
 
   # Check for command
@@ -990,6 +1056,20 @@ while true; do
     fi
   fi
   was_night="$night_now"
+
+  # check thermal profile (temperature-based, independent of any device state)
+  thermal_now="$(is_thermal_now)"
+  if [ "$thermal_now" != "$was_thermal" ]; then
+    log_msg 2 "Thermal profile boundary crossed"
+    if [ "$thermal_now" = "true" ]; then
+      handle_event thermal 1
+    else
+      handle_event thermal 0
+    fi
+  fi
+  was_thermal="$thermal_now"
+
+  check_charge_limit
 
   sleep "$delay"
 done

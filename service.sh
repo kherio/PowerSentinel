@@ -13,3 +13,20 @@ until [ "$(getprop sys.boot_completed)" = "1" ] && [ -d "/sdcard/Android" ]; do
 done
 
 /system/bin/bash /system/bin/XtremeBSd &
+
+# Watchdog: if the daemon dies unexpectedly (crash, OOM kill, etc.), the
+# device would otherwise stay unmanaged until the next reboot. Checks
+# every 60s and relaunches it if it's not running. Logs via Android's
+# own `log` command (visible in logcat) rather than XtremeBS's own log
+# file, since this script doesn't know/parse the user's configured
+# log_file path - it's a last-resort safety net, not a regular feature
+# users need to see inside the app.
+(
+  while true; do
+    sleep 60
+    if ! pgrep -f "/system/bin/XtremeBSd" >/dev/null 2>&1; then
+      log -t XtremeBS "Watchdog: XtremeBSd was not running - restarting it"
+      /system/bin/bash /system/bin/XtremeBSd &
+    fi
+  done
+) &
