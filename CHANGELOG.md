@@ -1,4 +1,12 @@
 
+### v3.3.1-kherio
+  - **Closed the two remaining low-severity findings from `docs/security-audit.md`** (both left deliberately open in the original audit, now fixed):
+    - `system/bin/XtremeBSd`'s app-handling loops (`enable_pwr_save()` and `disable_pwr_save()`) used an unquoted `for app in $(...)`, which both word-splits and glob-expands every line - a denylist entry containing a shell glob character (e.g. `*`) could expand to filenames in the daemon's working directory instead of being read as a literal package name. Rewrote as a hardened `while IFS= read -r app; do ... done < <(...)`. Verified with a standalone repro: the old loop expanded a `*` denylist line to every file in a test directory; the new one preserves it as the literal string `*`.
+    - The same functions matched a package against the allowlist with `grep -E` (extended regex), so a dot in a package name acted as a "match any character" wildcard instead of a literal dot - a package name could false-positive match a similarly-shaped, unrelated allowlist entry. Switched to `grep -Fxq` (fixed string, whole line). Verified: with the old `-E`, `com.example.app` falsely matched an allowlist line `comXexampleXapp`; with `-Fxq` it correctly doesn't.
+    - Also quoted two `pgrep $proc` calls that had the same unquoted-expansion issue against `proc_file` lines.
+  - `docs/security-audit.md` updated to reflect both findings as fixed, with the verification method used for each.
+  - No user-facing/UI changes in this release.
+
 ### v3.3.0-kherio
   - **Config tab UX overhaul**:
     - **Fixed a real bug**: the shared `.filter` class was only styled via a `select.filter` CSS selector, so every text/number `<input class="filter">` (paths, night hours, custom event name, app search...) had zero theme styling and rendered with the browser's tiny default form-control look. This was very likely the biggest single contributor to "the text is too small" - fixed by styling `.filter` generically for both `<input>` and `<select>`.

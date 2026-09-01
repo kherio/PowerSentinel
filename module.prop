@@ -1,7 +1,7 @@
 id=XtremeBS
 name=Xtreme Battery Saver
-version=v3.3.0-kherio
-versionCode=330
+version=v3.3.1-kherio
+versionCode=331
 author=kherio (fork of DethByte64/Xtreme-Battery-Saver)
 description=An extreme battery saver for Magisk/KernelSU users who really want to stretch their battery life
 updateJson=https://raw.githubusercontent.com/kherio/Xtreme-Battery-Saver/main/update.json
