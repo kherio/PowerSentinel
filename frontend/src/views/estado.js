@@ -1,6 +1,7 @@
 import { ICONS } from '../icons.js';
 import { readStatus } from '../api.js';
 import { toast, escapeHtml } from '../helpers.js';
+import { t } from '../i18n.js';
 
 const GAUGE_C = 2 * Math.PI * 52;
 const HISTORY_MAX = 30; // ~90s at 3s polling
@@ -63,11 +64,13 @@ function setGauge(percent) {
   document.getElementById('e-gauge-percent').textContent = percent + '%';
 }
 
-const CORE_META = {
-  online: { cls: 'core-active', mapCls: 'active', label: 'Activo', icon: ICONS.bolt },
-  powersave: { cls: 'core-save', mapCls: 'save', label: 'Ahorro', icon: ICONS.leaf },
-  offline: { cls: 'core-off', mapCls: 'off', label: 'Apagado', icon: ICONS.power }
-};
+function coreMeta() {
+  return {
+    online: { cls: 'core-active', mapCls: 'active', label: t('estado.legendActive'), icon: ICONS.bolt },
+    powersave: { cls: 'core-save', mapCls: 'save', label: t('estado.legendSave'), icon: ICONS.leaf },
+    offline: { cls: 'core-off', mapCls: 'off', label: t('estado.legendOff'), icon: ICONS.power }
+  };
+}
 
 // Rough remaining-time estimate from the battery-level samples collected
 // in this browsing session (persisted in localStorage, so it survives a
@@ -97,7 +100,7 @@ function renderBattery(batt) {
   fill.classList.toggle('low', batt.level <= 20 && !batt.charging);
   fill.classList.toggle('mid', batt.level > 20 && batt.level <= 50 && !batt.charging);
   document.getElementById('e-battery-pct').textContent = batt.level + '%';
-  document.getElementById('e-battery-status').textContent = batt.charging ? 'Cargando' : 'Batería';
+  document.getElementById('e-battery-status').textContent = batt.charging ? t('estado.batteryCharging') : t('estado.batteryLabel');
 
   if (!batt.charging) {
     battHistory.push({ t: Date.now(), level: batt.level });
@@ -107,13 +110,13 @@ function renderBattery(batt) {
 
   const bits = [`${(batt.temp / 10).toFixed(1)}°C`, `${(batt.voltage / 1000).toFixed(2)} V`];
   if (batt.charging) {
-    bits.push('en carga');
+    bits.push(t('estado.batteryCharging2'));
   } else {
     const hours = estimateRemainingHours(batt.level);
     if (hours !== null) {
       const h = Math.floor(hours);
       const m = Math.round((hours - h) * 60);
-      bits.push(`≈${h}h ${m}m restantes`);
+      bits.push(t('estado.batteryRemaining', { h, m }));
     }
   }
   document.getElementById('e-battery-sub').textContent = bits.join(' · ');
@@ -166,16 +169,17 @@ function render(text) {
   if (sys.error) {
     setGauge(0);
     document.getElementById('e-gauge-percent').innerHTML = ICONS.warn;
-    heroTitle.textContent = 'Servicio no disponible';
-    heroSub.textContent = sys.error + ' — comprueba que el demonio de XtremeBS esté corriendo.';
+    heroTitle.textContent = t('estado.serviceUnavailable');
+    heroSub.textContent = sys.error + ' — ' + t('estado.daemonNotRunningHint');
   }
 
   const coreGrid = document.getElementById('e-core-grid');
   const coreCounts = document.getElementById('e-core-counts');
   const coreMap = document.getElementById('e-core-map');
+  const CORE_META = coreMeta();
 
   if (sys.error) {
-    coreGrid.innerHTML = `<div class="stat-card"><div class="label">${ICONS.cpu} Demonio</div>${badgeHtml('off', 'No disponible')}</div>`;
+    coreGrid.innerHTML = `<div class="stat-card"><div class="label">${ICONS.cpu} ${t('estado.daemonLabel')}</div>${badgeHtml('off', t('estado.daemonUnavailable'))}</div>`;
     coreCounts.textContent = '';
     coreMap.innerHTML = '';
   } else if (cores.length) {
@@ -205,12 +209,16 @@ function render(text) {
     const activeCount = cores.filter((c) => c.state === 'online').length;
     const offCount = cores.filter((c) => c.state === 'offline').length;
     const psCount = cores.filter((c) => c.state === 'powersave').length;
-    coreCounts.textContent = `${activeCount} de ${cores.length} núcleos activos` +
-      ((offCount || psCount) ? ` · ${offCount + psCount} en ahorro` +
-        (offCount && psCount ? ` (${offCount} apagados, ${psCount} powersave)` :
-          offCount ? ' (apagados)' : ' (powersave)') : '');
+    coreCounts.textContent = t('estado.coresActiveOf', { active: activeCount, total: cores.length }) +
+      ((offCount || psCount)
+        ? (offCount && psCount
+          ? t('estado.savingSuffixBoth', { n: offCount + psCount, off: offCount, ps: psCount })
+          : offCount
+            ? t('estado.savingSuffixOff', { n: offCount + psCount })
+            : t('estado.savingSuffixPs', { n: offCount + psCount }))
+        : '');
   } else {
-    coreGrid.innerHTML = `<div class="stat-card"><div class="label">${ICONS.cpu} Núcleos</div><div class="value" style="color:var(--muted)">Sin datos</div></div>`;
+    coreGrid.innerHTML = `<div class="stat-card"><div class="label">${ICONS.cpu} ${t('estado.coresLabel')}</div><div class="value" style="color:var(--muted)">${t('estado.noData')}</div></div>`;
     coreCounts.textContent = '';
     coreMap.innerHTML = '';
   }
@@ -229,14 +237,14 @@ function render(text) {
     let avgPct = null;
     if (coresWithFreq.length) {
       avgPct = Math.round(coresWithFreq.reduce((s, c) => s + (c.curFreq / c.maxFreq) * 100, 0) / coresWithFreq.length);
-      cards.push(`<div class="metric-card"><div class="mc-label"><span style="width:12px;height:12px;display:inline-flex">${ICONS.bolt}</span> Frecuencia media</div>` +
-        `<div class="mc-value">${avgPct}<span class="mc-unit">% del máx.</span></div></div>`);
+      cards.push(`<div class="metric-card"><div class="mc-label"><span style="width:12px;height:12px;display:inline-flex">${ICONS.bolt}</span> ${t('estado.avgFreq')}</div>` +
+        `<div class="mc-value">${avgPct}<span class="mc-unit">% ${t('estado.pctOfMax')}</span></div></div>`);
       freqHistory.push(avgPct);
       if (freqHistory.length > HISTORY_MAX) freqHistory.shift();
     }
     if (sys.load1 !== undefined) {
-      cards.push(`<div class="metric-card"><div class="mc-label">Carga (1 min)</div><div class="mc-value">${sys.load1.toFixed(2)}</div></div>`);
-      cards.push(`<div class="metric-card"><div class="mc-label">Carga (5/15 min)</div><div class="mc-value" style="font-size:14px;">${sys.load5.toFixed(2)} / ${sys.load15.toFixed(2)}</div></div>`);
+      cards.push(`<div class="metric-card"><div class="mc-label">${t('estado.load1min')}</div><div class="mc-value">${sys.load1.toFixed(2)}</div></div>`);
+      cards.push(`<div class="metric-card"><div class="mc-label">${t('estado.load515min')}</div><div class="mc-value" style="font-size:14px;">${sys.load5.toFixed(2)} / ${sys.load15.toFixed(2)}</div></div>`);
       maxLoadSeen = Math.max(maxLoadSeen, sys.load1, 1);
       loadHistory.push(Math.min(100, (sys.load1 / maxLoadSeen) * 100));
       if (loadHistory.length > HISTORY_MAX) loadHistory.shift();
@@ -245,7 +253,7 @@ function render(text) {
 
     const nowBits = [];
     if (avgPct !== null) nowBits.push(avgPct + '%');
-    if (sys.load1 !== undefined) nowBits.push('carga ' + sys.load1.toFixed(2));
+    if (sys.load1 !== undefined) nowBits.push(t('estado.loadWord') + ' ' + sys.load1.toFixed(2));
     document.getElementById('e-chart-now').textContent = nowBits.join(' · ');
 
     renderChart();
@@ -258,19 +266,19 @@ function render(text) {
   const sysGrid = document.getElementById('e-sys-grid');
   const sysCards = [];
   if (sys.wifi) {
-    sysCards.push(`<div class="stat-card"><div class="label">${ICONS.wifi} WiFi</div>${badgeHtml(sys.wifi === 'disabled' ? 'on' : 'neutral', sys.wifi === 'disabled' ? 'Desactivado' : 'Activo')}</div>`);
+    sysCards.push(`<div class="stat-card"><div class="label">${ICONS.wifi} ${t('estado.wifi')}</div>${badgeHtml(sys.wifi === 'disabled' ? 'on' : 'neutral', sys.wifi === 'disabled' ? t('estado.disabled') : t('estado.active'))}</div>`);
   }
   if (sys.doze) {
-    const dozeLabel = sys.doze === 'light' ? 'Ligero' : (sys.doze === 'deep' ? 'Profundo' : 'Inactivo');
-    sysCards.push(`<div class="stat-card"><div class="label">${ICONS.moon} Doze</div>${badgeHtml(sys.doze === 'inactive' ? 'neutral' : 'on', dozeLabel)}</div>`);
+    const dozeLabel = sys.doze === 'light' ? t('estado.light') : (sys.doze === 'deep' ? t('estado.deep') : t('estado.inactive'));
+    sysCards.push(`<div class="stat-card"><div class="label">${ICONS.moon} ${t('estado.doze')}</div>${badgeHtml(sys.doze === 'inactive' ? 'neutral' : 'on', dozeLabel)}</div>`);
   }
   if (sys.lowRam === 'true' || sys.lowRam === 'false') {
-    sysCards.push(`<div class="stat-card"><div class="label">${ICONS.ram} Low RAM</div>${badgeHtml(sys.lowRam === 'true' ? 'on' : 'neutral', sys.lowRam === 'true' ? 'Activado' : 'Desactivado')}</div>`);
+    sysCards.push(`<div class="stat-card"><div class="label">${ICONS.ram} ${t('estado.lowRam')}</div>${badgeHtml(sys.lowRam === 'true' ? 'on' : 'neutral', sys.lowRam === 'true' ? t('estado.enabled') : t('estado.disabled'))}</div>`);
   } else {
-    sysCards.push(`<div class="stat-card"><div class="label">${ICONS.ram} Low RAM</div>${badgeHtml('neutral', 'No aplica')}</div>`);
+    sysCards.push(`<div class="stat-card"><div class="label">${ICONS.ram} ${t('estado.lowRam')}</div>${badgeHtml('neutral', t('estado.notApplicable'))}</div>`);
   }
   sysGrid.innerHTML = sysCards.length ? sysCards.join('') :
-    `<div class="stat-card"><div class="label">Sistema</div><div class="value" style="color:var(--muted)">Sin datos</div></div>`;
+    `<div class="stat-card"><div class="label">${t('estado.systemTitle')}</div><div class="value" style="color:var(--muted)">${t('estado.noData')}</div></div>`;
 
   if (!sys.error) {
     const offlineC = cores.filter((c) => c.state === 'offline').length;
@@ -281,17 +289,17 @@ function render(text) {
     setGauge(percent);
 
     if (totalUnits === 0) {
-      heroTitle.textContent = 'Sin datos todavía';
-      heroSub.textContent = 'Esperando la primera lectura del demonio.';
+      heroTitle.textContent = t('estado.noDataYet');
+      heroSub.textContent = t('estado.waitingFirstReading');
     } else if (percent >= 60) {
-      heroTitle.textContent = 'Ahorro activo';
-      heroSub.textContent = 'La mayoría de los sistemas monitorizados están en modo ahorro ahora mismo.';
+      heroTitle.textContent = t('estado.savingActiveTitle');
+      heroSub.textContent = t('estado.savingActiveSub');
     } else if (percent >= 25) {
-      heroTitle.textContent = 'Ahorro parcial';
-      heroSub.textContent = 'Algunos sistemas están ahorrando batería; otros siguen activos.';
+      heroTitle.textContent = t('estado.savingPartialTitle');
+      heroSub.textContent = t('estado.savingPartialSub');
     } else {
-      heroTitle.textContent = 'Sin ahorro activo';
-      heroSub.textContent = 'Ningún evento de ahorro está aplicado en este momento.';
+      heroTitle.textContent = t('estado.savingNoneTitle');
+      heroSub.textContent = t('estado.savingNoneSub');
     }
   }
 
@@ -310,17 +318,17 @@ async function loadStatus(silent) {
   try {
     const data = await readStatus();
     render(data);
-    document.getElementById('e-updated').textContent = 'Actualizado ' + new Date().toLocaleTimeString();
+    document.getElementById('e-updated').textContent = t('estado.updatedAt', { time: new Date().toLocaleTimeString() });
     document.querySelector('#view-estado .scroll-area').classList.add('loaded');
     firstLoad = false;
   } catch (e) {
-    document.getElementById('e-updated').textContent = 'Error al actualizar';
-    if (!silent) toast('No se pudo cargar el estado', 'error');
+    document.getElementById('e-updated').textContent = t('estado.updateError');
+    if (!silent) toast(t('estado.updateFailedToast'), 'error');
   }
 }
 
 export function initEstado() {
-  document.getElementById('e-refresh-btn').innerHTML = ICONS.reload + ' Actualizar';
+  document.getElementById('e-refresh-btn').innerHTML = ICONS.reload + ' ' + t('common.update');
   document.getElementById('e-refresh-btn').addEventListener('click', () => loadStatus(false));
 }
 

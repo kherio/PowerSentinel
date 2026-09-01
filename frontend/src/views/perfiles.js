@@ -1,6 +1,7 @@
 import { ICONS } from '../icons.js';
 import { listProfiles, readProfile, saveProfile, deleteProfile, readConfig, writeConfig } from '../api.js';
 import { toast } from '../helpers.js';
+import { t } from '../i18n.js';
 
 let loaded = false;
 
@@ -9,7 +10,7 @@ async function renderList() {
   try {
     const names = await listProfiles();
     if (!names.length) {
-      list.innerHTML = '<div class="log-empty">Todavía no has guardado ningún perfil.</div>';
+      list.innerHTML = `<div class="log-empty">${t('perfiles.noneYet')}</div>`;
       return;
     }
     list.innerHTML = '';
@@ -25,16 +26,16 @@ async function renderList() {
       const loadBtn = document.createElement('button');
       loadBtn.className = 'btn ghost';
       loadBtn.innerHTML = ICONS.upload;
-      loadBtn.title = 'Cargar este perfil (sustituye la configuración actual)';
+      loadBtn.title = t('perfiles.loadTitle');
       loadBtn.addEventListener('click', async () => {
-        const ok = window.confirm(`Cargar el perfil "${name}" sustituirá tu configuración actual (se recargará el demonio). ¿Continuar?`);
+        const ok = window.confirm(t('perfiles.loadConfirm', { name }));
         if (!ok) return;
         try {
           const content = await readProfile(name);
           await writeConfig(content);
-          toast(`Perfil "${name}" cargado`, 'success');
+          toast(t('perfiles.loaded', { name }), 'success');
         } catch (e) {
-          toast('Error al cargar el perfil: ' + e.message, 'error');
+          toast(t('perfiles.loadError', { msg: e.message }), 'error');
         }
       });
       row.appendChild(loadBtn);
@@ -42,16 +43,16 @@ async function renderList() {
       const delBtn = document.createElement('button');
       delBtn.className = 'btn ghost';
       delBtn.innerHTML = ICONS.trash;
-      delBtn.title = 'Eliminar perfil';
+      delBtn.title = t('common.delete');
       delBtn.addEventListener('click', async () => {
-        const ok = window.confirm(`¿Eliminar el perfil "${name}"? Esta acción no se puede deshacer.`);
+        const ok = window.confirm(t('perfiles.deleteConfirm', { name }));
         if (!ok) return;
         try {
           await deleteProfile(name);
-          toast(`Perfil "${name}" eliminado`, 'success');
+          toast(t('perfiles.deleted', { name }), 'success');
           renderList();
         } catch (e) {
-          toast('Error al eliminar: ' + e.message, 'error');
+          toast(t('perfiles.deleteError', { msg: e.message }), 'error');
         }
       });
       row.appendChild(delBtn);
@@ -59,27 +60,27 @@ async function renderList() {
       list.appendChild(row);
     });
   } catch (e) {
-    list.innerHTML = '<div class="log-empty">No se pudieron cargar los perfiles.</div>';
+    list.innerHTML = `<div class="log-empty">${t('perfiles.listError')}</div>`;
   }
 }
 
 export function initPerfiles() {
   document.getElementById('p-refresh-btn').innerHTML = ICONS.reload;
-  document.getElementById('p-refresh-btn').title = 'Actualizar lista';
+  document.getElementById('p-refresh-btn').title = t('perfiles.refresh');
   document.getElementById('p-refresh-btn').addEventListener('click', renderList);
 
   document.getElementById('p-save-btn').addEventListener('click', async () => {
     const input = document.getElementById('p-name-input');
     const name = input.value.trim().replace(/[^a-zA-Z0-9_-]/g, '');
-    if (!name) { toast('Escribe un nombre de perfil válido', 'error'); return; }
+    if (!name) { toast(t('perfiles.invalidName'), 'error'); return; }
     try {
       const content = await readConfig();
       await saveProfile(name, content);
       input.value = '';
-      toast(`Perfil "${name}" guardado`, 'success');
+      toast(t('perfiles.savedToast', { name }), 'success');
       renderList();
     } catch (e) {
-      toast('Error al guardar el perfil: ' + e.message, 'error');
+      toast(t('perfiles.saveError', { msg: e.message }), 'error');
     }
   });
 }

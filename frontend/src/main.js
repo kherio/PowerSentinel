@@ -1,4 +1,5 @@
 import './style.css';
+import { LOCALE, applyStaticI18n, t } from './i18n.js';
 import { ICONS } from './icons.js';
 import { initViewportFix } from './helpers.js';
 import { initEstado, activateEstado, deactivateEstado, refreshEstado } from './views/estado.js';
@@ -116,7 +117,7 @@ function initPullToRefresh(areaId, indicatorId, onRefresh) {
     indicator.style.height = pull + 'px';
     indicator.classList.toggle('ready', pull >= THRESHOLD);
     indicator.innerHTML = (pull >= THRESHOLD ? ICONS.reload : ICONS.chevron) +
-      (pull >= THRESHOLD ? ' Suelta para actualizar' : ' Desliza para actualizar');
+      (pull >= THRESHOLD ? ' ' + t('common.releaseToRefresh') : ' ' + t('common.pullToRefresh'));
   }, { passive: true });
 
   area.addEventListener('touchend', () => {
@@ -128,7 +129,7 @@ function initPullToRefresh(areaId, indicatorId, onRefresh) {
     if (!wasReady) return;
     refreshing = true;
     indicator.classList.add('spinning');
-    indicator.innerHTML = ICONS.reload + ' Actualizando…';
+    indicator.innerHTML = ICONS.reload + ' ' + t('common.refreshing');
     Promise.resolve(onRefresh()).finally(() => {
       indicator.classList.remove('spinning', 'ready');
       indicator.style.height = '0';
@@ -136,6 +137,9 @@ function initPullToRefresh(areaId, indicatorId, onRefresh) {
     });
   }, { passive: true });
 }
+
+document.documentElement.lang = LOCALE;
+applyStaticI18n();
 
 initViewportFix();
 initTabButtons();

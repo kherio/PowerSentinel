@@ -1,5 +1,6 @@
 import { ICONS } from '../icons.js';
 import { readModuleInfo } from '../api.js';
+import { t } from '../i18n.js';
 
 let loaded = false;
 
@@ -19,9 +20,9 @@ async function loadVersion() {
     // (the credits below, and the GitHub link).
     const version = parseProp(text, 'version').replace(/-kherio$/i, '');
     const versionCode = parseProp(text, 'versionCode');
-    el.textContent = version ? `${version} (code ${versionCode || '?'})` : 'Versión no disponible';
+    el.textContent = version ? `${version} (code ${versionCode || '?'})` : t('acerca.versionUnavailable');
   } catch (e) {
-    el.textContent = 'No se pudo leer la versión instalada';
+    el.textContent = t('acerca.versionReadError');
   }
 }
 
@@ -30,9 +31,9 @@ export function initAcerca() {
 
   const links = document.querySelectorAll('.about-link');
   const linkMeta = [
-    { icon: ICONS.github, label: 'Repositorio en GitHub' },
-    { icon: ICONS.list, label: 'Historial de cambios (CHANGELOG)' },
-    { icon: ICONS.info, label: 'Reportar un problema' }
+    { icon: ICONS.github, label: t('acerca.repoLink') },
+    { icon: ICONS.list, label: t('acerca.changelogLink') },
+    { icon: ICONS.info, label: t('acerca.issuesLink') }
   ];
   links.forEach((a, i) => {
     a.innerHTML = linkMeta[i].icon + '<span>' + linkMeta[i].label + '</span>';
