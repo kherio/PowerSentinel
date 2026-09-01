@@ -1,7 +1,7 @@
-id=XtremeBS
-name=Xtreme Battery Saver
+id=PowerSentinel
+name=PowerSentinel
 version=v3.7.1
 versionCode=371
-author=kherio (fork of DethByte64/Xtreme-Battery-Saver)
-description=A completely revamped Extreme Battery Saver module for KernelSU and Magisk users who want to squeeze every bit of battery life out of their device.
-updateJson=https://raw.githubusercontent.com/kherio/Xtreme-Battery-Saver/main/update.json
+author=kherio
+description=A policy-driven battery optimization module for rooted Android devices.
+updateJson=https://raw.githubusercontent.com/kherio/PowerSentinel/main/update.json
