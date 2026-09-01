@@ -11,7 +11,7 @@
 ### v3.6.0
   - **Delete-event confirmation** in Config, matching what profile deletion already had - previously one accidental tap could wipe an event's whole configuration with no warning.
   - **Native time picker** for the night profile's start/end hours, replacing free text.
-  - **Daemon watchdog**: relaunches `XtremeBSd` if it dies unexpectedly (crash, OOM kill), instead of leaving the device unmanaged until the next reboot.
+  - **Daemon watchdog**: relaunches `PowerSentineld` if it dies unexpectedly (crash, OOM kill), instead of leaving the device unmanaged until the next reboot.
   - **Thermal profile**: new independent `thermal` event, active whenever the battery reaches a configured temperature, with hysteresis to avoid rapid on/off flapping - same design as the existing time-of-day `night` profile.
   - **Optional charge limiter**: pauses charging once the battery reaches a configured percentage, resumes a few percent below it. Entirely opt-in and requires a device-specific sysfs path (there's no universal one) - does nothing if that path isn't set or isn't writable, rather than guessing.
   - **Manual language selector** in About, in addition to the existing automatic (system-language) detection.
@@ -33,18 +33,18 @@
 
 ### v3.4.0-kherio
   - **Bottom navigation bar** replaces the old top tab strip - icon + label per section, scales cleanly to the two new sections below instead of feeling cramped. The header is now just the app title.
-  - **Battery info on Estado**: level, charging state, temperature, voltage (`dumpsys battery`, added to `XtremeBSd`'s status output alongside a new anchored-regex parser to avoid matching the wrong `voltage:`/`level:` line), plus a rough remaining-time estimate from the battery-level samples collected across the browsing session (persisted in `localStorage`, so it survives a page reload).
+  - **Battery info on Estado**: level, charging state, temperature, voltage (`dumpsys battery`, added to `PowerSentineld`'s status output alongside a new anchored-regex parser to avoid matching the wrong `voltage:`/`level:` line), plus a rough remaining-time estimate from the battery-level samples collected across the browsing session (persisted in `localStorage`, so it survives a page reload).
   - **Currently-active event(s) shown on Estado**: the daemon now reports `ActiveEvents:` in its status (tracking the existing internal `active_events[]` array), rendered as chips under the savings gauge - previously you could see a savings % with no way to tell *which* event caused it.
   - Frequency/load chart history now persists across page reloads (was previously wiped on every reload).
   - **Config tab**: a search box filters the (collapsed) event list by name or by whatever appears in its one-line summary; each event card also shows an "Activo" badge (pulsing dot on the icon) when it's the one currently applied, cross-referencing the same `ActiveEvents` data Estado uses.
-  - **New: Perfiles tab** - save the current `XtremeBS.conf` as a named profile, and load or delete saved profiles later. Profiles are plain files under `XtremeBS/profiles/`, written through the same hardened `XBS-writefile` path as the main config.
+  - **New: Perfiles tab** - save the current `PowerSentinel.conf` as a named profile, and load or delete saved profiles later. Profiles are plain files under `PowerSentinel/profiles/`, written through the same hardened `PowerSentinel-writefile` path as the main config.
   - **New: Acerca de tab** - shows the installed module version (read live from `module.prop`) and links to the repo, changelog, and issue tracker.
   - **Pull-to-refresh** added to Estado and Log (in addition to the existing toolbar refresh button) - drag down from the top of either list to refresh.
   - Verified: the daemon's `dumpsys battery` parsing against a realistic sample dump (correctly ignores "Max charging voltage:" when looking for "voltage:"), and the battery-parsing/remaining-time-estimate JS logic against several synthetic histories (normal drain, too-short window, level going up, no data) - all matched expectations.
 
 ### v3.3.1-kherio
   - **Closed the two remaining low-severity findings from `docs/security-audit.md`** (both left deliberately open in the original audit, now fixed):
-    - `system/bin/XtremeBSd`'s app-handling loops (`enable_pwr_save()` and `disable_pwr_save()`) used an unquoted `for app in $(...)`, which both word-splits and glob-expands every line - a denylist entry containing a shell glob character (e.g. `*`) could expand to filenames in the daemon's working directory instead of being read as a literal package name. Rewrote as a hardened `while IFS= read -r app; do ... done < <(...)`. Verified with a standalone repro: the old loop expanded a `*` denylist line to every file in a test directory; the new one preserves it as the literal string `*`.
+    - `system/bin/PowerSentineld`'s app-handling loops (`enable_pwr_save()` and `disable_pwr_save()`) used an unquoted `for app in $(...)`, which both word-splits and glob-expands every line - a denylist entry containing a shell glob character (e.g. `*`) could expand to filenames in the daemon's working directory instead of being read as a literal package name. Rewrote as a hardened `while IFS= read -r app; do ... done < <(...)`. Verified with a standalone repro: the old loop expanded a `*` denylist line to every file in a test directory; the new one preserves it as the literal string `*`.
     - The same functions matched a package against the allowlist with `grep -E` (extended regex), so a dot in a package name acted as a "match any character" wildcard instead of a literal dot - a package name could false-positive match a similarly-shaped, unrelated allowlist entry. Switched to `grep -Fxq` (fixed string, whole line). Verified: with the old `-E`, `com.example.app` falsely matched an allowlist line `comXexampleXapp`; with `-Fxq` it correctly doesn't.
     - Also quoted two `pgrep $proc` calls that had the same unquoted-expansion issue against `proc_file` lines.
   - `docs/security-audit.md` updated to reflect both findings as fixed, with the verification method used for each.
@@ -88,7 +88,7 @@
     - **Inline safety warning**: if "Suspender" is selected with no apps in the allowlist, the form now shows the same warning the daemon would otherwise apply silently (it disables suspend and notifies).
     - **v1 removed from the form entirely** (not just hidden): the legacy v1/v2 toggle and v1 field editor are gone. A legacy v1 config's lines are preserved verbatim (not lost) if one is ever loaded, but are no longer form-editable - only the raw-text editor can touch them. New/reset configs are always v2.
     - **Duplicate event**: clone an existing event's settings into a new custom event instead of starting from blank fields.
-    - **Try it now**: per-event "Aplicar ahora" / "Detener" buttons call `XBSctl start|stop <event>` directly, to see an event's effect immediately instead of waiting for its real trigger condition.
+    - **Try it now**: per-event "Aplicar ahora" / "Detener" buttons call `PowerSentinelctl start|stop <event>` directly, to see an event's effect immediately instead of waiting for its real trigger condition.
     - **Night profile**: new independent, time-of-day-based event (`night_start`/`night_end`, HH:MM, wraps past midnight) that the daemon activates/deactivates purely on wall-clock time - in parallel with, not instead of, the other events (screen/charging/battery). Requires a reload after changing its hours.
     - **Restore recommended defaults**: a button that replaces the in-memory form with a sensible starting config (boot/charging/screen_off/low_power/night, balanced/aggressive presets) - nothing is written to disk until Guardar is pressed.
   - **Swipe navigation reworked into a real sliding carousel**: the track now follows the finger 1:1 during the drag (with edge rubber-banding) instead of jumping instantly on release, and tab-bar taps animate the same way.
@@ -97,9 +97,9 @@
 
 ### v3.0.0-kherio
   - **Breaking change**: replaced the local httpd/CGI web interface (`webui/`, `action.sh`) with a native KernelSU WebUI-X `webroot/`, built from a new Vite frontend (`frontend/`). No local server is started anymore; the manager's WebView loads `webroot/` directly and talks to the system through `kernelsu`'s `exec()`.
-  - Added `XBS-writefile`: a hardened helper for writes coming from the webui - base64-encoded content over stdin (never interpolated into a shell command), path allowlisted to XtremeBS's own data dir, atomic write (temp file + `mv`), automatic `.bak` of the previous content.
-  - Security audit of the existing scripts (see `docs/security-audit.md`): found and fixed a real command-injection path in `XtremeBSd`'s `notif()` (reachable via the world-writable control file) and a TOCTOU/insecure-tempfile issue with the default `ctl_file` location; both `XtremeBSd` and `XBSctl` now default `ctl_file` inside XtremeBS's own data dir and refuse to trust a pre-existing file not owned by root.
-  - `customize.sh`: sets explicit permissions for the new `XBS-writefile` binary; documented that `webroot/` permissions/SELinux context are managed by KernelSU itself.
+  - Added `PowerSentinel-writefile`: a hardened helper for writes coming from the webui - base64-encoded content over stdin (never interpolated into a shell command), path allowlisted to PowerSentinel's own data dir, atomic write (temp file + `mv`), automatic `.bak` of the previous content.
+  - Security audit of the existing scripts (see `docs/security-audit.md`): found and fixed a real command-injection path in `PowerSentineld`'s `notif()` (reachable via the world-writable control file) and a TOCTOU/insecure-tempfile issue with the default `ctl_file` location; both `PowerSentineld` and `PowerSentinelctl` now default `ctl_file` inside PowerSentinel's own data dir and refuse to trust a pre-existing file not owned by root.
+  - `customize.sh`: sets explicit permissions for the new `PowerSentinel-writefile` binary; documented that `webroot/` permissions/SELinux context are managed by KernelSU itself.
   - Added `docs/webui-x-migration.md` (rationale/architecture) and `docs/security-audit.md` (full findings + remediations) for future reference.
 
 ### v2.2.1-kherio
@@ -107,7 +107,7 @@
 
 ### v2.1.4-kherio
   - Forked release: module now updates from this repo directly, no longer depends on DethByte64's update.json/zip
-  - Added XBSconf CLI for terminal-based configuration
+  - Added PowerSentinelconf CLI for terminal-based configuration
   - Reworked WebUI: shared assets, redesigned Estado/Config/Log tabs, swipe navigation between tabs
   - Daemon now reports per-core frequency and system load in its status output
   - action.sh: avoid launching a duplicate httpd instance
@@ -156,7 +156,7 @@
 
 ### v1.0.4
 
-  - fix a bug where XtremeBS would continually enable when `trigger=boot` is set
+  - fix a bug where PowerSentinel would continually enable when `trigger=boot` is set
   - math changed in battery time prediction
   - process handling now ensures that the
   nice level doesnt get changed behind us
@@ -175,7 +175,7 @@
 ### v1.0.2
 
   - make requested changes for MMAR
-  - configs are now located in `/data/local/tmp/XtremeBS/`
+  - configs are now located in `/data/local/tmp/PowerSentinel/`
 
 ### v1.0.1
 

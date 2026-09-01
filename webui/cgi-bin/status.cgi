@@ -2,4 +2,4 @@
 . "$(dirname "$0")/cgi-common.sh"
 require_token
 echo ""
-cat "$XBS_DATA/XtremeBS.status" 2>/dev/null || echo "Error: Status Unavailable"
+cat "$PowerSentinel_DATA/PowerSentinel.status" 2>/dev/null || echo "Error: Status Unavailable"

@@ -123,7 +123,7 @@ function renderEvents() {
     actions.className = 'event-head-actions';
     actions.addEventListener('click', (e) => e.stopPropagation());
 
-    // Try-it-now: fires the event immediately via XBSctl, without
+    // Try-it-now: fires the event immediately via PowerSentinelctl, without
     // waiting for its real trigger condition (screen off, low battery...)
     const applyBtn = document.createElement('button');
     applyBtn.className = 'btn ghost';
@@ -329,7 +329,7 @@ async function saveFile() {
   const content = currentText();
   try {
     await writeConfig(content);
-    // Apps picker edits live outside XtremeBS.conf (separate allow/deny
+    // Apps picker edits live outside PowerSentinel.conf (separate allow/deny
     // files), so they're persisted alongside it here rather than being
     // part of the serialized config text.
     await Promise.all(model.blocks.map((b) => persistAppsPicker(b.fields)));

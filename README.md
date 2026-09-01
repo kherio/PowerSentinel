@@ -1,9 +1,9 @@
 
-# XtremeBS (Xtreme Battery Saver)
+# PowerSentinel (PowerSentinel)
 
 **Maximize your Android device’s battery life with highly configurable power-saving tools.**
 
-**XtremeBS** is a KernelSU (not yet Magisk) module designed for rooted Android devices, offering aggressive battery optimization through dynamic, event-driven settings. It allows advanced users to fine-tune CPU cores, apps, WiFi, Doze mode, and more to extend battery life significantly—potentially up to 5x stock uptime. While powerful, it requires careful configuration to avoid lag, missed notifications, or device instability.
+**PowerSentinel** is a KernelSU (not yet Magisk) module designed for rooted Android devices, offering aggressive battery optimization through dynamic, event-driven settings. It allows advanced users to fine-tune CPU cores, apps, WiFi, Doze mode, and more to extend battery life significantly—potentially up to 5x stock uptime. While powerful, it requires careful configuration to avoid lag, missed notifications, or device instability.
 
 > [!NOTE]
 > An Android app is in development to simplify configuration and enhance usability. The current web UI (v1.0.6+) will be replaced upon app release.
@@ -16,7 +16,7 @@
 - **CPU Optimization**: Set CPU cores to powersave mode or disable high-power cores automatically or manually.
 - **System Tweaks**: Force Doze mode (light/deep), disable WiFi, enable low RAM mode, or manage Google Mobile Services (GMS) and process priorities.
 - **Event-Driven Control (v2)**: Apply settings based on triggers like `boot`, `charging`, `screen_off`, `low_power`, or custom events.
-- **User-Friendly Tools**: Control via `XBSctl` commands, monitor with logs and status files, and configure via a web UI (v1.0.6+).
+- **User-Friendly Tools**: Control via `PowerSentinelctl` commands, monitor with logs and status files, and configure via a web UI (v1.0.6+).
 - **Safety Features**: Safe mode to recover from misconfigurations and sanity checks to prevent system crashes.
 
 ## Screenshots
@@ -31,7 +31,7 @@
 
 - **KernelSU** (and KernelSU Next, SukiSU Ultra, etc.) — full native WebUI, opened via the "Open" / WebUI icon next to the module in your manager.
 - **Magisk** — full WebUI too, via a local httpd server (Magisk has no native WebUI support): tap the module's **Action** button to open it in your browser. Same interface, same features, just a different way in.
-- **APatch** (Likely compatible via the Magisk path; please report results on [GitHub Issues](https://github.com/kherio/Xtreme-Battery-Saver/issues))
+- **APatch** (Likely compatible via the Magisk path; please report results on [GitHub Issues](https://github.com/kherio/PowerSentinel/issues))
 
 The WebUI detects automatically which path it's running under - nothing to configure.
 
@@ -39,7 +39,7 @@ The WebUI detects automatically which path it's running under - nothing to confi
 
 ## Disclaimer
 
-XtremeBS is an advanced tool that modifies system behavior and requires root access. Misconfiguration may cause lag, missed notifications, alarms, or SystemUI crashes. **Use at your own risk**. I is not responsible for damages or data loss. Always back up your config and test settings incrementally.
+PowerSentinel is an advanced tool that modifies system behavior and requires root access. Misconfiguration may cause lag, missed notifications, alarms, or SystemUI crashes. **Use at your own risk**. I is not responsible for damages or data loss. Always back up your config and test settings incrementally.
 
 Tested primarily on a **Pixel 5** running **ProtonAOSP**. Compatibility varies by device and ROM.
 
@@ -48,22 +48,22 @@ Tested primarily on a **Pixel 5** running **ProtonAOSP**. Compatibility varies b
 ## Installation
 
 1. **Download the Module**:
-   - Grab the latest release from [GitHub Releases](https://github.com/kherio/Xtreme-Battery-Saver/releases/latest).
+   - Grab the latest release from [GitHub Releases](https://github.com/kherio/PowerSentinel/releases/latest).
 
 2. **Install**:
    - Flash the module in your root manager (Magisk/KernelSU).
    - Reboot your device.
 
 3. **Configure**:
-   - A default config file is created at `/data/local/tmp/XtremeBS/XtremeBS.conf`.
-   - Edit the config from the module's WebUI (open it from your manager app - KernelSU Next, WebUI-X, etc. - via the "Open" / WebUI icon next to the module; no browser or local server involved), or use `XBSconf` from a terminal (see below).
-   - After changes made outside the WebUI (e.g. by hand), reload the config with `XBSctl reload` or reboot.
+   - A default config file is created at `/data/local/tmp/PowerSentinel/PowerSentinel.conf`.
+   - Edit the config from the module's WebUI (open it from your manager app - KernelSU Next, WebUI-X, etc. - via the "Open" / WebUI icon next to the module; no browser or local server involved), or use `PowerSentinelconf` from a terminal (see below).
+   - After changes made outside the WebUI (e.g. by hand), reload the config with `PowerSentinelctl reload` or reboot.
 
 ---
 
 ## Configuration
 
-XtremeBS uses a configuration file (`/data/local/tmp/XtremeBS/XtremeBS.conf`) to control its behavior. It supports two formats:
+PowerSentinel uses a configuration file (`/data/local/tmp/PowerSentinel/PowerSentinel.conf`) to control its behavior. It supports two formats:
 
 - **v1 (Legacy)**: Simple `key=value` pairs. Suitable for basic setups but less flexible.
 - **v2 (Recommended)**: Event-driven blocks (e.g., `screen_off={...}`) for dynamic control based on device states or custom triggers.
@@ -74,21 +74,21 @@ XtremeBS uses a configuration file (`/data/local/tmp/XtremeBS/XtremeBS.conf`) to
 ### v2 Configuration (Recommended)
 
 v2 uses **event blocks** to apply settings for specific triggers:
-- **Hardcoded Events**: `boot`, `charging`, `screen_off`, `low_power`, `manual` (triggered by device states or `XBSctl`).
-- **Custom Events**: User-defined (e.g., `my_event`), triggered manually via `XBSctl start my_event`.
+- **Hardcoded Events**: `boot`, `charging`, `screen_off`, `low_power`, `manual` (triggered by device states or `PowerSentinelctl`).
+- **Custom Events**: User-defined (e.g., `my_event`), triggered manually via `PowerSentinelctl start my_event`.
 
 Each block contains settings like `disable_cores` or `handle_apps`. Example:
 
 ```bash
 version=2
 delay=3
-log_file=/sdcard/XtremeBS.log
+log_file=/sdcard/PowerSentinel.log
 log_level=3
 
 screen_off={
   disable_cores=cpu6 cpu7
   handle_apps=nice
-  allowlist=/data/local/tmp/XtremeBS/apps.allow
+  allowlist=/data/local/tmp/PowerSentinel/apps.allow
 }
 
 low_power={
@@ -122,7 +122,7 @@ keep_on_charge=true
 handle_cores=auto
 disable_cores=false
 handle_apps=suspend
-allowlist=/data/local/tmp/XtremeBS/apps.allow
+allowlist=/data/local/tmp/PowerSentinel/apps.allow
 ```
 
 > [!NOTE]
@@ -137,18 +137,18 @@ allowlist=/data/local/tmp/XtremeBS/apps.allow
 | `delay` | Polling interval (seconds) | Integer | `3` | Higher values reduce CPU usage, but may takr longer to detect events and commands. Lower values may use more CPU cycles, but provide faster detection. |
 | `keep_on_charge` | Keep settings active while charging | `true`, `false` | `true` | Only useful with `trigger=auto` (v1) or `low_power` (v2). |
 | `handle_apps` | Manage app behavior | `false`, `kill`, `nice`, `suspend` | `false` | `suspend` requires a valid allowlist. |
-| `allowlist` | File with allowed app packages | Path (e.g., `/data/local/tmp/XtremeBS/apps.allow`) | `/data/local/tmp/XtremeBS/apps.allow` | Create manually; list one package per line (e.g., `com.termux`). |
-| `denylist` | File with system apps to manage | Path (e.g., `/data/local/tmp/XtremeBS/apps.deny`) | `/data/local/tmp/XtremeBS/apps.deny` | Optional; for system apps. |
+| `allowlist` | File with allowed app packages | Path (e.g., `/data/local/tmp/PowerSentinel/apps.allow`) | `/data/local/tmp/PowerSentinel/apps.allow` | Create manually; list one package per line (e.g., `com.termux`). |
+| `denylist` | File with system apps to manage | Path (e.g., `/data/local/tmp/PowerSentinel/apps.deny`) | `/data/local/tmp/PowerSentinel/apps.deny` | Optional; for system apps. |
 | `handle_cores` | Set CPU governors to powersave | `false`, `auto`, Space-separated cores (e.g., `cpu4 cpu5`) | `false` | `auto` targets low-power cores. |
 | `disable_cores` | Disable CPU cores | `false`, `auto`, Space-separated cores (e.g., `cpu6 cpu7`) | `false` | `auto` disables high-power cores; avoid on Samsung devices. |
 | `handle_gms` | Manage Google Mobile Services | `false`, `nice`, `kill` | `false` | `kill` breaks Google apps and SafetyNet/Play Integrity. |
 | `handle_proc` | Reprioritize system processes | `true`, `false` | `false` | Use with `proc_file`; may delay messages/alarms. |
-| `proc_file` | File with processes to reprioritize | Path (e.g., `/data/local/tmp/XtremeBS/proc.list`) | `/data/local/tmp/XtremeBS/proc.list` | Format: `process_name nice_level` (e.g., `netd 19`). |
+| `proc_file` | File with processes to reprioritize | Path (e.g., `/data/local/tmp/PowerSentinel/proc.list`) | `/data/local/tmp/PowerSentinel/proc.list` | Format: `process_name nice_level` (e.g., `netd 19`). |
 | `low_ram` | Enable low RAM mode | `true`, `false` | `false` | Avoid on OnePlus devices; may cause random reboots. |
 | `doze` | Force Doze mode | `false`, `light`, `deep` | `false` | May break alarms; test carefully. |
 | `kill_wifi` | Disable WiFi | `true`, `false` | `false` | Saves power but disables WiFi toggle in Settings. |
 | `notify` | Show notifications | `true`, `false` | `true` | Disable to not use notifications. |
-| `log_file` | Log file path | Path (e.g., `/sdcard/XtremeBS.log`) | `/sdcard/XtremeBS.log` | Set `log_level` for verbosity. |
+| `log_file` | Log file path | Path (e.g., `/sdcard/PowerSentinel.log`) | `/sdcard/PowerSentinel.log` | Set `log_level` for verbosity. |
 | `log_level` | Logging verbosity | `1` (INFO), `2` (VERBOSE), `3` (DEBUG) | `2` | Higher levels aid debugging. |
 
 **Allowlist Example** (`apps.allow`):
@@ -165,43 +165,43 @@ system_server 10
 ```
 
 > [!CAUTION]
-> Always include essential apps (e.g., keyboard, terminal) in `apps.allow` when using `handle_apps=suspend`. Without a valid allowlist, apps may become unusable, requiring `XBSctl safe` via ADB.
+> Always include essential apps (e.g., keyboard, terminal) in `apps.allow` when using `handle_apps=suspend`. Without a valid allowlist, apps may become unusable, requiring `PowerSentinelctl safe` via ADB.
 
 ---
 
-## XBSctl Commands
+## PowerSentinelctl Commands
 
-Control XtremeBS with the `XBSctl` command-line tool (run as root via `su`):
+Control PowerSentinel with the `PowerSentinelctl` command-line tool (run as root via `su`):
 
 | Command | Description | Usage |
 |---------|-------------|-------|
-| `start` | Start XtremeBS (v1) or an event (v2) | `XBSctl start` (v1/manual) or `XBSctl start my_event` (v2) |
-| `stop` | Stop XtremeBS (v1) or an event (v2) | `XBSctl stop` (v1/manual) or `XBSctl stop my_event` (v2) |
-| `reload` | Reload the config | `XBSctl reload` |
-| `pause` | Pause trigger handling | `XBSctl pause` |
-| `resume` | Resume trigger handling or exit safe mode | `XBSctl resume` |
-| `safe` | Enter safe mode (stops XtremeBS, unsuspends apps) | `XBSctl safe` |
+| `start` | Start PowerSentinel (v1) or an event (v2) | `PowerSentinelctl start` (v1/manual) or `PowerSentinelctl start my_event` (v2) |
+| `stop` | Stop PowerSentinel (v1) or an event (v2) | `PowerSentinelctl stop` (v1/manual) or `PowerSentinelctl stop my_event` (v2) |
+| `reload` | Reload the config | `PowerSentinelctl reload` |
+| `pause` | Pause trigger handling | `PowerSentinelctl pause` |
+| `resume` | Resume trigger handling or exit safe mode | `PowerSentinelctl resume` |
+| `safe` | Enter safe mode (stops PowerSentinel, unsuspends apps) | `PowerSentinelctl safe` |
 
 > [!TIP]
-> Use `XBSctl safe` via ADB (`adb shell XBSctl safe`) if the device becomes unresponsive due to misconfiguration.
+> Use `PowerSentinelctl safe` via ADB (`adb shell PowerSentinelctl safe`) if the device becomes unresponsive due to misconfiguration.
 
 ---
 
-## XBSconf: configuring without a browser
+## PowerSentinelconf: configuring without a browser
 
-Besides the WebUI, `XtremeBS.conf` can be generated and edited entirely from a terminal (ADB, Termux, or any root shell):
+Besides the WebUI, `PowerSentinel.conf` can be generated and edited entirely from a terminal (ADB, Termux, or any root shell):
 
 | Command | Description |
 |---------|-------------|
-| `XBSconf` | Interactive wizard; walks through every option and (re)writes the whole config |
-| `XBSconf show` | Print the current config |
-| `XBSconf get KEY [--event NAME]` | Read a single value (global, or inside an event block) |
-| `XBSconf set KEY VALUE [--event NAME]` | Update a single value in place |
-| `XBSconf events` | List configured v2 events |
-| `XBSconf add-event NAME` | Add an empty v2 event block |
-| `XBSconf rm-event NAME` | Remove a v2 event block |
+| `PowerSentinelconf` | Interactive wizard; walks through every option and (re)writes the whole config |
+| `PowerSentinelconf show` | Print the current config |
+| `PowerSentinelconf get KEY [--event NAME]` | Read a single value (global, or inside an event block) |
+| `PowerSentinelconf set KEY VALUE [--event NAME]` | Update a single value in place |
+| `PowerSentinelconf events` | List configured v2 events |
+| `PowerSentinelconf add-event NAME` | Add an empty v2 event block |
+| `PowerSentinelconf rm-event NAME` | Remove a v2 event block |
 
-Run as root, e.g. `su -c XBSconf` or `adb shell su -c "XBSconf set doze light --event screen_off"`. A `.bak` copy of the previous config is kept on every change. Files it writes use the exact same format as the WebUI, so you can freely switch between both.
+Run as root, e.g. `su -c PowerSentinelconf` or `adb shell su -c "PowerSentinelconf set doze light --event screen_off"`. A `.bak` copy of the previous config is kept on every change. Files it writes use the exact same format as the WebUI, so you can freely switch between both.
 
 ---
 
@@ -222,7 +222,7 @@ npm install
 npm run build      # writes to ../webroot
 ```
 
-For local iteration with hot reload, `npm run dev` starts a Vite dev server, but neither backend's APIs are available outside a real manager/device, so most functionality (status, config load/save, log) will need a real device/emulator to test end to end - see `docs/webui-x-migration.md` for the architecture and rationale, and `docs/security-audit.md` for the write path's security model (`XBS-writefile`).
+For local iteration with hot reload, `npm run dev` starts a Vite dev server, but neither backend's APIs are available outside a real manager/device, so most functionality (status, config load/save, log) will need a real device/emulator to test end to end - see `docs/webui-x-migration.md` for the architecture and rationale, and `docs/security-audit.md` for the write path's security model (`PowerSentinel-writefile`).
 
 ---
 
@@ -233,8 +233,8 @@ For local iteration with hot reload, `npm run dev` starts a Vite dev server, but
    - Avoid aggressive settings like `disable_cores` initially, especially on Samsung or OnePlus devices.
 
 2. **Debugging**:
-   - Check `/data/local/tmp/XtremeBS/XtremeBS.status` for CPU, WiFi, and Doze states.
-   - Set `log_level=3` and review `/sdcard/XtremeBS.log` for detailed logs if issues occur.
+   - Check `/data/local/tmp/PowerSentinel/PowerSentinel.status` for CPU, WiFi, and Doze states.
+   - Set `log_level=3` and review `/sdcard/PowerSentinel.log` for detailed logs if issues occur.
    - Run `su -c ps -eo "%cpu pid cmd" | sort -n -k1,1` to identify high-CPU processes for `proc_file`.
 
 3. **Device-Specific Notes**:
@@ -242,7 +242,7 @@ For local iteration with hot reload, `npm run dev` starts a Vite dev server, but
    - **OnePlus Devices**: Disable `low_ram` to avoid random reboots.
 
 4. **Security**:
-   - Restrict config file permissions: `chmod 600 /data/local/tmp/XtremeBS/*`.
+   - Restrict config file permissions: `chmod 600 /data/local/tmp/PowerSentinel/*`.
    - Avoid sharing configs, as they may include sensitive app data or cause instability on different devices.
 
 ---
@@ -250,31 +250,31 @@ For local iteration with hot reload, `npm run dev` starts a Vite dev server, but
 ## FAQ
 
 **Q: My device soft-loops or SystemUI crashes. What do I do?**  
-**A**: You likely enabled too many aggressive options. Enter safe mode with `adb shell XBSctl safe`, disable risky settings (e.g., `disable_cores`, `low_ram`), and test incrementally. Check logs for clues.
+**A**: You likely enabled too many aggressive options. Enter safe mode with `adb shell PowerSentinelctl safe`, disable risky settings (e.g., `disable_cores`, `low_ram`), and test incrementally. Check logs for clues.
 
-**Q: Will XtremeBS brick my device?**  
+**Q: Will PowerSentinel brick my device?**  
 **A**: No, it won’t cause hard bootloops. However, misconfigurations can cause lag, missed alarms, or crashes. Always back up your device.
 
-**Q: Is XtremeBS plug-and-play?**  
+**Q: Is PowerSentinel plug-and-play?**  
 **A**: No, it requires manual configuration. Start with the default config and adjust based on your device’s needs. An app is in development to simplify this.
 
-**Q: How effective is XtremeBS?**  
+**Q: How effective is PowerSentinel?**  
 **A**: With proper tuning, it can extend battery life significantly. Effectiveness depends on your config and device.
 
 **Q: Why does my config not take effect?**  
-**A**: Ensure you run `XBSctl reload` or reboot after changes. Verify event names (v2) are valid and check logs for errors. Use the web UI to avoid syntax issues.
+**A**: Ensure you run `PowerSentinelctl reload` or reboot after changes. Verify event names (v2) are valid and check logs for errors. Use the web UI to avoid syntax issues.
 
-**Q: Can I use XtremeBS with other battery-saving modules?**  
+**Q: Can I use PowerSentinel with other battery-saving modules?**  
 **A**: Yes, but conflicts may occur (e.g., with L Speed, Naptime). Disable overlapping features in other modules and test thoroughly.
 
 ---
 
 ## Troubleshooting
 
-- **Unresponsive Device**: Boot into recovery, edit `/data/local/tmp/XtremeBS/XtremeBS.conf` to set `safemode=1`, reboot, and fix the config.
-- **No Battery Improvement**: Verify active events (`XBSctl status` in future releases or check logs). Try `handle_apps=suspend` with a robust allowlist.
+- **Unresponsive Device**: Boot into recovery, edit `/data/local/tmp/PowerSentinel/PowerSentinel.conf` to set `safemode=1`, reboot, and fix the config.
+- **No Battery Improvement**: Verify active events (`PowerSentinelctl status` in future releases or check logs). Try `handle_apps=suspend` with a robust allowlist.
 - **Missed Alarms/Notifications**: Disable `doze` or `handle_proc`, as they may delay background tasks.
-- **Report Issues**: Open a [GitHub Issue](https://github.com/kherio/Xtreme-Battery-Saver/issues) with your config, device details, and logs.
+- **Report Issues**: Open a [GitHub Issue](https://github.com/kherio/PowerSentinel/issues) with your config, device details, and logs.
 
 ---
 
@@ -282,11 +282,11 @@ For local iteration with hot reload, `npm run dev` starts a Vite dev server, but
 
 We welcome contributions! To contribute:
 
-1. Fork the repository: [DethByte64/Xtreme-Battery-Saver](https://github.com/kherio/Xtreme-Battery-Saver).
+1. Fork the repository: [DethByte64/PowerSentinel](https://github.com/kherio/PowerSentinel).
 
 2. Submit pull requests with bug fixes, features, or documentation improvements.
 
-3. Report bugs or suggest features via [GitHub Issues](https://github.com/kherio/Xtreme-Battery-Saver/issues).
+3. Report bugs or suggest features via [GitHub Issues](https://github.com/kherio/PowerSentinel/issues).
 
 ---
 
@@ -304,4 +304,4 @@ We welcome contributions! To contribute:
 
 ## License
 
-XtremeBS is released under the [GPLv3 License](LICENSE.md).
+PowerSentinel is released under the [GPLv3 License](LICENSE.md).

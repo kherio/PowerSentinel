@@ -12,7 +12,7 @@ The module shipped its WebUI as a local `httpd` server (`action.sh` launched
 - **CGI scripts as the API surface**: every read/write was a shell script
   invoked per-request, with all the quoting/escaping hazards that implies
   (see `docs/security-audit.md` for what that actually cost us in
-  `XtremeBSd`'s `notif()`).
+  `PowerSentineld`'s `notif()`).
 - **Three separate HTML documents** (`/`, `/conf`, `/log`) with duplicated
   boilerplate, full page reloads on navigation, and no shared build tooling.
 - A dependency on `httpd` and a hardcoded port (8081) being free.
@@ -40,9 +40,9 @@ shell. No local server, no port, no CGI process per request - the WebView
 - `src/api.js` replaces the five CGI scripts with five functions
   (`readStatus`, `readConfig`, `writeConfig`, `readLog`, `exportLog`), each
   a single `exec()` call (or two, for `writeConfig`'s save-then-reload).
-  Same on-disk paths as before (`XtremeBS.conf`, `.status`, `.log`) - only
+  Same on-disk paths as before (`PowerSentinel.conf`, `.status`, `.log`) - only
   the transport changed.
-- Config writes go through the new `XBS-writefile` helper instead of a raw
+- Config writes go through the new `PowerSentinel-writefile` helper instead of a raw
   shell redirect - see `docs/security-audit.md` for why.
 
 ## Trade-offs worth knowing about
@@ -52,7 +52,7 @@ shell. No local server, no port, no CGI process per request - the WebView
   is the risk we discussed before starting: an earlier session had moved
   *away* from a WebUI-X-based fork specifically because of a bug attributed
   to that panel. If the same class of issue resurfaces here, the fallback
-  is `XBSconf` from a terminal - it never depended on either web
+  is `PowerSentinelconf` from a terminal - it never depended on either web
   interface.
 - **No more arbitrary browser access.** The old httpd approach meant you
   could open `http://127.0.0.1:8081` from any browser on the device. The
