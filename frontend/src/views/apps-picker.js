@@ -71,18 +71,34 @@ export function mountAppsPicker(container, fields, onDirty) {
       list.style.overflowY = 'auto';
       list.style.marginTop = '8px';
       const q = (filter || '').toLowerCase();
-      const shown = pkgs.filter((p) => p.toLowerCase().indexOf(q) !== -1);
+      const filtered = pkgs.filter((p) => p.toLowerCase().indexOf(q) !== -1);
+
+      // Pin already-selected apps (allowed or restricted) to the top, so
+      // toggling one doesn't require scrolling the whole list to see it
+      // again - alphabetical order is preserved within each group, since
+      // `pkgs` already comes pre-sorted from listPackages().
+      const selected = filtered.filter((p) => state.allow.has(p) || state.deny.has(p));
+      const rest = filtered.filter((p) => !state.allow.has(p) && !state.deny.has(p));
+      const shown = selected.concat(rest);
 
       if (!shown.length) {
         list.innerHTML = `<div class="log-empty">${t('apps.noResults')}</div>`;
       } else {
-        shown.forEach((pkg) => {
+        shown.forEach((pkg, i) => {
           const row = document.createElement('div');
           row.style.display = 'flex';
           row.style.alignItems = 'center';
           row.style.gap = '8px';
           row.style.padding = '6px 0';
           row.style.borderBottom = '1px solid var(--border)';
+          // A subtle divider between the pinned (selected) apps and the
+          // rest, so the pinning itself is visually obvious rather than
+          // looking like an arbitrary reorder.
+          if (selected.length && i === selected.length) {
+            row.style.borderTop = '1px dashed var(--border)';
+            row.style.marginTop = '4px';
+            row.style.paddingTop = '10px';
+          }
 
           const name = document.createElement('div');
           name.textContent = pkg;
