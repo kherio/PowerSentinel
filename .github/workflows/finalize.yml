@@ -51,7 +51,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if git grep -n -I -E 'XtremeBS|XBSctl|XBSconf|XBS-writefile|Xtreme-Battery-Saver|Xtreme Battery Saver|xtremebs-webui' -- ':!docs/webui-x-migration.md'; then
+          if git grep -n -I -E 'XtremeBS|XBSctl|XBSconf|XBS-writefile|Xtreme-Battery-Saver|Xtreme Battery Saver|xtremebs-webui' -- ':!docs/webui-x-migration.md' ':!.github/workflows/finalize.yml'; then
             echo 'Legacy identity tokens remain in tracked text files.'
             exit 1
           fi
