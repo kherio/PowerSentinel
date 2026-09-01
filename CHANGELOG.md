@@ -1,4 +1,17 @@
 
+### v3.6.0
+  - **Delete-event confirmation** in Config, matching what profile deletion already had - previously one accidental tap could wipe an event's whole configuration with no warning.
+  - **Native time picker** for the night profile's start/end hours, replacing free text.
+  - **Daemon watchdog**: relaunches `XtremeBSd` if it dies unexpectedly (crash, OOM kill), instead of leaving the device unmanaged until the next reboot.
+  - **Thermal profile**: new independent `thermal` event, active whenever the battery reaches a configured temperature, with hysteresis to avoid rapid on/off flapping - same design as the existing time-of-day `night` profile.
+  - **Optional charge limiter**: pauses charging once the battery reaches a configured percentage, resumes a few percent below it. Entirely opt-in and requires a device-specific sysfs path (there's no universal one) - does nothing if that path isn't set or isn't writable, rather than guessing.
+  - **Manual language selector** in About, in addition to the existing automatic (system-language) detection.
+  - **Copy diagnostics** button in About: bundles the installed version, live status, and the last 40 log lines into one block, copied to the clipboard (with a manual-copy fallback).
+  - **App picker** now shows a small indicator next to apps that are currently running.
+  - **Fixed a real bug**: `KNOWN_GLOBAL_KEYS` (used to parse the config file) was a hand-maintained list that had drifted out of sync with the actual set of global fields - newly added fields were silently dropped from the in-memory config model and risked being duplicated on save. Now derived automatically from the field definitions, so this can't happen again for future fields.
+  - Also fixed two leftover untranslated strings the previous release's translation pass had missed (group section headers, and the toggle switch's "Enabled/Disabled" text) - neither had an accented character, which is why a simple search hadn't caught them.
+  - All daemon-side logic (watchdog detection, thermal hysteresis, charge-limit behavior including the safety case of a misconfigured path) and the config-parsing fix were verified with standalone test scripts before being included.
+
 ### v3.5.1
   - **Fixed**: "kherio" was still showing on the module's install/list screen in the root manager app (KernelSU Next, ReSukiSU, etc.), because that screen reads `module.prop`'s `version` field directly - the earlier fix only stripped it from the WebUI's own "Acerca de"/"About" tab, not from the field the manager itself displays. `module.prop` and `update.json`'s `version` fields no longer carry the "-kherio" suffix at all; `versionCode` (a plain integer, already higher than upstream's) is what the update checker actually compares, so this doesn't affect update detection. The suffix is now only used internally in the Release/tag name, which the manager UI never shows.
 
