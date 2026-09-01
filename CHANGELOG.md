@@ -1,4 +1,7 @@
 
+### v3.4.1-kherio
+  - Acerca de: the displayed version no longer shows the internal "-kherio" suffix (e.g. "v3.4.1" instead of "v3.4.1-kherio") - that suffix only exists internally so update checkers see a distinct/newer version than upstream, it has no place in anything the user reads. Left untouched everywhere it's actual developer/repo attribution (the credits line, the GitHub links).
+
 ### v3.4.0-kherio
   - **Bottom navigation bar** replaces the old top tab strip - icon + label per section, scales cleanly to the two new sections below instead of feeling cramped. The header is now just the app title.
   - **Battery info on Estado**: level, charging state, temperature, voltage (`dumpsys battery`, added to `XtremeBSd`'s status output alongside a new anchored-regex parser to avoid matching the wrong `voltage:`/`level:` line), plus a rough remaining-time estimate from the battery-level samples collected across the browsing session (persisted in `localStorage`, so it survives a page reload).
