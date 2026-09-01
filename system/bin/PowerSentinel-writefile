@@ -1,0 +1,59 @@
+#!/system/bin/bash
+# PowerSentinel-writefile <target-path>
+#
+# Reads base64-encoded content from stdin and writes it to <target-path>,
+# used by the webroot frontend (via `kernelsu`'s exec()) instead of a raw
+# shell redirect, so that:
+#
+#   1. Arbitrary file content (which the user can type freely into the
+#      raw-text config editor) is never interpolated into a shell command
+#      line - it travels as base64 and is decoded server-side, so quoting/
+#      injection via the content itself is not possible.
+#   2. Only a small allowlist of paths can be written at all, even if the
+#      caller (webroot JS, or anything acting on its behalf) is somehow
+#      compromised or buggy.
+#   3. The write is atomic (temp file + mv) and keeps one .bak of the
+#      previous content, matching what PowerSentinelconf already does for
+#      PowerSentinel.conf.
+
+set -u
+
+TARGET="${1:-}"
+
+# Allowlist: only files inside PowerSentinel's own data dir, matching the
+# small, fixed set of files the webui ever needs to write. Reject
+# anything else outright - including attempts to escape via "..",
+# symlink-looking paths, or writing into system/adb directories.
+ALLOWED_DIR="/data/local/tmp/PowerSentinel"
+
+fail() { echo "PowerSentinel-writefile: $1" >&2; exit 1; }
+
+[ -n "$TARGET" ] || fail "missing target path"
+case "$TARGET" in
+  "$ALLOWED_DIR"/*) ;;
+  *) fail "target not allowed: $TARGET" ;;
+esac
+case "$TARGET" in
+  *..*) fail "path traversal rejected: $TARGET" ;;
+esac
+[ -L "$TARGET" ] && fail "refusing to write through a symlink: $TARGET"
+
+mkdir -p "$ALLOWED_DIR" 2>/dev/null
+
+TMP_FILE="${TARGET}.tmp.$$"
+DECODE_OK=1
+
+base64 -d > "$TMP_FILE" 2>/dev/null || DECODE_OK=0
+if [ "$DECODE_OK" != "1" ] || [ ! -s "$TMP_FILE" ]; then
+  rm -f "$TMP_FILE"
+  fail "failed to decode incoming content"
+fi
+
+if [ -f "$TARGET" ]; then
+  cp -f "$TARGET" "${TARGET}.bak" 2>/dev/null
+fi
+
+chmod 0644 "$TMP_FILE" 2>/dev/null
+mv -f "$TMP_FILE" "$TARGET" || fail "failed to move into place"
+
+echo "OK"
