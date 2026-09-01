@@ -12,7 +12,12 @@ async function loadVersion() {
   const el = document.getElementById('a-version');
   try {
     const text = await readModuleInfo();
-    const version = parseProp(text, 'version');
+    // module.prop's raw version string carries a "-kherio" suffix
+    // (needed internally so update checkers see a distinct/newer
+    // version than upstream), but that suffix has no place in anything
+    // the user actually reads - only in developer/repo attribution
+    // (the credits below, and the GitHub link).
+    const version = parseProp(text, 'version').replace(/-kherio$/i, '');
     const versionCode = parseProp(text, 'versionCode');
     el.textContent = version ? `${version} (code ${versionCode || '?'})` : 'Versión no disponible';
   } catch (e) {
