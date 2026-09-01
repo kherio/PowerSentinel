@@ -28,9 +28,6 @@ jobs:
             git rm -- XtremeBS.zip
           fi
 
-          # Recreate the two legacy controller/config tools from the common
-          # ancestor when they are absent on the migration branch, then let
-          # the identity pass rename their internals safely.
           if [ ! -e system/bin/PowerSentinelctl ]; then
             git show origin/main:system/bin/XBSctl > system/bin/PowerSentinelctl
             chmod 0755 system/bin/PowerSentinelctl
@@ -61,6 +58,23 @@ jobs:
                s#xbs-locale-override#powersentinel-locale-override#g; \
                s#xbs#powersentinel#g' "${files[@]}"
           fi
+
+          # git grep only sees tracked files; explicitly process files created
+          # above from origin/main so their legacy identity is also migrated.
+          perl -pi -e \
+            's#kherio/Xtreme-Battery-Saver#kherio/PowerSentinel#g; \
+             s#Xtreme-Battery-Saver#PowerSentinel#g; \
+             s#Xtreme Battery Saver#PowerSentinel#g; \
+             s#XBS-writefile#PowerSentinel-writefile#g; \
+             s#XBSctl#PowerSentinelctl#g; \
+             s#XBSconf#PowerSentinelconf#g; \
+             s#XBSd#PowerSentineld#g; \
+             s#XtremeBS#PowerSentinel#g; \
+             s#Xbs#PowerSentinel#g; \
+             s#XBS#PowerSentinel#g; \
+             s#xbs-locale-override#powersentinel-locale-override#g; \
+             s#xbs#powersentinel#g' \
+            system/bin/PowerSentinelctl system/bin/PowerSentinelconf
 
           if [ -f module.prop ]; then
             sed -i 's/^id=XtremeBS$/id=PowerSentinel/; s/^name=Xtreme Battery Saver$/name=PowerSentinel/; s/^author=kherio (fork of DethByte64\/Xtreme-Battery-Saver)$/author=kherio/' module.prop
