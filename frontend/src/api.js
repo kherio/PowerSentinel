@@ -1,151 +1,62 @@
-import { exec } from 'kernelsu';
+// Picks, once at startup, which backend actually works in this
+// environment - the native KernelSU exec() bridge (WebUI-X-capable
+// managers: KernelSU Next, etc.) or the httpd/CGI fallback that
+// action.sh starts (Magisk, which has no native webroot support). Every
+// other module in the app imports from here and never needs to know
+// which one is actually in use - both backends export the exact same
+// function set with the exact same behavior.
+const FUNCTIONS = [
+  'readStatus', 'readConfig', 'writeConfig', 'readLog', 'exportLog',
+  'listPackages', 'readAppListFile', 'writeAppListFile',
+  'startEvent', 'stopEvent',
+  'listProfiles', 'readProfile', 'saveProfile', 'deleteProfile',
+  'readModuleInfo', 'listRunningPackages'
+];
 
-// Same on-disk layout the daemon (XtremeBSd) and XBSconf already use -
-// unchanged from the httpd/CGI era, only the transport changed.
-const DATA_DIR = '/data/local/tmp/XtremeBS';
-const CONF_FILE = `${DATA_DIR}/XtremeBS.conf`;
-const STATUS_FILE = `${DATA_DIR}/XtremeBS.status`;
-const DEFAULT_LOG_FILE = `${DATA_DIR}/XtremeBS.log`;
+let backendPromise = null;
 
-// Resolves the log_file path from the config the same way load_log.cgi
-// (and XtremeBSd's own getconf()) did, since it's user-overridable.
-const RESOLVE_LOG_PATH =
-  `f=$(grep '^log_file=' '${CONF_FILE}' 2>/dev/null | cut -d= -f2); ` +
-  `echo "\${f:-${DEFAULT_LOG_FILE}}"`;
-
-class XbsApiError extends Error {}
-
-async function run(command) {
-  const { errno, stdout, stderr } = await exec(command);
-  if (errno !== 0) {
-    throw new XbsApiError((stderr && stderr.trim()) || `Command failed (errno ${errno})`);
+async function detectBackend() {
+  // Try the native bridge first (it's the richer, more secure transport
+  // - no network socket involved at all) with a short timeout, since a
+  // WebView with no bridge injected can otherwise hang rather than
+  // reject immediately.
+  const ksu = await import('./backend-ksu.js');
+  try {
+    await Promise.race([
+      ksu.__probe(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('probe timeout')), 800))
+    ]);
+    return ksu;
+  } catch (e) {
+    const cgi = await import('./backend-cgi.js');
+    await cgi.__probe(); // let this one throw for real if neither works - nothing left to fall back to
+    return cgi;
   }
-  return stdout;
 }
 
-export async function readStatus() {
-  return run(`cat '${STATUS_FILE}' 2>/dev/null || echo 'Error: Status Unavailable'`);
+function getBackend() {
+  if (!backendPromise) backendPromise = detectBackend();
+  return backendPromise;
 }
 
-export async function readConfig() {
-  return run(`cat '${CONF_FILE}' 2>/dev/null || echo ''`);
-}
+// A thin wrapper per function, rather than re-exporting the resolved
+// module directly, since the backend isn't known synchronously at
+// import time (every caller already awaits these, so the extra await
+// here to resolve the backend first is free).
+const api = {};
+FUNCTIONS.forEach((name) => {
+  api[name] = async (...args) => (await getBackend())[name](...args);
+});
 
-// Writes go through XBS-writefile instead of a raw shell redirect: it
-// only accepts paths under an allowlisted prefix, writes atomically
-// (temp file + mv) and keeps a .bak of the previous content. The config
-// text itself is never interpolated into the shell command line - it's
-// base64-encoded first, so it can't break out of quoting no matter what
-// the user typed into the raw-text editor.
-export async function writeConfig(text) {
-  const b64 = btoa(unescape(encodeURIComponent(text)));
-  await run(`echo '${b64}' | XBS-writefile '${CONF_FILE}'`);
-  await run('XBSctl reload');
-}
+export const {
+  readStatus, readConfig, writeConfig, readLog, exportLog,
+  listPackages, readAppListFile, writeAppListFile,
+  startEvent, stopEvent,
+  listProfiles, readProfile, saveProfile, deleteProfile,
+  readModuleInfo, listRunningPackages
+} = api;
 
-export async function readLog() {
-  return run(`logf=$(${RESOLVE_LOG_PATH}); cat "$logf" 2>/dev/null || echo ''`);
-}
-
-// Copies the live log file to Downloads instead of re-uploading its
-// content (as save_log.cgi used to) - simpler and avoids re-encoding a
-// potentially large file through the command line.
-export async function exportLog() {
-  const dest = `/sdcard/Download/XtremeBS-log-${Date.now()}.txt`;
-  await run(`logf=$(${RESOLVE_LOG_PATH}); cp "$logf" '${dest}'`);
-  return dest;
-}
-
-export { XbsApiError };
-
-// ---------- Apps (allowlist/denylist picker) ----------
-
-// Mirrors what enable_pwr_save() itself queries ("-3" = third-party only)
-// plus an opt-in for system packages, since some users do want to
-// restrict a preinstalled app.
-export async function listPackages(includeSystem) {
-  const flag = includeSystem ? '' : ' -3';
-  const out = await run(`pm list packages${flag} | cut -d: -f2- | sort`);
-  return out.split('\n').map((s) => s.trim()).filter(Boolean);
-}
-
-// allow/deny-list files are plain one-package-per-line text files, at
-// whatever path the config currently points to (user-editable, so not
-// hardcoded like CONF_FILE/STATUS_FILE).
-export async function readAppListFile(path) {
-  if (!path) return '';
-  return run(`cat '${path}' 2>/dev/null || echo ''`);
-}
-
-export async function writeAppListFile(path, lines) {
-  const text = lines.join('\n') + (lines.length ? '\n' : '');
-  const b64 = btoa(unescape(encodeURIComponent(text)));
-  await run(`echo '${b64}' | XBS-writefile '${path}'`);
-}
-
-// ---------- Manual event control (the "try it now" button) ----------
-
-export async function startEvent(name) {
-  await run(`XBSctl start ${name}`);
-}
-
-export async function stopEvent(name) {
-  await run(`XBSctl stop ${name}`);
-}
-
-// ---------- Saved profiles (whole event-config snapshots) ----------
-
-const PROFILES_DIR = `${DATA_DIR}/profiles`;
-
-// Defense in depth: even though the UI only ever lets the user type
-// [a-zA-Z0-9_-] into the profile-name field, every call site here
-// re-validates before building a path/command from it, the same
-// posture as event names elsewhere in this codebase.
-function sanitizeProfileName(name) {
-  const clean = (name || '').replace(/[^a-zA-Z0-9_-]/g, '');
-  if (!clean) throw new XbsApiError('Invalid profile name');
-  return clean;
-}
-
-export async function listProfiles() {
-  const out = await run(`mkdir -p '${PROFILES_DIR}'; ls -1 '${PROFILES_DIR}' 2>/dev/null | sed 's/\\.conf$//'`);
-  return out.split('\n').map((s) => s.trim()).filter(Boolean);
-}
-
-export async function readProfile(name) {
-  const clean = sanitizeProfileName(name);
-  return run(`cat '${PROFILES_DIR}/${clean}.conf' 2>/dev/null || echo ''`);
-}
-
-export async function saveProfile(name, content) {
-  const clean = sanitizeProfileName(name);
-  const b64 = btoa(unescape(encodeURIComponent(content)));
-  await run(`mkdir -p '${PROFILES_DIR}'`);
-  await run(`echo '${b64}' | XBS-writefile '${PROFILES_DIR}/${clean}.conf'`);
-}
-
-export async function deleteProfile(name) {
-  const clean = sanitizeProfileName(name);
-  await run(`rm -f '${PROFILES_DIR}/${clean}.conf'`);
-}
-
-// ---------- Installed module info (for the "Acerca de" screen) ----------
-
-export async function readModuleInfo() {
-  return run(`cat "$(find /data/adb -maxdepth 2 -type d -name XtremeBS 2>/dev/null | head -1)/module.prop" 2>/dev/null || echo ''`);
-}
-
-// ---------- Currently-running packages (apps picker "running now" hint) ----------
-
-// Deliberately NOT parsing `dumpsys batterystats` here: its output format
-// is notoriously complex and has changed across Android versions, and a
-// wrong parse could point someone at the wrong app to restrict - worse
-// than no suggestion at all. `ps -A`'s last column is the process name,
-// which for a regular app process IS its package name (or
-// "package:service" for a secondary process) - a much simpler, more
-// reliable signal for "this is doing something right now", even if it's
-// not a full battery-drain ranking.
-export async function listRunningPackages() {
-  const out = await run(`ps -A -o NAME 2>/dev/null | tail -n +2`);
-  return new Set(out.split('\n').map((s) => s.trim()).filter(Boolean));
-}
+// Both backends throw this same error class for request failures, so
+// callers can keep doing `catch (e) { toast(e.message) }` without
+// caring which backend actually ran.
+export { XbsApiError } from './errors.js';
