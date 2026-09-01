@@ -92,3 +92,45 @@ export async function startEvent(name) {
 export async function stopEvent(name) {
   await run(`XBSctl stop ${name}`);
 }
+
+// ---------- Saved profiles (whole event-config snapshots) ----------
+
+const PROFILES_DIR = `${DATA_DIR}/profiles`;
+
+// Defense in depth: even though the UI only ever lets the user type
+// [a-zA-Z0-9_-] into the profile-name field, every call site here
+// re-validates before building a path/command from it, the same
+// posture as event names elsewhere in this codebase.
+function sanitizeProfileName(name) {
+  const clean = (name || '').replace(/[^a-zA-Z0-9_-]/g, '');
+  if (!clean) throw new XbsApiError('Invalid profile name');
+  return clean;
+}
+
+export async function listProfiles() {
+  const out = await run(`mkdir -p '${PROFILES_DIR}'; ls -1 '${PROFILES_DIR}' 2>/dev/null | sed 's/\\.conf$//'`);
+  return out.split('\n').map((s) => s.trim()).filter(Boolean);
+}
+
+export async function readProfile(name) {
+  const clean = sanitizeProfileName(name);
+  return run(`cat '${PROFILES_DIR}/${clean}.conf' 2>/dev/null || echo ''`);
+}
+
+export async function saveProfile(name, content) {
+  const clean = sanitizeProfileName(name);
+  const b64 = btoa(unescape(encodeURIComponent(content)));
+  await run(`mkdir -p '${PROFILES_DIR}'`);
+  await run(`echo '${b64}' | XBS-writefile '${PROFILES_DIR}/${clean}.conf'`);
+}
+
+export async function deleteProfile(name) {
+  const clean = sanitizeProfileName(name);
+  await run(`rm -f '${PROFILES_DIR}/${clean}.conf'`);
+}
+
+// ---------- Installed module info (for the "Acerca de" screen) ----------
+
+export async function readModuleInfo() {
+  return run(`cat "$(find /data/adb -maxdepth 2 -type d -name XtremeBS 2>/dev/null | head -1)/module.prop" 2>/dev/null || echo ''`);
+}

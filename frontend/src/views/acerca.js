@@ -1,0 +1,42 @@
+import { ICONS } from '../icons.js';
+import { readModuleInfo } from '../api.js';
+
+let loaded = false;
+
+function parseProp(text, key) {
+  const m = text.split('\n').find((l) => l.trim().startsWith(key + '='));
+  return m ? m.split('=').slice(1).join('=').trim() : '';
+}
+
+async function loadVersion() {
+  const el = document.getElementById('a-version');
+  try {
+    const text = await readModuleInfo();
+    const version = parseProp(text, 'version');
+    const versionCode = parseProp(text, 'versionCode');
+    el.textContent = version ? `${version} (code ${versionCode || '?'})` : 'Versión no disponible';
+  } catch (e) {
+    el.textContent = 'No se pudo leer la versión instalada';
+  }
+}
+
+export function initAcerca() {
+  document.querySelector('.about-logo').innerHTML = ICONS.gauge;
+
+  const links = document.querySelectorAll('.about-link');
+  const linkMeta = [
+    { icon: ICONS.github, label: 'Repositorio en GitHub' },
+    { icon: ICONS.list, label: 'Historial de cambios (CHANGELOG)' },
+    { icon: ICONS.info, label: 'Reportar un problema' }
+  ];
+  links.forEach((a, i) => {
+    a.innerHTML = linkMeta[i].icon + '<span>' + linkMeta[i].label + '</span>';
+  });
+}
+
+export function activateAcerca() {
+  if (!loaded) loaded = true;
+  loadVersion();
+}
+
+export function deactivateAcerca() {}

@@ -1,11 +1,30 @@
 import { ICONS } from '../icons.js';
 import { readStatus } from '../api.js';
-import { toast } from '../helpers.js';
+import { toast, escapeHtml } from '../helpers.js';
 
 const GAUGE_C = 2 * Math.PI * 52;
 const HISTORY_MAX = 30; // ~90s at 3s polling
-let freqHistory = [];
-let loadHistory = [];
+const HISTORY_KEY = 'xbs-estado-history';
+const BATT_WINDOW_MS = 3 * 60 * 60 * 1000; // keep up to 3h of battery samples for the drain-rate estimate
+
+function loadPersisted() {
+  try {
+    const raw = localStorage.getItem(HISTORY_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch (e) {
+    return {};
+  }
+}
+function savePersisted() {
+  try {
+    localStorage.setItem(HISTORY_KEY, JSON.stringify({ freqHistory, loadHistory, battHistory }));
+  } catch (e) { /* storage full/unavailable - charts just won't survive a reload this time */ }
+}
+
+const persisted = loadPersisted();
+let freqHistory = persisted.freqHistory || [];
+let loadHistory = persisted.loadHistory || [];
+let battHistory = persisted.battHistory || [];
 let maxLoadSeen = 1;
 let pollTimer = null;
 let firstLoad = true;
@@ -50,6 +69,56 @@ const CORE_META = {
   offline: { cls: 'core-off', mapCls: 'off', label: 'Apagado', icon: ICONS.power }
 };
 
+// Rough remaining-time estimate from the battery-level samples collected
+// in this browsing session (persisted in localStorage, so it survives a
+// page reload too) - not a substitute for Android's own estimate, just a
+// simple drop-per-hour projection from whatever window of data we have.
+function estimateRemainingHours(currentLevel) {
+  const cutoff = Date.now() - BATT_WINDOW_MS;
+  const recent = battHistory.filter((p) => p.t >= cutoff);
+  if (recent.length < 2) return null;
+  const first = recent[0];
+  const last = recent[recent.length - 1];
+  const hoursElapsed = (last.t - first.t) / 3600000;
+  if (hoursElapsed < 0.05) return null; // need at least ~3 minutes of real span
+  const levelDrop = first.level - last.level;
+  if (levelDrop <= 0) return null; // flat or charging over that window
+  const ratePerHour = levelDrop / hoursElapsed;
+  return ratePerHour > 0 ? currentLevel / ratePerHour : null;
+}
+
+function renderBattery(batt) {
+  const card = document.getElementById('e-battery-card');
+  if (!batt) { card.style.display = 'none'; return; }
+  card.style.display = 'flex';
+
+  const fill = document.getElementById('e-battery-fill');
+  fill.style.width = batt.level + '%';
+  fill.classList.toggle('low', batt.level <= 20 && !batt.charging);
+  fill.classList.toggle('mid', batt.level > 20 && batt.level <= 50 && !batt.charging);
+  document.getElementById('e-battery-pct').textContent = batt.level + '%';
+  document.getElementById('e-battery-status').textContent = batt.charging ? 'Cargando' : 'Batería';
+
+  if (!batt.charging) {
+    battHistory.push({ t: Date.now(), level: batt.level });
+    const cutoff = Date.now() - BATT_WINDOW_MS;
+    battHistory = battHistory.filter((p) => p.t >= cutoff);
+  }
+
+  const bits = [`${(batt.temp / 10).toFixed(1)}°C`, `${(batt.voltage / 1000).toFixed(2)} V`];
+  if (batt.charging) {
+    bits.push('en carga');
+  } else {
+    const hours = estimateRemainingHours(batt.level);
+    if (hours !== null) {
+      const h = Math.floor(hours);
+      const m = Math.round((hours - h) * 60);
+      bits.push(`≈${h}h ${m}m restantes`);
+    }
+  }
+  document.getElementById('e-battery-sub').textContent = bits.join(' · ');
+}
+
 function render(text) {
   document.getElementById('e-raw-status').textContent = text;
 
@@ -73,6 +142,10 @@ function render(text) {
       sys.wifi = m[1].toLowerCase();
     } else if ((m = line.match(/^doze:\s*(light|deep|inactive)$/i))) {
       sys.doze = m[1].toLowerCase();
+    } else if ((m = line.match(/^battery:\s*level=(\d+)\s+temp=(-?\d+)\s+voltage=(\d+)\s+charging=(true|false)$/i))) {
+      sys.battery = { level: parseInt(m[1], 10), temp: parseInt(m[2], 10), voltage: parseInt(m[3], 10), charging: m[4] === 'true' };
+    } else if ((m = line.match(/^activeevents:\s*(.*)$/i))) {
+      sys.activeEvents = m[1].trim() ? m[1].trim().split(/\s+/) : [];
     } else if (line.toLowerCase().indexOf('error') === 0) {
       sys.error = line;
     } else {
@@ -82,6 +155,13 @@ function render(text) {
 
   const heroTitle = document.getElementById('e-hero-title');
   const heroSub = document.getElementById('e-hero-sub');
+
+  renderBattery(sys.battery);
+
+  const aeRow = document.getElementById('e-active-events');
+  aeRow.innerHTML = (sys.activeEvents && sys.activeEvents.length)
+    ? sys.activeEvents.map((e) => `<span class="ae-chip">${escapeHtml(e)}</span>`).join('')
+    : '';
 
   if (sys.error) {
     setGauge(0);
@@ -222,6 +302,8 @@ function render(text) {
   } else {
     extraBox.style.display = 'none';
   }
+
+  savePersisted();
 }
 
 async function loadStatus(silent) {
@@ -252,4 +334,9 @@ export function activateEstado() {
 // doesn't keep spawning root shells in the background.
 export function deactivateEstado() {
   if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+}
+
+// Used by main.js's pull-to-refresh gesture.
+export function refreshEstado() {
+  return loadStatus(false);
 }

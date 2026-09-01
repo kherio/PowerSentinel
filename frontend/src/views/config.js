@@ -10,6 +10,7 @@ import {
 let model = null;
 let original = '';
 let coreList = null;
+let activeEventNames = new Set();
 let activeView = 'form';
 let loaded = false;
 
@@ -75,7 +76,8 @@ function renderEvents() {
   list.innerHTML = '';
   model.blocks.forEach((block, idx) => {
     const card = document.createElement('div');
-    card.className = 'event-card' + (block.__expanded ? ' expanded' : '');
+    const isActiveNow = activeEventNames.has(block.name);
+    card.className = 'event-card' + (block.__expanded ? ' expanded' : '') + (isActiveNow ? ' is-active-now' : '');
 
     const head = document.createElement('div');
     head.className = 'event-head';
@@ -87,6 +89,7 @@ function renderEvents() {
     const iconEl = document.createElement('div');
     iconEl.className = 'event-icon';
     iconEl.innerHTML = EVENT_ICONS[block.name] || ICONS.bolt;
+    if (isActiveNow) iconEl.title = 'Activo ahora mismo';
     head.appendChild(iconEl);
 
     const isPredefined = PREDEFINED_EVENTS.indexOf(block.name) !== -1;
@@ -106,6 +109,13 @@ function renderEvents() {
       });
     }
     head.appendChild(nameEl);
+
+    if (isActiveNow) {
+      const activeBadge = document.createElement('span');
+      activeBadge.className = 'badge on event-active-badge';
+      activeBadge.innerHTML = '<span class="b-dot"></span>Activo';
+      head.appendChild(activeBadge);
+    }
 
     const actions = document.createElement('div');
     actions.className = 'event-head-actions';
@@ -249,6 +259,21 @@ function renderEvents() {
       predefSelect.appendChild(opt);
     });
   }
+
+  filterEventCards();
+}
+
+// Filters the (collapsed-by-default) event list by name or by whatever
+// shows in the one-line summary (e.g. "apps: nice · WiFi off"), so a
+// search for "wifi" finds events touching WiFi without needing to open
+// every card first.
+function filterEventCards() {
+  const term = document.getElementById('c-event-search').value.trim().toLowerCase();
+  const cards = document.querySelectorAll('#c-events-list .event-card');
+  cards.forEach((card) => {
+    const matches = !term || card.textContent.toLowerCase().indexOf(term) !== -1;
+    card.style.display = matches ? '' : 'none';
+  });
 }
 
 function renderVersionView() {
@@ -375,30 +400,43 @@ export function initConfig() {
   });
 
   document.getElementById('c-tab-form').addEventListener('click', () => switchSubTab('form'));
+  document.getElementById('c-event-search').addEventListener('input', filterEventCards);
   document.getElementById('c-tab-text').addEventListener('click', () => switchSubTab('text'));
   document.getElementById('c-save-btn').addEventListener('click', saveFile);
   document.getElementById('c-reload-btn').addEventListener('click', () => loadFile(true));
   document.getElementById('c-restore-btn').addEventListener('click', restoreRecommended);
 
-  // Detect core count from the live status so cores in the form get
-  // real chips (best-effort - fine if it stays empty on first load).
-  readStatus().then((text) => {
-    const cores = [];
-    text.split('\n').forEach((line) => {
-      const m = line.trim().match(/^cpu(\d+):/i);
-      if (m) cores.push(parseInt(m[1], 10));
-    });
-    if (cores.length) {
-      coreList = cores.sort((a, b) => a - b);
-      if (loaded) renderVersionView();
-    }
-  }).catch(() => {});
+  // Detect core count + currently-active events from the live status so
+  // cores in the form get real chips and event cards can show an
+  // "activo ahora" badge (best-effort - fine if it stays empty at first).
+  refreshLiveStatus();
 
   loadFile(false);
 }
 
+function refreshLiveStatus() {
+  return readStatus().then((text) => {
+    const cores = [];
+    let activeEvents = [];
+    text.split('\n').forEach((rawLine) => {
+      const line = rawLine.trim();
+      let m;
+      if ((m = line.match(/^cpu(\d+):/i))) cores.push(parseInt(m[1], 10));
+      else if ((m = line.match(/^activeevents:\s*(.*)$/i))) {
+        activeEvents = m[1].trim() ? m[1].trim().split(/\s+/) : [];
+      }
+    });
+    if (cores.length) coreList = cores.sort((a, b) => a - b);
+    activeEventNames = new Set(activeEvents);
+    if (loaded) renderVersionView();
+  }).catch(() => {});
+}
+
 export function activateConfig() {
-  // Nothing to poll - config is loaded once and edited locally.
+  // Refresh which events are active-right-now (for the accordion badges)
+  // whenever the user switches into this tab - safe to re-render at this
+  // moment since nothing here has input focus yet.
+  refreshLiveStatus();
 }
 
 export function deactivateConfig() {}
