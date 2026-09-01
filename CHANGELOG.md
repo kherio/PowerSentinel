@@ -1,4 +1,14 @@
 
+### v3.3.0-kherio
+  - **Config tab UX overhaul**:
+    - **Fixed a real bug**: the shared `.filter` class was only styled via a `select.filter` CSS selector, so every text/number `<input class="filter">` (paths, night hours, custom event name, app search...) had zero theme styling and rendered with the browser's tiny default form-control look. This was very likely the biggest single contributor to "the text is too small" - fixed by styling `.filter` generically for both `<input>` and `<select>`.
+    - Bumped field labels (13→15px) and help/warning text (11→13px, tighter line-height) - readable without squinting on a phone screen.
+    - More breathing room between fields (14px → 20px margin).
+    - **Fields grouped into labeled clusters** (Horario / Apps / CPU / Sistema) within each event instead of one flat list of 14 fields - `config-form.js`'s `FIELD_DEFS` entries now carry a `group`, and `renderFieldsForm` inserts a small subheading whenever the group changes.
+    - **Event cards are now a collapsed-by-default accordion**: each shows just its icon, name, and a one-line auto-generated summary (e.g. "apps: nice · núcleos: auto · WiFi off") until tapped open. A newly added or duplicated event starts expanded (so you can configure it immediately); existing/loaded events start collapsed, so 5 events x 14 fields no longer means scrolling through a huge wall on open.
+    - Event header reworked: bigger touch targets, the 4 action buttons (aplicar/detener/duplicar/eliminar) grouped together with a visual divider instead of sitting flush against the name, and a chevron indicating expand state.
+  - Verified with a standalone jsdom test that field grouping renders the expected group headers for both a config-managing event (Apps/CPU/Sistema) and the night event (Horario first).
+
 ### v3.2.4-kherio
   - **Reverted the live-dragging carousel after 3 failed fix attempts (v3.2.1/2/3), confirmed still broken by on-device screenshots**: each pane was still rendering wider than the screen (grid rows and toolbar buttons visibly cut off past the right edge), across percentage-based flex sizing and two different pixel-measurement strategies. Rather than keep guessing blind without a way to render-test locally, reverted the switching mechanism to the simple, previously-confirmed-working approach: only the active tab is rendered (`display:none` on the others), toggled instantly on tab tap or swipe.
   - Swipe still switches tabs (a completed left/right drag past a small threshold), it just no longer visually tracks the finger mid-drag - that tracking is exactly the part that kept breaking, and isn't worth the reliability cost until it can be revisited with actual on-device debugging tools rather than remote guessing.
