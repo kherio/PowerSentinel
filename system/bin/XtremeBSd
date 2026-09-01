@@ -400,8 +400,18 @@ enable_pwr_save() {
   fi
   # Handle Apps
   if [ "$handle_apps" != "false" ]; then
-    for app in $(pm list packages -3 | cut -d: -f2- && [ -s "$denylist" ] && cat "$denylist"); do
-      if grep -q -E "$app" "$allowlist"; then
+    # SECURITY: iterate with a hardened while-read instead of an unquoted
+    # for-loop - the old `for app in $(...)` word-splits AND glob-expands
+    # every line, so a denylist entry containing a shell glob character
+    # (e.g. "*") could unexpectedly match filenames in the daemon's
+    # working directory instead of being treated as a literal package
+    # name. `grep -Fxq` (fixed string, whole line) instead of `-E`
+    # likewise avoids a package name being misinterpreted as a regex
+    # pattern against the allowlist (dots match any character in a
+    # regex) and avoids partial/substring matches against other entries.
+    while IFS= read -r app; do
+      [ -n "$app" ] || continue
+      if grep -Fxq -- "$app" "$allowlist"; then
         continue
       fi
       if [ "$handle_apps" = "nice" ]; then
@@ -417,7 +427,7 @@ enable_pwr_save() {
         am force-stop "$app" &>/dev/null &
         pm suspend "$app" &>/dev/null &
       fi
-    done
+    done < <(pm list packages -3 | cut -d: -f2-; [ -s "$denylist" ] && cat "$denylist")
   fi
 
   # Handle GMS , this will be leaving soon.
@@ -435,8 +445,8 @@ enable_pwr_save() {
   # Handle processes
   if [ "$handle_proc" = "true" ]; then
     while [ "$lock" = "1" ]; do
-      while read proc nice; do
-        pid="$(pgrep $proc)"
+      while IFS= read -r proc nice; do
+        pid="$(pgrep "$proc")"
         [ ! "$nice" ] && nice="10"
         if [ "$(cat /proc/$pid/stat | cut -d' ' -f19)" != "$nice" ]; then
           log_msg 3 "Renicing $proc to $nice"
@@ -607,8 +617,10 @@ disable_pwr_save() {
 
   # Handle Apps
   if [ "$handle_apps" != "false" ]; then
-    for app in $(pm list packages -3 | cut -d: -f2- && [ -s "$denylist" ] && cat "$denylist"); do
-      if grep -q -E "$app" "$allowlist"; then
+    # SECURITY: see the matching comment in enable_pwr_save() above.
+    while IFS= read -r app; do
+      [ -n "$app" ] || continue
+      if grep -Fxq -- "$app" "$allowlist"; then
         continue
       fi
       if [ "$handle_apps" = "nice" ]; then
@@ -620,7 +632,7 @@ disable_pwr_save() {
         log_msg 3 "Unsuspending $app"
         pm unsuspend "$app" &>/dev/null &
       fi
-    done
+    done < <(pm list packages -3 | cut -d: -f2-; [ -s "$denylist" ] && cat "$denylist")
   fi
 
   # Handle GMS
@@ -635,9 +647,9 @@ disable_pwr_save() {
   fi
   # Handle Processes
   if [ "$handle_proc" = "true" ]; then
-    while read proc nice; do
+    while IFS= read -r proc nice; do
       log_msg 3 "Resetting the nice level for $proc"
-      renice -n 0 "$(pgrep $proc)"
+      renice -n 0 "$(pgrep "$proc")"
     done < "$proc_file"
   fi
   # Low RAM

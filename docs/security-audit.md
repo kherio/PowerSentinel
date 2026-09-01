@@ -71,49 +71,56 @@ well-timed attacker could still win a single boot-time window before
 `ensure_ctl_file` has run once with the file root-owned and `600`, no
 unprivileged app can write to it again.
 
-### 3. Package names used as unescaped regex — Low — Documented, not changed
+### 3. Package names used as unescaped regex — Low — Fixed
 
 ```sh
+# before
 if grep -q -E "$app" "$allowlist"; then
 ```
 
 (`system/bin/XtremeBSd`, both `enable_pwr_save()` and `disable_pwr_save()`)
 
-`$app` comes from `pm list packages` output or the denylist file, and is
-used as an **extended regex** against the allowlist, not a literal string.
-Android package names are restricted to letters/digits/underscore/dot, so
-this isn't an injection path, but dots match any character - a package
-whose name happens to be a "near miss" of an allowlist entry (differing
-only where the allowlist has a literal dot) could match when it
-shouldn't, or vice versa. Impact is a wrong suspend/allow decision for a
-single app, not code execution.
+`$app` comes from `pm list packages` output or the denylist file, and was
+used as an **extended regex** against the allowlist, not a literal
+string. Dots match any character in a regex, so a package whose name
+happened to be a "near miss" of an allowlist entry (differing only where
+the allowlist has a literal dot) could match when it shouldn't, or an
+unrelated package could match via substring. Impact was a wrong
+suspend/allow decision for a single app, not code execution.
 
-**Not changed**: switching to `grep -F` (fixed string) would fix this, but
-would also silently break the feature if anyone is deliberately relying on
-partial/regex matches in their allowlist today (undocumented, but the code
-has clearly supported it since `-E` was chosen deliberately). Flagging
-here rather than changing behavior unprompted.
+**Fix applied**: `grep -Fxq -- "$app" "$allowlist"` - fixed string (`-F`,
+no regex interpretation) and whole-line (`-x`, no partial/substring
+match). Verified with a standalone repro: with the old `-E`, the pattern
+`com.example.app` falsely matched an allowlist line `comXexampleXapp`
+(the dots acted as wildcards); with `-Fxq` it correctly does not match.
+This does mean the allowlist no longer supports partial/regex matching
+if anyone was relying on that (undocumented) behavior - exact package
+names only, matching how the WebUI's app picker already writes it.
 
-### 4. Unquoted word-splitting in app/process loops — Low — Documented, not changed
+### 4. Unquoted word-splitting in app/process loops — Low — Fixed
 
 ```sh
+# before
 for app in $(pm list packages -3 | cut -d: -f2- && [ -s "$denylist" ] && cat "$denylist"); do
 ```
 ```sh
+# before
 pid="$(pgrep $proc)"
 ```
 
-Both loops iterate over unquoted command substitutions, so both word
-splitting and pathname (glob) expansion apply to each line. Android
-package names won't contain spaces or shell glob characters in practice,
-and `proc_file` is a config file the device owner controls directly - so
-this is low real-world risk - but it's not hardened against a
-`proc_file`/`denylist` line containing a `*` or similar that happens to
-match filenames in the daemon's working directory at the time. A proper
-fix (`while IFS= read -r line; do ... done < file`, with `set -f` around
-the loop) is a larger, behavior-sensitive change across several loops in a
-file that's otherwise untouched this session - left for a follow-up
-rather than bundled in here.
+Both loops iterated over unquoted command substitutions, so both word
+splitting and pathname (glob) expansion applied to each line. A
+`denylist`/`proc_file` line containing a shell glob character (e.g. `*`)
+could expand against filenames in the daemon's working directory instead
+of being treated as a literal package/process name.
+
+**Fix applied**: both `for app in $(...)` loops (`enable_pwr_save()` and
+`disable_pwr_save()`) are now `while IFS= read -r app; do ... done < <(...)`,
+and both `pgrep $proc` calls are now `pgrep "$proc"`, with `read -r` used
+throughout. Verified with a standalone repro: with the old unquoted
+`for`, a denylist containing a `*` line expanded to every filename in the
+test directory (`allowlist`, `denylist_glob`, unrelated files); with the
+`while read` version it's preserved as the literal string `*`.
 
 ### 5. `frontend/`'s dev-only dependency (esbuild) — Moderate, dev-only — Not applicable to shipped code
 
