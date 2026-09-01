@@ -1,4 +1,8 @@
 
+### v3.5.0-kherio
+  - **Full English translation**, automatic based on the device's default language: the WebUI now shows English for any non-Spanish system locale, and Spanish otherwise. New `src/i18n.js` (locale detection + a full es/en dictionary + a `t()` helper) is used across every view - static HTML labels via `data-i18n` attributes, dynamic text (toasts, generated summaries, form field labels/help/warnings, event presets) via `t()` calls. Verified: locale detection checks only the browser's *primary* (default) language, ignoring secondary preferences - a first version incorrectly matched Spanish anywhere in the preference list, fixed and re-verified against several `navigator.languages` combinations (Spanish-primary, English-primary-Spanish-secondary, non-Spanish-only, empty). Also verified variable interpolation and the fallback-to-key behavior for the `t()` helper.
+  - `module.prop`'s description field updated.
+
 ### v3.4.1-kherio
   - Acerca de: the displayed version no longer shows the internal "-kherio" suffix (e.g. "v3.4.1" instead of "v3.4.1-kherio") - that suffix only exists internally so update checkers see a distinct/newer version than upstream, it has no place in anything the user reads. Left untouched everywhere it's actual developer/repo attribution (the credits line, the GitHub links).
 
