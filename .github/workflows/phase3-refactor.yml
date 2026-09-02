@@ -1,0 +1,85 @@
+name: Phase 3 state refactor
+
+on:
+  push:
+    paths:
+      - '.github/phase3-trigger'
+
+permissions:
+  contents: write
+
+jobs:
+  refactor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Refactor runtime state
+        shell: bash
+        run: |
+          set -e
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('system/bin/PowerSentineld')
+          s = p.read_text()
+          anchor = '. "$(dirname "$0")/PowerSentinel-config.sh"\n'
+          assert anchor in s
+          if 'PowerSentinel-state.sh' not in s:
+              s = s.replace(anchor, anchor + '. "$(dirname "$0")/PowerSentinel-state.sh"\n', 1)
+          s = s.replace('if [ "$was_thermal" = "true" ]; then', 'if [ "$(state_get thermal)" = "true" ]; then', 1)
+          s = s.replace('was_thermal="false"\n', '', 1)
+          s = s.replace('state_init\n', '', 1)
+          marker = 'init_v2() {\n\n'
+          assert marker in s
+          s = s.replace(marker, marker + 'state_init\n\n', 1)
+          pairs = [
+            ('if [ "$was_charging" != "" ]; then\n    if [ "$charging" != "$was_charging" ]; then', 'if state_changed charging "$charging" && [ "$(state_get charging)" != "" ]; then'),
+            ('if [ "$was_low_power" != "" ]; then\n    if [ "$low_power" != "$was_low_power" ]; then', 'if state_changed low_power "$low_power" && [ "$(state_get low_power)" != "" ]; then'),
+            ('if [ "$was_screen_on" != "" ]; then\n    if [ "$screen_on" != "$was_screen_on" ]; then', 'if state_changed screen_on "$screen_on" && [ "$(state_get screen_on)" != "" ]; then'),
+            ('if [ "$was_night" != "" ]; then\n    if [ "$night_now" != "$was_night" ]; then', 'if state_changed night "$night_now" && [ "$(state_get night)" != "" ]; then'),
+            ('if [ "$thermal_now" != "$was_thermal" ]; then', 'if state_changed thermal "$thermal_now"; then'),
+          ]
+          for old, new in pairs:
+              assert old in s, old
+              s = s.replace(old, new, 1)
+          for old, new in [
+            ('was_charging="$charging"', 'state_commit charging "$charging"'),
+            ('was_low_power="$low_power"', 'state_commit low_power "$low_power"'),
+            ('was_screen_on="$screen_on"', 'state_commit screen_on "$screen_on"'),
+            ('was_night="$night_now"', 'state_commit night "$night_now"'),
+            ('was_thermal="$thermal_now"', 'state_commit thermal "$thermal_now"'),
+          ]:
+              assert old in s, old
+              s = s.replace(old, new, 1)
+          p.write_text(s)
+          Path('system/bin/PowerSentinel-state.sh').write_text('''#!/system/bin/bash
+# PowerSentinel internal runtime state. Phase 3 keeps observed state
+# explicit and separate from event detection and policy execution.
+declare -gA PS_STATE=()
+
+state_init() {
+  PS_STATE=()
+  PS_STATE[charging]=""
+  PS_STATE[low_power]=""
+  PS_STATE[screen_on]=""
+  PS_STATE[night]=""
+  PS_STATE[thermal]=""
+}
+
+state_get() { printf '%s\\n' "${PS_STATE[$1]-}"; }
+state_changed() { [ "${PS_STATE[$1]-}" != "$2" ]; }
+state_commit() { PS_STATE[$1]="$2"; }
+''')
+          PY
+          bash -n system/bin/PowerSentineld
+          bash -n system/bin/PowerSentinel-state.sh
+          ! grep -nE '(^|[^[:alnum:]_])was_(charging|low_power|screen_on|night|thermal)=' system/bin/PowerSentineld
+          git diff --check
+      - name: Cleanup and commit
+        shell: bash
+        run: |
+          rm -f .github/phase3-trigger .github/workflows/phase3-refactor.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add system/bin/PowerSentineld system/bin/PowerSentinel-state.sh .github/workflows
+          git commit -m 'refactor(daemon): introduce explicit runtime state'
+          git push
