@@ -1,6 +1,7 @@
 #!/system/bin/bash
 conf="/data/local/tmp/PowerSentinel/PowerSentinel.conf"
 . "$(dirname "$0")/PowerSentinel-config.sh"
+. "$(dirname "$0")/PowerSentinel-detect.sh"
 declare -a active_events
 declare -a cpus
 declare -a cpu_freqs
@@ -16,19 +17,6 @@ getconf() {
   # Compatibility wrapper: callers keep the existing interface while all
   # global reads go through the centralized configuration cache.
   config_get "$1" "${2-}"
-}
-
-is_device() {
-  # is device charging|screen|low_power
-  if [ "$1" != "low_power" ]; then
-    dumpsys deviceidle get $1
-  else
-    if [ $(settings get global low_power) = 1 ]; then
-      echo true
-    else
-      echo false
-    fi
-  fi
 }
 
 # SECURITY: creates/repairs the control file the webui/PowerSentinelctl write
@@ -102,10 +90,8 @@ is_thermal_now() {
     echo false
     return
   fi
-  local temp_raw temp_c hysteresis_c
-  temp_raw=$(dumpsys battery 2>/dev/null | grep -m1 -oE '^[[:space:]]*temperature:[[:space:]]*[0-9]+' | grep -oE '[0-9]+$')
-  [ -z "$temp_raw" ] && { echo false; return; }
-  temp_c=$(( temp_raw / 10 ))
+  local temp_c hysteresis_c
+  temp_c="$(detect_battery_temp_c)"
   if [ "$was_thermal" = "true" ]; then
     hysteresis_c=$(( thermal_threshold - 3 ))
     [ "$temp_c" -ge "$hysteresis_c" ] && echo true || echo false
@@ -124,17 +110,14 @@ is_thermal_now() {
 # fails silently rather than touching anything else.
 was_charge_paused="false"
 check_charge_limit() {
-  local charge_limit charge_limit_node batt_dump level charging
+  local charge_limit charge_limit_node level charging
   charge_limit=$(getconf charge_limit 0)
   charge_limit_node=$(getconf charge_limit_node "")
   [ "$charge_limit" -gt 0 ] 2>/dev/null || return
   [ -n "$charge_limit_node" ] && [ -w "$charge_limit_node" ] || return
 
-  batt_dump="$(dumpsys battery 2>/dev/null)"
-  level=$(echo "$batt_dump" | grep -m1 -oE '^[[:space:]]*level:[[:space:]]*[0-9]+' | grep -oE '[0-9]+$')
-  charging="false"
-  echo "$batt_dump" | grep -qE '^[[:space:]]*(AC|USB|Wireless) powered:[[:space:]]*true' && charging="true"
-  [ -z "$level" ] && return
+  level="$DETECT_BATTERY_LEVEL"
+  charging="$DETECT_BATTERY_CHARGING"
 
   if [ "$charging" = "true" ] && [ "$level" -ge "$charge_limit" ]; then
     if [ "$was_charge_paused" != "true" ]; then
@@ -172,19 +155,14 @@ check_charge_limit() {
 #     since a busy device is the one time aggressive action would
 #     actually be felt
 compute_pressure_score() {
-  local batt_dump level temp_raw temp_c charging_flag score
-  local screen_on load1 load_int night_now over
+  local level temp_c charging_flag score
+  local screen_on load_int night_now over
 
-  batt_dump="$(dumpsys battery 2>/dev/null)"
-  level=$(echo "$batt_dump" | grep -m1 -oE '^[[:space:]]*level:[[:space:]]*[0-9]+' | grep -oE '[0-9]+$')
-  temp_raw=$(echo "$batt_dump" | grep -m1 -oE '^[[:space:]]*temperature:[[:space:]]*[0-9]+' | grep -oE '[0-9]+$')
-  charging_flag="false"
-  echo "$batt_dump" | grep -qE '^[[:space:]]*(AC|USB|Wireless) powered:[[:space:]]*true' && charging_flag="true"
-  level="${level:-100}"
-  temp_c=$(( ${temp_raw:-250} / 10 ))
+  level="$DETECT_BATTERY_LEVEL"
+  temp_c="$(detect_battery_temp_c)"
+  charging_flag="$DETECT_BATTERY_CHARGING"
 
   screen_on="$(is_device screen)"
-  load1=$(cut -d' ' -f1 /proc/loadavg 2>/dev/null)
   get_night_times
   night_now="$(is_night_now)"
 
@@ -199,7 +177,7 @@ compute_pressure_score() {
   [ "$screen_on" = "false" ] && score=$(( score + 15 ))
   [ "$night_now" = "true" ] && score=$(( score + 10 ))
 
-  load_int="${load1%%.*}"
+  load_int="${DETECT_LOAD1%%.*}"
   case "$load_int" in ''|*[!0-9]*) load_int=0 ;; esac
   if [ "$load_int" -ge 2 ]; then
     score=$(( score - 20 ))
@@ -454,18 +432,17 @@ update_status() {
   [ -n "$load" ] && echo "Load: $load" >> "$status_file"
   unset doze wifi load
 
-  # Battery - anchored patterns (^[[:space:]]*key:) so e.g. "level:" never
-  # matches an unrelated line like "Max charging voltage:".
-  batt_dump="$(dumpsys battery 2>/dev/null)"
-  batt_level="$(echo "$batt_dump" | grep -m1 -oE '^[[:space:]]*level:[[:space:]]*[0-9]+' | grep -oE '[0-9]+$')"
-  batt_temp_raw="$(echo "$batt_dump" | grep -m1 -oE '^[[:space:]]*temperature:[[:space:]]*[0-9]+' | grep -oE '[0-9]+$')"
-  batt_voltage="$(echo "$batt_dump" | grep -m1 -oE '^[[:space:]]*voltage:[[:space:]]*[0-9]+' | grep -oE '[0-9]+$')"
-  batt_charging="false"
-  echo "$batt_dump" | grep -qE '^[[:space:]]*(AC|USB|Wireless) powered:[[:space:]]*true' && batt_charging="true"
-  if [ -n "$batt_level" ]; then
-    echo "Battery: level=${batt_level} temp=${batt_temp_raw:-0} voltage=${batt_voltage:-0} charging=${batt_charging}" >> "$status_file"
+  # Battery. update_status() can run at any point during an event
+  # transition (it's called from both enable_pwr_save and
+  # disable_pwr_save), not only once per poll cycle, so it refreshes
+  # detection itself here rather than trusting whatever the main loop's
+  # own detect_refresh last captured - the WebUI's Estado tab reads this
+  # file, and stale battery data there would be worse than one extra
+  # dumpsys call on a state change.
+  detect_refresh
+  if [ -n "$DETECT_BATTERY_LEVEL" ]; then
+    echo "Battery: level=${DETECT_BATTERY_LEVEL} temp=${DETECT_BATTERY_TEMP_RAW} voltage=${DETECT_BATTERY_VOLTAGE} charging=${DETECT_BATTERY_CHARGING}" >> "$status_file"
   fi
-  unset batt_dump batt_level batt_temp_raw batt_voltage batt_charging
 
   # Currently-active events (empty list if none), for the WebUI to show
   # "what's applied right now" instead of just the aggregate savings %.
@@ -1031,6 +1008,12 @@ else
 fi
 
 while true; do
+
+  # One shared snapshot of battery/load state for everything this cycle
+  # reads (compute_pressure_score, is_thermal_now, check_charge_limit) -
+  # see PowerSentinel-detect.sh for why this replaced four independent
+  # dumpsys calls.
+  detect_refresh
 
   # Check for command
   cmd="$(cat $ctl_file)"
