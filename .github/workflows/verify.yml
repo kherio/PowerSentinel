@@ -1,0 +1,45 @@
+name: Verify PowerSentinel
+
+on:
+  push:
+    paths:
+      - '.github/verify-trigger'
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Build WebUI
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+      - name: Validate shell scripts
+        run: |
+          set -e
+          bash -n service.sh customize.sh
+          bash -n system/bin/PowerSentineld
+          bash -n system/bin/PowerSentinelctl
+          bash -n system/bin/PowerSentinelconf
+          bash -n system/bin/PowerSentinel-writefile
+      - name: Verify KernelSU-only WebUI
+        run: |
+          set -e
+          test -f webroot/index.html
+          test ! -e action.sh
+          test ! -e frontend/src/backend-cgi.js
+          test ! -e webui
+          ! grep -RniE 'httpd|cgi-bin|127\.0\.0\.1:8081|backend-cgi|\.token|\.serve' frontend service.sh customize.sh system docs README.md
+      - name: Package module
+        run: |
+          set -e
+          rm -rf /tmp/PowerSentinel-package
+          mkdir -p /tmp/PowerSentinel-package
+          cp -a META-INF customize.sh module.prop service.sh system webroot /tmp/PowerSentinel-package/
+          cd /tmp/PowerSentinel-package
+          zip -qr "$GITHUB_WORKSPACE/PowerSentinel-v3.8.0.zip" .
+          unzip -t "$GITHUB_WORKSPACE/PowerSentinel-v3.8.0.zip"
