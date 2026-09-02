@@ -1,3 +1,8 @@
+### v3.11.0
+  - **Front 2 of the architecture pass, part 1/3: `PowerSentinel-detect.sh`** - a new file holding every side-effect-free read of device state (battery, temperature, charging, CPU load, screen). Consolidates four independent `dumpsys battery` calls that had accumulated across the daemon into one shared read per poll cycle, so every consumer sees a consistent snapshot instead of four separate ones a few lines apart.
+  - Removed dead code left over from an earlier, incomplete refactor attempt (`PowerSentinel-events.sh`, never actually wired into anything) that had started duplicating this same territory and had already begun silently drifting from the real behavior.
+  - No user-facing changes - this is internal groundwork. Policy and action separation (parts 2/3 and 3/3) are next.
+
 ### v3.10.0
   - **Configuration is now JSON, not a hand-rolled text format** (front 1 of a broader architecture pass - detect/policy/action separation, a capability manager, centralized policy, persistent state, and splitting up monolithic scripts are next). The daemon reads/writes `PowerSentinel.json` via a bundled, statically-linked `jq` instead of the old bespoke `.conf` grammar. Existing installs upgrade automatically and silently the first time this version runs - your current settings are converted once, nothing to do manually.
   - The WebUI's "Texto sin formato" tab is now genuinely a developer mode: it shows and edits the real JSON directly, validated before saving.
