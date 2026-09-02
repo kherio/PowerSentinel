@@ -1,26 +1,14 @@
 import { exec } from 'kernelsu';
 import { PowerSentinelApiError } from './errors.js';
 
-// Used by api.js to decide, once at startup, whether this backend is
-// actually usable - the 'kernelsu' package itself always imports fine,
-// but its exec() only works if the page was loaded inside a WebUI-X-
-// capable manager's WebView, which injects the underlying native
-// bridge. Outside of that (e.g. a plain browser hitting the Magisk
-// httpd path), exec() rejects immediately.
-export async function __probe() {
-  const { errno } = await exec('true');
-  if (errno !== 0) throw new Error('kernelsu bridge not usable');
-}
-
-// Same on-disk layout the daemon (PowerSentineld) and PowerSentinelconf already use -
-// unchanged from the httpd/CGI era, only the transport changed.
+// Native KernelSU WebUI transport. The page is expected to run inside a
+// KernelSU/WebUI-X-capable manager WebView, where `exec()` is provided by
+// the `kernelsu` JavaScript API and executes commands with root privileges.
 const DATA_DIR = '/data/local/tmp/PowerSentinel';
 const CONF_FILE = `${DATA_DIR}/PowerSentinel.conf`;
 const STATUS_FILE = `${DATA_DIR}/PowerSentinel.status`;
 const DEFAULT_LOG_FILE = `${DATA_DIR}/PowerSentinel.log`;
 
-// Resolves the log_file path from the config the same way load_log.cgi
-// (and PowerSentineld's own getconf()) did, since it's user-overridable.
 const RESOLVE_LOG_PATH =
   `f=$(grep '^log_file=' '${CONF_FILE}' 2>/dev/null | cut -d= -f2); ` +
   `echo "\${f:-${DEFAULT_LOG_FILE}}"`;
@@ -41,12 +29,6 @@ export async function readConfig() {
   return run(`cat '${CONF_FILE}' 2>/dev/null || echo ''`);
 }
 
-// Writes go through PowerSentinel-writefile instead of a raw shell redirect: it
-// only accepts paths under an allowlisted prefix, writes atomically
-// (temp file + mv) and keeps a .bak of the previous content. The config
-// text itself is never interpolated into the shell command line - it's
-// base64-encoded first, so it can't break out of quoting no matter what
-// the user typed into the raw-text editor.
 export async function writeConfig(text) {
   const b64 = btoa(unescape(encodeURIComponent(text)));
   await run(`echo '${b64}' | PowerSentinel-writefile '${CONF_FILE}'`);
@@ -57,30 +39,20 @@ export async function readLog() {
   return run(`logf=$(${RESOLVE_LOG_PATH}); cat "$logf" 2>/dev/null || echo ''`);
 }
 
-// Copies the live log file to Downloads instead of re-uploading its
-// content (as save_log.cgi used to) - simpler and avoids re-encoding a
-// potentially large file through the command line.
 export async function exportLog() {
   const dest = `/sdcard/Download/PowerSentinel-log-${Date.now()}.txt`;
   await run(`logf=$(${RESOLVE_LOG_PATH}); cp "$logf" '${dest}'`);
   return dest;
 }
 
-
 // ---------- Apps (allowlist/denylist picker) ----------
 
-// Mirrors what enable_pwr_save() itself queries ("-3" = third-party only)
-// plus an opt-in for system packages, since some users do want to
-// restrict a preinstalled app.
 export async function listPackages(includeSystem) {
   const flag = includeSystem ? '' : ' -3';
   const out = await run(`pm list packages${flag} | cut -d: -f2- | sort`);
   return out.split('\n').map((s) => s.trim()).filter(Boolean);
 }
 
-// allow/deny-list files are plain one-package-per-line text files, at
-// whatever path the config currently points to (user-editable, so not
-// hardcoded like CONF_FILE/STATUS_FILE).
 export async function readAppListFile(path) {
   if (!path) return '';
   return run(`cat '${path}' 2>/dev/null || echo ''`);
@@ -92,7 +64,7 @@ export async function writeAppListFile(path, lines) {
   await run(`echo '${b64}' | PowerSentinel-writefile '${path}'`);
 }
 
-// ---------- Manual event control (the "try it now" button) ----------
+// ---------- Manual event control ----------
 
 export async function startEvent(name) {
   await run(`PowerSentinelctl start ${name}`);
@@ -102,14 +74,10 @@ export async function stopEvent(name) {
   await run(`PowerSentinelctl stop ${name}`);
 }
 
-// ---------- Saved profiles (whole event-config snapshots) ----------
+// ---------- Saved profiles ----------
 
 const PROFILES_DIR = `${DATA_DIR}/profiles`;
 
-// Defense in depth: even though the UI only ever lets the user type
-// [a-zA-Z0-9_-] into the profile-name field, every call site here
-// re-validates before building a path/command from it, the same
-// posture as event names elsewhere in this codebase.
 function sanitizeProfileName(name) {
   const clean = (name || '').replace(/[^a-zA-Z0-9_-]/g, '');
   if (!clean) throw new PowerSentinelApiError('Invalid profile name');
@@ -138,22 +106,14 @@ export async function deleteProfile(name) {
   await run(`rm -f '${PROFILES_DIR}/${clean}.conf'`);
 }
 
-// ---------- Installed module info (for the "Acerca de" screen) ----------
+// ---------- Installed module info ----------
 
 export async function readModuleInfo() {
   return run(`cat "$(find /data/adb -maxdepth 2 -type d -name PowerSentinel 2>/dev/null | head -1)/module.prop" 2>/dev/null || echo ''`);
 }
 
-// ---------- Currently-running packages (apps picker "running now" hint) ----------
+// ---------- Currently-running packages ----------
 
-// Deliberately NOT parsing `dumpsys batterystats` here: its output format
-// is notoriously complex and has changed across Android versions, and a
-// wrong parse could point someone at the wrong app to restrict - worse
-// than no suggestion at all. `ps -A`'s last column is the process name,
-// which for a regular app process IS its package name (or
-// "package:service" for a secondary process) - a much simpler, more
-// reliable signal for "this is doing something right now", even if it's
-// not a full battery-drain ranking.
 export async function listRunningPackages() {
   const out = await run(`ps -A -o NAME 2>/dev/null | tail -n +2`);
   return new Set(out.split('\n').map((s) => s.trim()).filter(Boolean));
