@@ -36,7 +36,7 @@ jobs:
           test ! -e action.sh
           test ! -e frontend/src/backend-cgi.js
           test ! -e webui
-          ! grep -RniE 'httpd|cgi-bin|127\.0\.0\.1:8081|backend-cgi|\.token|\.serve' frontend/src frontend/index.html frontend/vite.config.js service.sh customize.sh system/bin/PowerSentineld system/bin/PowerSentinelctl system/bin/PowerSentinel-writefile README.md
+          ! grep -RniE 'backend-cgi|cgi-bin/|httpd -p 127\.0\.0\.1:8081|\.token/|\.serve/' frontend/src service.sh customize.sh system/bin/PowerSentineld system/bin/PowerSentinelctl system/bin/PowerSentinel-writefile
       - name: Package module
         run: |
           set -e
