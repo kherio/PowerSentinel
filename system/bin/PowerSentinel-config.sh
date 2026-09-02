@@ -98,7 +98,7 @@ config_get() {
     log_level)
       case "$value" in ''|*[!0-9]*) value="$default" ;; esac
       ;;
-    notify|keep_on_charge|handle_proc|low_ram|doze_enabled|kill_wifi|safemode)
+    notify|keep_on_charge|handle_proc|low_ram|doze_enabled|kill_wifi|safemode|adaptive_mode)
       config_valid_bool "$value" || value="$default"
       ;;
     doze)
@@ -107,7 +107,7 @@ config_get() {
     handle_apps|handle_gms)
       case "$value" in false|kill|nice|suspend) ;; *) value="$default" ;; esac
       ;;
-    charge_limit)
+    charge_limit|adaptive_tier1_threshold|adaptive_tier2_threshold|adaptive_tier3_threshold)
       case "$value" in ''|*[!0-9]*) value="$default" ;; esac
       ;;
   esac

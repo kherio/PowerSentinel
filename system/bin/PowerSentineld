@@ -145,6 +145,88 @@ check_charge_limit() {
   fi
 }
 
+# ---------- Adaptive pressure engine ----------
+#
+# Opt-in (adaptive_mode=true) alternative to the classic per-device-state
+# events (charging/low_power/screen_off/night/thermal): instead of an
+# all-or-nothing profile switching on/off around a single state change,
+# this computes one 0-100 "pressure" score each poll cycle from several
+# real-time signals at once, then maps that score to one of three
+# escalating tiers - adaptive_tier1/2/3, plain config blocks with the
+# exact same fields any other event has (handle_apps, handle_cores,
+# doze, ...), so the existing form UI/handle_event/apps-picker machinery
+# needs no changes to support them. When enabled, this fully replaces
+# the classic automatic triggers below; "manual", "boot", and safe mode
+# are unaffected in either mode.
+#
+# Score composition (each term is independent, then the total is
+# clamped to 0-100 - see docs/adaptive-engine.md for the reasoning
+# behind these specific weights):
+#   - Battery level: linear, an empty battery contributes up to +40
+#   - Temperature: starts contributing above 30C, capped at +30 by 40C+
+#   - Charging: flat -40 (charging relieves pressure - no urgency)
+#   - Screen off: flat +15 (headroom to act without the user noticing)
+#   - Night hours (if configured on the night event): flat +10
+#   - CPU load (1-min average, whole-number part only - bash has no
+#     float comparison): high load holds pressure back (-10 to -20),
+#     since a busy device is the one time aggressive action would
+#     actually be felt
+compute_pressure_score() {
+  local batt_dump level temp_raw temp_c charging_flag score
+  local screen_on load1 load_int night_now over
+
+  batt_dump="$(dumpsys battery 2>/dev/null)"
+  level=$(echo "$batt_dump" | grep -m1 -oE '^[[:space:]]*level:[[:space:]]*[0-9]+' | grep -oE '[0-9]+$')
+  temp_raw=$(echo "$batt_dump" | grep -m1 -oE '^[[:space:]]*temperature:[[:space:]]*[0-9]+' | grep -oE '[0-9]+$')
+  charging_flag="false"
+  echo "$batt_dump" | grep -qE '^[[:space:]]*(AC|USB|Wireless) powered:[[:space:]]*true' && charging_flag="true"
+  level="${level:-100}"
+  temp_c=$(( ${temp_raw:-250} / 10 ))
+
+  screen_on="$(is_device screen)"
+  load1=$(cut -d' ' -f1 /proc/loadavg 2>/dev/null)
+  get_night_times
+  night_now="$(is_night_now)"
+
+  score=0
+  score=$(( score + (100 - level) * 40 / 100 ))
+  if [ "$temp_c" -gt 30 ]; then
+    over=$(( temp_c - 30 ))
+    [ "$over" -gt 10 ] && over=10
+    score=$(( score + over * 3 ))
+  fi
+  [ "$charging_flag" = "true" ] && score=$(( score - 40 ))
+  [ "$screen_on" = "false" ] && score=$(( score + 15 ))
+  [ "$night_now" = "true" ] && score=$(( score + 10 ))
+
+  load_int="${load1%%.*}"
+  case "$load_int" in ''|*[!0-9]*) load_int=0 ;; esac
+  if [ "$load_int" -ge 2 ]; then
+    score=$(( score - 20 ))
+  elif [ "$load_int" -ge 1 ]; then
+    score=$(( score - 10 ))
+  fi
+
+  [ "$score" -lt 0 ] && score=0
+  [ "$score" -gt 100 ] && score=100
+  echo "$score"
+}
+
+# Maps a 0-100 score to a tier (0 = no intervention), using
+# user-configurable thresholds so advanced users can tune sensitivity
+# without touching the scoring formula itself.
+pressure_tier_for_score() {
+  local score="$1" t1 t2 t3
+  t1=$(getconf adaptive_tier1_threshold 20)
+  t2=$(getconf adaptive_tier2_threshold 45)
+  t3=$(getconf adaptive_tier3_threshold 70)
+  if [ "$score" -ge "$t3" ]; then echo 3
+  elif [ "$score" -ge "$t2" ]; then echo 2
+  elif [ "$score" -ge "$t1" ]; then echo 1
+  else echo 0
+  fi
+}
+
 notif() {
   if [ "$(getconf notify true)" = "true" ]; then
     # SECURITY: "$1" is interpolated into a string that su -c hands to a
@@ -900,39 +982,53 @@ handle_event() {
 
 init_v2() {
 
+adaptive_mode="$(getconf adaptive_mode false)"
+
 handle_event boot 1
-charging="$(is_device charging)"
-if [ "$charging" = "true" ]; then
-  handle_event charging 1
-fi
-was_charging="$charging"
-low_power="$(is_device low_power)"
-if [ "$low_power" = "true" ]; then
-  handle_event low_power 1
-fi
-was_low_power="$low_power"
-screen_on="$(is_device screen)"
-# here we invert because we only want to
-# do something if the screen is off
-if [ "$screen_on" = "false" ]; then
-  handle_event screen_off 1
-fi
-was_screen_on="$screen_on"
 
-get_night_times
-night_now="$(is_night_now)"
-if [ "$night_now" = "true" ]; then
-  handle_event night 1
-fi
-was_night="$night_now"
+if [ "$adaptive_mode" != "true" ]; then
+  charging="$(is_device charging)"
+  if [ "$charging" = "true" ]; then
+    handle_event charging 1
+  fi
+  was_charging="$charging"
+  low_power="$(is_device low_power)"
+  if [ "$low_power" = "true" ]; then
+    handle_event low_power 1
+  fi
+  was_low_power="$low_power"
+  screen_on="$(is_device screen)"
+  # here we invert because we only want to
+  # do something if the screen is off
+  if [ "$screen_on" = "false" ]; then
+    handle_event screen_off 1
+  fi
+  was_screen_on="$screen_on"
 
-was_thermal="false"
-get_thermal_threshold
-thermal_now="$(is_thermal_now)"
-if [ "$thermal_now" = "true" ]; then
-  handle_event thermal 1
+  get_night_times
+  night_now="$(is_night_now)"
+  if [ "$night_now" = "true" ]; then
+    handle_event night 1
+  fi
+  was_night="$night_now"
+
+  was_thermal="false"
+  get_thermal_threshold
+  thermal_now="$(is_thermal_now)"
+  if [ "$thermal_now" = "true" ]; then
+    handle_event thermal 1
+  fi
+  was_thermal="$thermal_now"
+else
+  was_adaptive_tier=0
+  adaptive_score="$(compute_pressure_score)"
+  adaptive_tier="$(pressure_tier_for_score "$adaptive_score")"
+  log_msg 2 "Adaptive mode enabled - initial score=$adaptive_score tier=$adaptive_tier"
+  if [ "$adaptive_tier" -gt 0 ]; then
+    handle_event "adaptive_tier${adaptive_tier}" 1
+  fi
+  was_adaptive_tier="$adaptive_tier"
 fi
-was_thermal="$thermal_now"
 
 while true; do
 
@@ -1000,74 +1096,90 @@ while true; do
   esac
 
   # check charging state
-  charging=$(is_device charging)
-  if [ "$was_charging" != "" ]; then
-    if [ "$charging" != "$was_charging" ]; then
-      log_msg 2 "Charging event was triggered"
-      if [ "$charging" = "true" ]; then
-        handle_event charging 1
-      else
-        handle_event charging 0
+  if [ "$adaptive_mode" != "true" ]; then
+    charging=$(is_device charging)
+    if [ "$was_charging" != "" ]; then
+      if [ "$charging" != "$was_charging" ]; then
+        log_msg 2 "Charging event was triggered"
+        if [ "$charging" = "true" ]; then
+          handle_event charging 1
+        else
+          handle_event charging 0
+        fi
       fi
     fi
-  fi
-  was_charging="$charging"
+    was_charging="$charging"
 
-  # check low_power state
-  low_power=$(is_device low_power)
-  if [ "$was_low_power" != "" ]; then
-    if [ "$low_power" != "$was_low_power" ]; then
-      log_msg 2 "Low Power event was triggered"
-      if [ "$low_power" = "true" ]; then
-        handle_event low_power 1
-      else
-        handle_event low_power 0
+    # check low_power state
+    low_power=$(is_device low_power)
+    if [ "$was_low_power" != "" ]; then
+      if [ "$low_power" != "$was_low_power" ]; then
+        log_msg 2 "Low Power event was triggered"
+        if [ "$low_power" = "true" ]; then
+          handle_event low_power 1
+        else
+          handle_event low_power 0
+        fi
       fi
     fi
-  fi
-  was_low_power="$low_power"
+    was_low_power="$low_power"
 
-  # check screen change
-  screen_on=$(is_device screen)
-  if [ "$was_screen_on" != "" ]; then
-    if [ "$screen_on" != "$was_screen_on" ]; then
-      log_msg 2 "Screen change was detected"
-      # here we invert because we only want to
-      # do something if the screen is off
-      if [ "$screen_on" = "false" ]; then
-        handle_event screen_off 1
-      else
-        handle_event screen_off 0
+    # check screen change
+    screen_on=$(is_device screen)
+    if [ "$was_screen_on" != "" ]; then
+      if [ "$screen_on" != "$was_screen_on" ]; then
+        log_msg 2 "Screen change was detected"
+        # here we invert because we only want to
+        # do something if the screen is off
+        if [ "$screen_on" = "false" ]; then
+          handle_event screen_off 1
+        else
+          handle_event screen_off 0
+        fi
       fi
     fi
-  fi
-  was_screen_on="$screen_on"
+    was_screen_on="$screen_on"
 
-  # check night profile (time-of-day, independent of any device state)
-  night_now="$(is_night_now)"
-  if [ "$was_night" != "" ]; then
-    if [ "$night_now" != "$was_night" ]; then
-      log_msg 2 "Night profile boundary crossed"
-      if [ "$night_now" = "true" ]; then
-        handle_event night 1
-      else
-        handle_event night 0
+    # check night profile (time-of-day, independent of any device state)
+    night_now="$(is_night_now)"
+    if [ "$was_night" != "" ]; then
+      if [ "$night_now" != "$was_night" ]; then
+        log_msg 2 "Night profile boundary crossed"
+        if [ "$night_now" = "true" ]; then
+          handle_event night 1
+        else
+          handle_event night 0
+        fi
       fi
     fi
-  fi
-  was_night="$night_now"
+    was_night="$night_now"
 
-  # check thermal profile (temperature-based, independent of any device state)
-  thermal_now="$(is_thermal_now)"
-  if [ "$thermal_now" != "$was_thermal" ]; then
-    log_msg 2 "Thermal profile boundary crossed"
-    if [ "$thermal_now" = "true" ]; then
-      handle_event thermal 1
-    else
-      handle_event thermal 0
+    # check thermal profile (temperature-based, independent of any device state)
+    thermal_now="$(is_thermal_now)"
+    if [ "$thermal_now" != "$was_thermal" ]; then
+      log_msg 2 "Thermal profile boundary crossed"
+      if [ "$thermal_now" = "true" ]; then
+        handle_event thermal 1
+      else
+        handle_event thermal 0
+      fi
     fi
+    was_thermal="$thermal_now"
+  else
+    # Adaptive mode: recompute the pressure score every cycle and move
+    # to whichever tier it maps to - only the boundary crossing itself
+    # (not every unchanged score) triggers a handle_event call, exactly
+    # like the classic checks above only escalate/de-escalate on a
+    # real transition.
+    adaptive_score="$(compute_pressure_score)"
+    adaptive_tier="$(pressure_tier_for_score "$adaptive_score")"
+    if [ "$adaptive_tier" != "$was_adaptive_tier" ]; then
+      log_msg 2 "Adaptive tier changed: $was_adaptive_tier -> $adaptive_tier (score=$adaptive_score)"
+      [ "$was_adaptive_tier" -gt 0 ] && handle_event "adaptive_tier${was_adaptive_tier}" 0
+      [ "$adaptive_tier" -gt 0 ] && handle_event "adaptive_tier${adaptive_tier}" 1
+    fi
+    was_adaptive_tier="$adaptive_tier"
   fi
-  was_thermal="$thermal_now"
 
   check_charge_limit
 
