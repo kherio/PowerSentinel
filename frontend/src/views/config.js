@@ -48,6 +48,7 @@ function renderGlobalFields() {
     const row = renderFieldRow(def, model, null, (val) => {
       model[def.key] = val;
       markDirty(true);
+      renderGlobalFields();
     });
     if (row) container.appendChild(row);
   });
@@ -55,7 +56,9 @@ function renderGlobalFields() {
 
 const EVENT_ICONS = {
   boot: ICONS.power, charging: ICONS.plug, screen_off: ICONS.moon,
-  low_power: ICONS.warn, night: ICONS.moon, thermal: ICONS.thermometer, manual: ICONS.manual
+  low_power: ICONS.warn, night: ICONS.moon, thermal: ICONS.thermometer,
+  adaptive_tier1: ICONS.leaf, adaptive_tier2: ICONS.gauge, adaptive_tier3: ICONS.bolt,
+  manual: ICONS.manual
 };
 
 function summarizeFields(fields) {

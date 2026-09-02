@@ -1,7 +1,7 @@
 // Parser / serializer / form renderer for PowerSentinel.conf (v1 flat + v2 event blocks)
 import { t } from './i18n.js';
 
-var PREDEFINED_EVENTS = ['boot', 'charging', 'screen_off', 'low_power', 'night', 'thermal', 'manual'];
+var PREDEFINED_EVENTS = ['boot', 'charging', 'screen_off', 'low_power', 'night', 'thermal', 'adaptive_tier1', 'adaptive_tier2', 'adaptive_tier3', 'manual'];
 
 var FIELD_DEFS = [
   {
@@ -105,7 +105,18 @@ var GLOBAL_DEFS = [
   { key: 'charge_limit_node', label: t('global.chargeLimitNode.label'), type: 'text', def: '',
     placeholder: '/sys/class/power_supply/battery/charging_enabled',
     help: t('global.chargeLimitNode.help'),
-    warn: t('global.chargeLimitNode.warn') }
+    warn: t('global.chargeLimitNode.warn') },
+  { key: 'adaptive_mode', label: t('global.adaptiveMode.label'), type: 'toggle', def: 'false',
+    help: t('global.adaptiveMode.help') },
+  { key: 'adaptive_tier1_threshold', label: t('global.adaptiveTier1.label'), type: 'number', def: '20',
+    help: t('global.adaptiveTier1.help'),
+    showIf: function (f) { return f.adaptive_mode === 'true'; } },
+  { key: 'adaptive_tier2_threshold', label: t('global.adaptiveTier2.label'), type: 'number', def: '45',
+    help: t('global.adaptiveTier2.help'),
+    showIf: function (f) { return f.adaptive_mode === 'true'; } },
+  { key: 'adaptive_tier3_threshold', label: t('global.adaptiveTier3.label'), type: 'number', def: '70',
+    help: t('global.adaptiveTier3.help'),
+    showIf: function (f) { return f.adaptive_mode === 'true'; } }
 ];
 
 // Quick-start templates a user can apply to any event, instead of having
