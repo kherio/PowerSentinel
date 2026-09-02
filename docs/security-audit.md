@@ -4,7 +4,7 @@ PowerSentinel's WebUI now uses the native KernelSU JavaScript bridge exclusively
 
 ## Runtime trust boundary
 
-The WebUI is loaded by a KernelSU/WebUI-X-capable manager from the module's `webroot/`. The frontend uses the `kernelsu` npm package's `exec()` API to run the small set of required root commands. KernelSU documents that `webroot/` is the native module WebUI location and that `exec()` executes commands through the manager-provided system API. citeturn0search1turn0search3
+The WebUI is loaded by a KernelSU/WebUI-X-capable manager from the module's `webroot/`. The frontend uses the `kernelsu` npm package's `exec()` API to run the small set of required root commands. KernelSU documents `webroot/` as the native module WebUI location and `exec()` as the system-command API exposed to the WebUI.
 
 There is deliberately no module-owned HTTP listener, no loopback port, no CGI endpoint, and no browser session token.
 
@@ -43,7 +43,7 @@ The following attack surface has been intentionally removed:
 - port `127.0.0.1:8081`
 - runtime backend detection/fallback
 
-This means PowerSentinel no longer exposes a root-owned HTTP service for its WebUI. The frontend has a single transport: `backend-ksu.js` → `kernelsu.exec()`.
+PowerSentinel no longer exposes a root-owned HTTP service for its WebUI. The frontend has a single transport: `backend-ksu.js` → `kernelsu.exec()`.
 
 ## Development dependency
 
