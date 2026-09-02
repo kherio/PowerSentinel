@@ -1,5 +1,6 @@
 #!/system/bin/bash
 conf="/data/local/tmp/PowerSentinel/PowerSentinel.conf"
+. "$(dirname "$0")/PowerSentinel-config.sh"
 declare -a active_events
 declare -a cpus
 declare -a cpu_freqs
@@ -12,10 +13,9 @@ cpu_base_path="/sys/devices/system/cpu"
 # Helpers and one time things
 
 getconf() {
-  # change made here to set default
-  # if not set
-  opt=$(grep "^$1=" "$conf" | cut -d= -f2)
-  [ "$opt" != "" ] && echo "$opt" || echo "$2"
+  # Compatibility wrapper: callers keep the existing interface while all
+  # global reads go through the centralized configuration cache.
+  config_get "$1" "${2-}"
 }
 
 is_device() {
@@ -59,8 +59,8 @@ ensure_ctl_file() {
 # its own event block's night_start/night_end fields (HH:MM), and can be
 # active at the same time as any other event.
 get_night_times() {
-  night_start=$(grep -F -A99 "night={" "$conf" 2>/dev/null | grep '^\s*night_start=' | head -1 | cut -d= -f2 | tr -d ' \r')
-  night_end=$(grep -F -A99 "night={" "$conf" 2>/dev/null | grep '^\s*night_end=' | head -1 | cut -d= -f2 | tr -d ' \r')
+  night_start="$(config_get_event_raw night night_start "")"
+  night_end="$(config_get_event_raw night night_end "")"
 }
 
 is_night_now() {
@@ -94,7 +94,7 @@ is_night_now() {
 # (whole degrees Celsius). Hysteresis (3C below the threshold) avoids
 # rapidly flapping on/off when the temperature hovers right at the line.
 get_thermal_threshold() {
-  thermal_threshold=$(grep -F -A99 "thermal={" "$conf" 2>/dev/null | grep '^\s*thermal_threshold=' | head -1 | cut -d= -f2 | tr -d ' \r')
+  thermal_threshold="$(config_get_event_raw thermal thermal_threshold "")"
 }
 
 is_thermal_now() {
@@ -184,7 +184,7 @@ migrate() {
   echo "version=2" > "$conf-v2"
   ctl_file=$(getconf ctl_file "")
   if [ ! -z "$ctl_file" ]; then
-    echo "ctl_file=$ctl_file" "$conf-v2"
+    echo "ctl_file=$ctl_file" >> "$conf-v2"
   fi
   delay="$(getconf delay 3)"
   echo "delay=$delay" >> "$conf-v2"
@@ -1264,11 +1264,17 @@ EOF
 
 fi
 
+# Load the top-level configuration once. Event-specific values are parsed
+# separately when their event is evaluated.
+config_load_global
+
 # check for migration
 version="$(getconf version 1)" # if version is not set, it is 1
 # check for a user wanting to switch to v2
 if [ "$(grep ".*={" "$conf" | head -n 1)" == "" ] && [ "$version" = "2" ]; then
   migrate
+  config_load_global
+  version="$(getconf version 1)"
 fi
 
 # setup logging
@@ -1297,7 +1303,8 @@ safe=$(getconf safemode 0)
 if [ "$safe" = "1" ]; then
   log_msg 1 "Safemode was found in the config file, Entering safemode."
   notif "Safe Mode is Active"
-  until [ "$resume" = "resume" ] || [ $(getconf safemode 0) = "0" ]; do
+  until [ "$resume" = "resume" ] || [ "$(config_get safemode 0)" = "0" ]; do
+    config_load_global
     resume=$(cat "$ctl_file")
   done
   sed -i '/safemode=1/d' "$conf"
