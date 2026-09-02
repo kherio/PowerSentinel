@@ -1,0 +1,75 @@
+name: Final legacy identity cleanup
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Rewrite all legacy identities
+        env:
+          LEGACY_EMAIL_1: dethbyte777@gmail.com
+          LEGACY_EMAIL_2: 45522817+DethByte64@users.noreply.github.com
+          LEGACY_EMAIL_3: 86263062+vikasmistry@users.noreply.github.com
+          NEW_NAME: kherio
+          NEW_EMAIL: kherio@users.noreply.github.com
+        run: |
+          set -euo pipefail
+
+          git config user.name "$NEW_NAME"
+          git config user.email "$NEW_EMAIL"
+          git fetch origin powersentinel/identity-migration:refs/heads/powersentinel/identity-migration
+
+          # Remove this one-shot workflow before rewriting history, but commit
+          # the deletion so the resulting main branch no longer contains it.
+          rm -f .github/workflows/history-cleanup.yml
+          git add -u .github/workflows/history-cleanup.yml
+          git commit -m 'chore: remove one-shot identity cleanup workflow'
+
+          FILTER_ENV=''
+          FILTER_ENV+='if [ "$GIT_AUTHOR_EMAIL" = "$LEGACY_EMAIL_1" ] || [ "$GIT_AUTHOR_EMAIL" = "$LEGACY_EMAIL_2" ] || [ "$GIT_AUTHOR_EMAIL" = "$LEGACY_EMAIL_3" ]; then '
+          FILTER_ENV+='GIT_AUTHOR_NAME="$NEW_NAME"; GIT_AUTHOR_EMAIL="$NEW_EMAIL"; fi; '
+          FILTER_ENV+='if [ "$GIT_COMMITTER_EMAIL" = "$LEGACY_EMAIL_1" ] || [ "$GIT_COMMITTER_EMAIL" = "$LEGACY_EMAIL_2" ] || [ "$GIT_COMMITTER_EMAIL" = "$LEGACY_EMAIL_3" ]; then '
+          FILTER_ENV+='GIT_COMMITTER_NAME="$NEW_NAME"; GIT_COMMITTER_EMAIL="$NEW_EMAIL"; fi; '
+          export FILTER_ENV
+
+          FILTER_MSG='sed -e "s/DethByte64/kherio/g" -e "s/vikasmistry/kherio/g"'
+          export FILTER_MSG
+
+          FILTER_BRANCH_SQUELCH_WARNING=1 git filter-branch -f --env-filter "$FILTER_ENV" --msg-filter "$FILTER_MSG" --tag-name-filter cat -- main powersentinel/identity-migration
+
+          # Verify branch history before any destructive ref update.
+          if git log main powersentinel/identity-migration --format='%an <%ae>%n%cn <%ce>%n%B' | grep -Eiq 'DethByte64|vikasmistry|dethbyte777@gmail\.com|45522817\+DethByte64@users\.noreply\.github\.com|86263062\+vikasmistry@users\.noreply\.github\.com'; then
+            echo 'Legacy identity remains in branch history.'
+            exit 1
+          fi
+
+          # Verify every rewritten tag reachable from the branches.
+          for tag in $(git tag); do
+            if git show "$tag" --format='%an <%ae>%n%cn <%ce>%n%B' --no-patch | grep -Eiq 'DethByte64|vikasmistry|dethbyte777@gmail\.com|45522817\+DethByte64@users\.noreply\.github\.com|86263062\+vikasmistry@users\.noreply\.github\.com'; then
+              echo "Legacy identity remains in tag $tag"
+              exit 1
+            fi
+          done
+
+          # Preserve release/tag names, but move them to rewritten commits.
+          git push origin --force refs/heads/main:refs/heads/main
+          git push origin --force refs/heads/powersentinel/identity-migration:refs/heads/powersentinel/identity-migration
+          git push origin --force --tags
+
+          # The temporary rollback branch has served its purpose. Remove it so
+          # the old identities are not reachable through another branch.
+          git push origin --delete history-cleanup-backup-2026-09-02
