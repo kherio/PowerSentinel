@@ -1,307 +1,130 @@
+# PowerSentinel
 
-# PowerSentinel (PowerSentinel)
+**PowerSentinel** is a rooted Android battery-optimization module built around event-driven power policies. It can manage CPU cores, apps, WiFi, Doze, GMS/process priorities, logging, profiles, and safety controls.
 
-**Maximize your Android device’s battery life with highly configurable power-saving tools.**
+## Requirements
 
-**PowerSentinel** is a KernelSU (not yet Magisk) module designed for rooted Android devices, offering aggressive battery optimization through dynamic, event-driven settings. It allows advanced users to fine-tune CPU cores, apps, WiFi, Doze mode, and more to extend battery life significantly—potentially up to 5x stock uptime. While powerful, it requires careful configuration to avoid lag, missed notifications, or device instability.
+- Rooted Android device with KernelSU.
+- A KernelSU/WebUI-X-capable manager for the graphical WebUI.
+- The module can also be operated entirely from a root shell with `PowerSentinelctl` and `PowerSentinelconf`.
 
-> [!NOTE]
-> An Android app is in development to simplify configuration and enhance usability. The current web UI (v1.0.6+) will be replaced upon app release.
-
----
+> **Important:** PowerSentinel is intentionally **KernelSU-only for its WebUI**. The legacy Magisk `httpd`/CGI compatibility layer was removed in v3.8.0. There is no local HTTP server or browser fallback.
 
 ## Features
 
-- **App Management**: Kill, suspend, or reprioritize apps with allowlists and denylists for user and system apps.
-- **CPU Optimization**: Set CPU cores to powersave mode or disable high-power cores automatically or manually.
-- **System Tweaks**: Force Doze mode (light/deep), disable WiFi, enable low RAM mode, or manage Google Mobile Services (GMS) and process priorities.
-- **Event-Driven Control (v2)**: Apply settings based on triggers like `boot`, `charging`, `screen_off`, `low_power`, or custom events.
-- **User-Friendly Tools**: Control via `PowerSentinelctl` commands, monitor with logs and status files, and configure via a web UI (v1.0.6+).
-- **Safety Features**: Safe mode to recover from misconfigurations and sanity checks to prevent system crashes.
+- **App management** — kill, suspend, or reprioritize applications with allow/deny lists.
+- **CPU optimization** — powersave governors and optional core disabling.
+- **System controls** — Doze, WiFi, low-RAM mode, GMS and process priorities.
+- **Event-driven control** — boot, charging, screen-off, low-power, manual and custom events.
+- **Profiles** — save and restore complete event configurations.
+- **WebUI** — native KernelSU WebUI using `kernelsu.exec()`.
+- **Safety** — safe mode, sanity checks, atomic configuration writes and backups.
 
-## Screenshots
+## WebUI architecture
 
-<img width="1440" height="2811" alt="Screenshot_20260831-113741_Firefox Nightly" src="https://github.com/user-attachments/assets/1ca40545-a912-40b3-81f4-b664770fb360" />
-<img width="1440" height="2873" alt="Screenshot_20260831-113727_Firefox Nightly" src="https://github.com/user-attachments/assets/57b5850f-5580-47dc-9fa3-f1fd6d62b865" />
-<img width="1440" height="2848" alt="Screenshot_20260831-113715_Firefox Nightly" src="https://github.com/user-attachments/assets/cae06991-b573-4620-8ede-1a591ae9fc1b" />
+The WebUI lives in `webroot/`, which KernelSU loads directly inside the manager's WebView. The source is under `frontend/` and is built with Vite.
 
----
+```text
+KernelSU Manager
+      ↓
+   webroot/
+      ↓
+ frontend/src/api.js
+      ↓
+backend-ksu.js
+      ↓
+kernelsu.exec()
+      ↓
+PowerSentinelctl / PowerSentinel-writefile / Android commands
+```
 
-## Supported Root Managers
+There is deliberately only one WebUI transport. PowerSentinel does **not** start `httpd`, does **not** expose port 8081, and does **not** ship CGI endpoints or WebUI session tokens.
 
-- **KernelSU** (and KernelSU Next, SukiSU Ultra, etc.) — full native WebUI, opened via the "Open" / WebUI icon next to the module in your manager.
-- **Magisk** — full WebUI too, via a local httpd server (Magisk has no native WebUI support): tap the module's **Action** button to open it in your browser. Same interface, same features, just a different way in.
-- **APatch** (Likely compatible via the Magisk path; please report results on [GitHub Issues](https://github.com/kherio/PowerSentinel/issues))
-
-The WebUI detects automatically which path it's running under - nothing to configure.
-
----
-
-## Disclaimer
-
-PowerSentinel is an advanced tool that modifies system behavior and requires root access. Misconfiguration may cause lag, missed notifications, alarms, or SystemUI crashes. **Use at your own risk**. I is not responsible for damages or data loss. Always back up your config and test settings incrementally.
-
-Tested primarily on a **Pixel 5** running **ProtonAOSP**. Compatibility varies by device and ROM.
-
----
+KernelSU's documentation specifies `webroot/index.html` as the module WebUI entry point and exposes system APIs such as `exec()` to the page.
 
 ## Installation
 
-1. **Download the Module**:
-   - Grab the latest release from [GitHub Releases](https://github.com/kherio/PowerSentinel/releases/latest).
+1. Download the latest release.
+2. Install the ZIP through your KernelSU manager.
+3. Reboot if requested by the manager.
+4. Open PowerSentinel from the module's native **WebUI/Open** button.
+5. Configure the module from the WebUI or from a root shell.
 
-2. **Install**:
-   - Flash the module in your root manager (Magisk/KernelSU).
-   - Reboot your device.
+A default configuration is stored at:
 
-3. **Configure**:
-   - A default config file is created at `/data/local/tmp/PowerSentinel/PowerSentinel.conf`.
-   - Edit the config from the module's WebUI (open it from your manager app - KernelSU Next, WebUI-X, etc. - via the "Open" / WebUI icon next to the module; no browser or local server involved), or use `PowerSentinelconf` from a terminal (see below).
-   - After changes made outside the WebUI (e.g. by hand), reload the config with `PowerSentinelctl reload` or reboot.
-
----
+```text
+/data/local/tmp/PowerSentinel/PowerSentinel.conf
+```
 
 ## Configuration
 
-PowerSentinel uses a configuration file (`/data/local/tmp/PowerSentinel/PowerSentinel.conf`) to control its behavior. It supports two formats:
-
-- **v1 (Legacy)**: Simple `key=value` pairs. Suitable for basic setups but less flexible.
-- **v2 (Recommended)**: Event-driven blocks (e.g., `screen_off={...}`) for dynamic control based on device states or custom triggers.
-
-> [!TIP]
-> Set `version=2` in the config to enable v2 mode. The module automatically migrates v1 configs to v2 if detected.
-
-### v2 Configuration (Recommended)
-
-v2 uses **event blocks** to apply settings for specific triggers:
-- **Hardcoded Events**: `boot`, `charging`, `screen_off`, `low_power`, `manual` (triggered by device states or `PowerSentinelctl`).
-- **Custom Events**: User-defined (e.g., `my_event`), triggered manually via `PowerSentinelctl start my_event`.
-
-Each block contains settings like `disable_cores` or `handle_apps`. Example:
+PowerSentinel supports the current v2 event-driven configuration format. A minimal example:
 
 ```bash
 version=2
 delay=3
 log_file=/sdcard/PowerSentinel.log
-log_level=3
+log_level=2
 
 screen_off={
-  disable_cores=cpu6 cpu7
   handle_apps=nice
-  allowlist=/data/local/tmp/PowerSentinel/apps.allow
+  disable_cores=cpu6 cpu7
 }
 
 low_power={
-  disable_cores=cpu2 cpu3 cpu4 cpu5
   doze=light
-  kill_wifi=true
-}
-
-my_event={
-  handle_gms=nice
-  low_ram=true
+  kill_wifi=false
 }
 ```
 
-**Rules**:
-- Each block starts with `event_name={` and ends with `}` on separate lines.
-- Use alphanumeric characters, underscores, or dashes for custom event names (no spaces, `$`, `=`, `{`, or `}`).
-- Empty blocks (e.g., `boot={
-  }`) do nothing.
-- Multiple events can stack (e.g., `screen_off` and `low_power` disabling different cores) these work in a Last on, First off method, plan accordingly.
+Multiple events can be active at the same time. Configure overlapping policies carefully and keep essential applications protected.
 
-### v1 Configuration (Legacy)
+## Command-line tools
 
-v1 uses a single `trigger` to apply settings globally. Example:
+Run these commands from a root shell:
 
 ```bash
-version=1
-trigger=auto
-delay=3
-keep_on_charge=true
-handle_cores=auto
-disable_cores=false
-handle_apps=suspend
-allowlist=/data/local/tmp/PowerSentinel/apps.allow
+PowerSentinelctl start <event>
+PowerSentinelctl stop <event>
+PowerSentinelctl reload
+PowerSentinelctl pause
+PowerSentinelctl resume
+PowerSentinelctl safe
 ```
 
-> [!NOTE]
-> v1 is backward compatible but will be deprecated in future releases. Consider switching to v2 for advanced features.
+`PowerSentinelconf` provides an interactive wizard and direct configuration operations:
 
-### Config Options
-
-| Option | Description | Values | Default | Notes |
-|--------|-------------|--------|---------|-------|
-| `version` | Config format | `1`, `2` | `2` | Set to `2` for event-driven mode. |
-| `trigger` (v1 only) | When to apply settings | `auto` (Battery Saver), `boot`, `manual` | `auto` | Ignored in v2. |
-| `delay` | Polling interval (seconds) | Integer | `3` | Higher values reduce CPU usage, but may takr longer to detect events and commands. Lower values may use more CPU cycles, but provide faster detection. |
-| `keep_on_charge` | Keep settings active while charging | `true`, `false` | `true` | Only useful with `trigger=auto` (v1) or `low_power` (v2). |
-| `handle_apps` | Manage app behavior | `false`, `kill`, `nice`, `suspend` | `false` | `suspend` requires a valid allowlist. |
-| `allowlist` | File with allowed app packages | Path (e.g., `/data/local/tmp/PowerSentinel/apps.allow`) | `/data/local/tmp/PowerSentinel/apps.allow` | Create manually; list one package per line (e.g., `com.termux`). |
-| `denylist` | File with system apps to manage | Path (e.g., `/data/local/tmp/PowerSentinel/apps.deny`) | `/data/local/tmp/PowerSentinel/apps.deny` | Optional; for system apps. |
-| `handle_cores` | Set CPU governors to powersave | `false`, `auto`, Space-separated cores (e.g., `cpu4 cpu5`) | `false` | `auto` targets low-power cores. |
-| `disable_cores` | Disable CPU cores | `false`, `auto`, Space-separated cores (e.g., `cpu6 cpu7`) | `false` | `auto` disables high-power cores; avoid on Samsung devices. |
-| `handle_gms` | Manage Google Mobile Services | `false`, `nice`, `kill` | `false` | `kill` breaks Google apps and SafetyNet/Play Integrity. |
-| `handle_proc` | Reprioritize system processes | `true`, `false` | `false` | Use with `proc_file`; may delay messages/alarms. |
-| `proc_file` | File with processes to reprioritize | Path (e.g., `/data/local/tmp/PowerSentinel/proc.list`) | `/data/local/tmp/PowerSentinel/proc.list` | Format: `process_name nice_level` (e.g., `netd 19`). |
-| `low_ram` | Enable low RAM mode | `true`, `false` | `false` | Avoid on OnePlus devices; may cause random reboots. |
-| `doze` | Force Doze mode | `false`, `light`, `deep` | `false` | May break alarms; test carefully. |
-| `kill_wifi` | Disable WiFi | `true`, `false` | `false` | Saves power but disables WiFi toggle in Settings. |
-| `notify` | Show notifications | `true`, `false` | `true` | Disable to not use notifications. |
-| `log_file` | Log file path | Path (e.g., `/sdcard/PowerSentinel.log`) | `/sdcard/PowerSentinel.log` | Set `log_level` for verbosity. |
-| `log_level` | Logging verbosity | `1` (INFO), `2` (VERBOSE), `3` (DEBUG) | `2` | Higher levels aid debugging. |
-
-**Allowlist Example** (`apps.allow`):
 ```bash
-com.termux
-com.google.android.inputmethod.latin
-com.topjohnwu.magisk
+PowerSentinelconf
+PowerSentinelconf show
+PowerSentinelconf events
+PowerSentinelconf set KEY VALUE --event screen_off
 ```
 
-**Process File Example** (`proc.list`):
-```bash
-netd 19
-system_server 10
-```
+If the WebUI is unavailable, these tools remain the supported recovery/configuration path.
 
-> [!CAUTION]
-> Always include essential apps (e.g., keyboard, terminal) in `apps.allow` when using `handle_apps=suspend`. Without a valid allowlist, apps may become unusable, requiring `PowerSentinelctl safe` via ADB.
+## Development
 
----
-
-## PowerSentinelctl Commands
-
-Control PowerSentinel with the `PowerSentinelctl` command-line tool (run as root via `su`):
-
-| Command | Description | Usage |
-|---------|-------------|-------|
-| `start` | Start PowerSentinel (v1) or an event (v2) | `PowerSentinelctl start` (v1/manual) or `PowerSentinelctl start my_event` (v2) |
-| `stop` | Stop PowerSentinel (v1) or an event (v2) | `PowerSentinelctl stop` (v1/manual) or `PowerSentinelctl stop my_event` (v2) |
-| `reload` | Reload the config | `PowerSentinelctl reload` |
-| `pause` | Pause trigger handling | `PowerSentinelctl pause` |
-| `resume` | Resume trigger handling or exit safe mode | `PowerSentinelctl resume` |
-| `safe` | Enter safe mode (stops PowerSentinel, unsuspends apps) | `PowerSentinelctl safe` |
-
-> [!TIP]
-> Use `PowerSentinelctl safe` via ADB (`adb shell PowerSentinelctl safe`) if the device becomes unresponsive due to misconfiguration.
-
----
-
-## PowerSentinelconf: configuring without a browser
-
-Besides the WebUI, `PowerSentinel.conf` can be generated and edited entirely from a terminal (ADB, Termux, or any root shell):
-
-| Command | Description |
-|---------|-------------|
-| `PowerSentinelconf` | Interactive wizard; walks through every option and (re)writes the whole config |
-| `PowerSentinelconf show` | Print the current config |
-| `PowerSentinelconf get KEY [--event NAME]` | Read a single value (global, or inside an event block) |
-| `PowerSentinelconf set KEY VALUE [--event NAME]` | Update a single value in place |
-| `PowerSentinelconf events` | List configured v2 events |
-| `PowerSentinelconf add-event NAME` | Add an empty v2 event block |
-| `PowerSentinelconf rm-event NAME` | Remove a v2 event block |
-
-Run as root, e.g. `su -c PowerSentinelconf` or `adb shell su -c "PowerSentinelconf set doze light --event screen_off"`. A `.bak` copy of the previous config is kept on every change. Files it writes use the exact same format as the WebUI, so you can freely switch between both.
-
----
-
-## WebUI development
-
-The module's WebUI (`frontend/`, built to `webroot/`) runs the same on both KernelSU-family managers and Magisk - `frontend/src/api.js` detects at runtime which transport actually works and picks it automatically:
-
-- **`backend-ksu.js`**: talks to the system through the [`kernelsu`](https://www.npmjs.com/package/kernelsu) JS library's `exec()` (spawns a root shell), used when the page is loaded natively by a WebUI-X-capable manager's WebView.
-- **`backend-cgi.js`**: talks to a local httpd server (`webui/cgi-bin/*.cgi`, started by `action.sh`) over `fetch()`, used on Magisk. Every request is authenticated with a per-session token `action.sh` generates and passes in the URL - see `docs/security-audit.md` for why (loopback sockets are reachable by any app on the device, unlike the KernelSU bridge).
-
-Both backends export the exact same function set, so every view module (`estado.js`, `config.js`, etc.) is written once and works either way.
-
-`webroot/` is a **build output** - don't hand-edit it. The source lives in `frontend/`:
+The generated `webroot/` directory is the shipped WebUI output. Do not edit it manually.
 
 ```bash
 cd frontend
-npm install
-npm run build      # writes to ../webroot
+npm ci
+npm run build
 ```
 
-For local iteration with hot reload, `npm run dev` starts a Vite dev server, but neither backend's APIs are available outside a real manager/device, so most functionality (status, config load/save, log) will need a real device/emulator to test end to end - see `docs/webui-x-migration.md` for the architecture and rationale, and `docs/security-audit.md` for the write path's security model (`PowerSentinel-writefile`).
+The frontend depends on the `kernelsu` JavaScript package and expects to run inside a compatible KernelSU manager WebView. A normal desktop browser does not provide the root bridge.
 
----
+## Security
 
-## Usage Tips
+The WebUI never sends configuration content to a local HTTP server. Configuration writes are base64-encoded and passed to `PowerSentinel-writefile`, which restricts write targets, performs atomic replacement, and keeps a backup.
 
-1. **Start Slow**:
-   - Enable one option at a time (e.g., `handle_apps=nice`) and test for 24 hours to ensure stability.
-   - Avoid aggressive settings like `disable_cores` initially, especially on Samsung or OnePlus devices.
+See [`docs/security-audit.md`](docs/security-audit.md) for the current security model.
 
-2. **Debugging**:
-   - Check `/data/local/tmp/PowerSentinel/PowerSentinel.status` for CPU, WiFi, and Doze states.
-   - Set `log_level=3` and review `/sdcard/PowerSentinel.log` for detailed logs if issues occur.
-   - Run `su -c ps -eo "%cpu pid cmd" | sort -n -k1,1` to identify high-CPU processes for `proc_file`.
+## Disclaimer
 
-3. **Device-Specific Notes**:
-   - **Samsung Devices**: Avoid `disable_cores` and `handle_cores` to prevent reboots or SystemUI crashes.
-   - **OnePlus Devices**: Disable `low_ram` to avoid random reboots.
+PowerSentinel modifies system behavior and requires root access. Aggressive settings can cause lag, missed notifications/alarms, application instability, or SystemUI problems. Use at your own risk and test changes incrementally.
 
-4. **Security**:
-   - Restrict config file permissions: `chmod 600 /data/local/tmp/PowerSentinel/*`.
-   - Avoid sharing configs, as they may include sensitive app data or cause instability on different devices.
+## Credits
 
----
-
-## FAQ
-
-**Q: My device soft-loops or SystemUI crashes. What do I do?**  
-**A**: You likely enabled too many aggressive options. Enter safe mode with `adb shell PowerSentinelctl safe`, disable risky settings (e.g., `disable_cores`, `low_ram`), and test incrementally. Check logs for clues.
-
-**Q: Will PowerSentinel brick my device?**  
-**A**: No, it won’t cause hard bootloops. However, misconfigurations can cause lag, missed alarms, or crashes. Always back up your device.
-
-**Q: Is PowerSentinel plug-and-play?**  
-**A**: No, it requires manual configuration. Start with the default config and adjust based on your device’s needs. An app is in development to simplify this.
-
-**Q: How effective is PowerSentinel?**  
-**A**: With proper tuning, it can extend battery life significantly. Effectiveness depends on your config and device.
-
-**Q: Why does my config not take effect?**  
-**A**: Ensure you run `PowerSentinelctl reload` or reboot after changes. Verify event names (v2) are valid and check logs for errors. Use the web UI to avoid syntax issues.
-
-**Q: Can I use PowerSentinel with other battery-saving modules?**  
-**A**: Yes, but conflicts may occur (e.g., with L Speed, Naptime). Disable overlapping features in other modules and test thoroughly.
-
----
-
-## Troubleshooting
-
-- **Unresponsive Device**: Boot into recovery, edit `/data/local/tmp/PowerSentinel/PowerSentinel.conf` to set `safemode=1`, reboot, and fix the config.
-- **No Battery Improvement**: Verify active events (`PowerSentinelctl status` in future releases or check logs). Try `handle_apps=suspend` with a robust allowlist.
-- **Missed Alarms/Notifications**: Disable `doze` or `handle_proc`, as they may delay background tasks.
-- **Report Issues**: Open a [GitHub Issue](https://github.com/kherio/PowerSentinel/issues) with your config, device details, and logs.
-
----
-
-## Contributing
-
-We welcome contributions! To contribute:
-
-1. Fork the repository: [DethByte64/PowerSentinel](https://github.com/kherio/PowerSentinel).
-
-2. Submit pull requests with bug fixes, features, or documentation improvements.
-
-3. Report bugs or suggest features via [GitHub Issues](https://github.com/kherio/PowerSentinel/issues).
-
----
-
-## Acknowledgments
-
-- Thanks to the Magisk and KernelSU communities for root support.
-
-- [DerGoogler](https://github.com/DerGoogler) for MMRL and their work in MMAR
-
-- Special thanks to **DethByte64** for his initial idea and releases.
-
-- Gratitude to XDA users for feedback and testing.
-
----
-
-## License
-
-PowerSentinel is released under the [GPLv3 License](LICENSE.md).
+PowerSentinel retains historical attribution to the earlier PowerSentinel/Xtreme-Battery-Saver lineage and its original contributors. The project is released under GPLv3.
