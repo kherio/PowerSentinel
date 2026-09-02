@@ -263,17 +263,61 @@ function fieldValue(fields, def) {
 
 function renderCoresControl(value, coreList, onChange) {
   var wrap = document.createElement('div');
-  var mode = (value === 'false' || value === 'auto' || value === '' || value === undefined) ? value || 'false' : 'custom';
+  // BUG FIX: this used to be `(value === 'false' || value === 'auto' ||
+  // value === '' || value === undefined) ? value || 'false' : 'custom'`,
+  // which mishandled the empty-string case - `'' || 'false'` evaluates
+  // to 'false' in JS (an empty string is falsy), so picking
+  // "Personalizado" with no cores selected yet (a legitimate value of
+  // '') was immediately redisplayed as "Desactivado" on the very next
+  // render. Empty string can only ever come from an explicit custom
+  // selection (fieldValue() falls back to the field's def, 'false', for
+  // a truly-unset value - never to ''), so it must always map to
+  // 'custom', never silently reinterpreted as 'false' by a truthiness
+  // fallback.
+  var mode;
+  if (value === 'auto') mode = 'auto';
+  else if (value === 'false' || value === undefined) mode = 'false';
+  else mode = 'custom';
 
-  var select = document.createElement('select');
-  select.className = 'filter';
+  // Segmented buttons instead of a native <select>: this field only ever
+  // needs one of 3 fixed choices, and a native OS picker dialog (which a
+  // <select> triggers on Android) was found to sometimes revert the
+  // choice back to "Desactivado" right after picking "Automático" or
+  // "Personalizado" - button taps have simple, unambiguous click
+  // handling with no separate native dialog involved, sidestepping that
+  // class of issue entirely. Mirrors the same button style already used
+  // for the individual core chips below.
+  var modeRow = document.createElement('div');
+  modeRow.style.display = 'flex';
+  modeRow.style.flexWrap = 'wrap';
+  modeRow.style.gap = '6px';
+  var modeButtons = {};
   [['false', t('cores.optDisabled')], ['auto', t('cores.optAuto')], ['custom', t('cores.optCustom')]].forEach(function (o) {
-    var opt = document.createElement('option');
-    opt.value = o[0]; opt.textContent = o[1];
-    if (o[0] === mode) opt.selected = true;
-    select.appendChild(opt);
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn' + (o[0] === mode ? ' primary' : ' ghost');
+    btn.style.padding = '8px 12px';
+    btn.style.fontSize = '13px';
+    btn.textContent = o[1];
+    btn.addEventListener('click', function () {
+      if (o[0] === mode) return;
+      mode = o[0];
+      Object.keys(modeButtons).forEach(function (k) {
+        modeButtons[k].className = 'btn' + (k === mode ? ' primary' : ' ghost');
+      });
+      if (mode === 'custom') {
+        customWrap.style.display = 'block';
+        renderCustom('');
+        onChange('');
+      } else {
+        customWrap.style.display = 'none';
+        onChange(mode);
+      }
+    });
+    modeButtons[o[0]] = btn;
+    modeRow.appendChild(btn);
   });
-  wrap.appendChild(select);
+  wrap.appendChild(modeRow);
 
   var customWrap = document.createElement('div');
   customWrap.style.marginTop = '8px';
@@ -318,17 +362,6 @@ function renderCoresControl(value, coreList, onChange) {
     }
   }
   renderCustom(mode === 'custom' ? value : '');
-
-  select.addEventListener('change', function () {
-    if (select.value === 'custom') {
-      customWrap.style.display = 'block';
-      renderCustom('');
-      onChange('');
-    } else {
-      customWrap.style.display = 'none';
-      onChange(select.value);
-    }
-  });
 
   return wrap;
 }
