@@ -848,73 +848,57 @@ handle_event() {
 
   log_msg 3 "Parsing the config for $event event"
 
-  # parse config of event
-  line=''
-  while read line; do
-    [ "$line" = "$event={" ] && continue
-    [ "$line" = "}" ] && break
-    key=$(echo "$line" | cut -d= -f1)
-    val=$(echo "$line" | cut -d= -f2-)
-    case $key in
-      keep_on_charge)
-        if [ "$val" = "true" ] && \
-        [ "$flag" = "0" ] && \
-        [ "$event" != "charging" ] && \
-        [ "$charging" = "true" ]; then
-          log_msg 1 "$event has keep_on_charge set. We are keeping the settings until unplugged"
-          return 0
-        fi ;;
-      quit)
-        if [ "$val" = "true" ] && \
-        [ "$event" = "boot" ]; then
-          quit=true
-        fi ;;
-      handle_cores)
-        if [ "$val" != "false" ]; then
-          handle_cores="$val"
-        fi ;;
-      disable_cores)
-        if [ "$val" != "false" ]; then
-          disable_cores="$val"
-        fi ;;
-      handle_apps)
-        if [ "$val" != "false" ]; then
-          handle_apps="$val"
-        fi ;;
-      allowlist)
-        if [ -f "$val" ]; then
-          allowlist="$val"
-        fi ;;
-      denylist)
-        if [ -f "$val" ]; then
-          denylist="$val"
-        fi ;;
-      handle_proc)
-        if [ "$val" != "false" ]; then
-          handle_proc="$val"
-        fi ;;
-      proc_file)
-        if [ -f "$val" ]; then
-          proc_file="$val"
-        fi ;;
-      handle_gms)
-        if [ "$val" != "false" ]; then
-          handle_gms="$val"
-        fi ;;
-      low_ram)
-        if [ "$val" = "true" ]; then
-          low_ram="true"
-        fi ;;
-      doze)
-        if [ "$val" != "false" ]; then
-          doze="$val"
-        fi ;;
-      kill_wifi)
-        if [ "$val" = "true" ]; then
-          kill_wifi="true"
-        fi;;
-    esac
-  done < <(grep -F -A99 "$event={" "$conf")
+  # Centralized read: every field for this event now goes through
+  # config_get_event_raw() (PowerSentinel-config.sh, JSON-backed) instead
+  # of this function's own hand-rolled `grep -F -A99 "$event={" "$conf"`
+  # + while-read parser - removing what used to be a third, independent
+  # parser of the config file (config.sh's own functions, and the
+  # WebUI's frontend parser, are the other two), each of which could in
+  # principle drift out of sync about what a given field means. Same
+  # validation semantics as before for every field, just centralized.
+  local val
+
+  val="$(config_get_event_raw "$event" keep_on_charge false)"
+  if [ "$val" = "true" ] && [ "$flag" = "0" ] && [ "$event" != "charging" ] && [ "$charging" = "true" ]; then
+    log_msg 1 "$event has keep_on_charge set. We are keeping the settings until unplugged"
+    return 0
+  fi
+
+  val="$(config_get_event_raw "$event" quit false)"
+  [ "$val" = "true" ] && [ "$event" = "boot" ] && quit=true
+
+  val="$(config_get_event_raw "$event" handle_cores false)"
+  [ "$val" != "false" ] && handle_cores="$val"
+
+  val="$(config_get_event_raw "$event" disable_cores false)"
+  [ "$val" != "false" ] && disable_cores="$val"
+
+  val="$(config_get_event_raw "$event" handle_apps false)"
+  [ "$val" != "false" ] && handle_apps="$val"
+
+  val="$(config_get_event_raw "$event" allowlist "")"
+  [ -n "$val" ] && [ -f "$val" ] && allowlist="$val"
+
+  val="$(config_get_event_raw "$event" denylist "")"
+  [ -n "$val" ] && [ -f "$val" ] && denylist="$val"
+
+  val="$(config_get_event_raw "$event" handle_proc false)"
+  [ "$val" != "false" ] && handle_proc="$val"
+
+  val="$(config_get_event_raw "$event" proc_file "")"
+  [ -n "$val" ] && [ -f "$val" ] && proc_file="$val"
+
+  val="$(config_get_event_raw "$event" handle_gms false)"
+  [ "$val" != "false" ] && handle_gms="$val"
+
+  val="$(config_get_event_raw "$event" low_ram false)"
+  [ "$val" = "true" ] && low_ram="true"
+
+  val="$(config_get_event_raw "$event" doze false)"
+  [ "$val" != "false" ] && doze="$val"
+
+  val="$(config_get_event_raw "$event" kill_wifi false)"
+  [ "$val" = "true" ] && kill_wifi="true"
 
   # perform sanity checks to prevent the user from killing themself
   if [ "$handle_apps" != "false" ] && [ "$allowlist" = "null" ] && [ "$denylist" = "null" ]; then
@@ -1058,7 +1042,7 @@ while true; do
       done ;;
     safe)
       log_msg 1 "Entered Safe Mode"
-      echo "safemode=1" >> "$conf"
+      config_set_global safemode true
       for i in ${!active_events[@]}; do
         handle_event "${active_events[$i]}" 0
       done
@@ -1070,7 +1054,7 @@ while true; do
         ready="$(cat $ctl_file)"
       done
       log_msg 1 "Resume command received. Safe Mode Exited."
-      sed -i '/safemode=1/d' "$conf"
+      config_set_global safemode false
       exec "$0"
       ;;
     *)
@@ -1231,7 +1215,7 @@ init_v1() {
           log_msg 1 "Resume command received"
           ;;
         safe)
-          echo "safemode=1" >> "$conf"
+          config_set_global safemode true
           log_msg 1 "Entering Safe Mode"
           disable_pwr_save
           # enhance safemode here
@@ -1248,7 +1232,7 @@ init_v1() {
           until [ "$ready" = "resume" ]; do
             ready="$(cat $ctl_file)"
           done
-          sed -i '/safemode=1/d' "$conf"
+          config_set_global safemode false
           log_msg 1 "Resume command received. Safe Mode Exited. Restarting Daemon."
           exec "$0"
           ;;
@@ -1359,18 +1343,53 @@ EOF
 
 fi
 
-# Load the top-level configuration once. Event-specific values are parsed
-# separately when their event is evaluated.
-config_load_global
+# Bootstrap-only version check, reading $conf directly rather than
+# through getconf/config_load_global - PowerSentinel.json doesn't exist
+# yet at this point, so there's nothing for those to read. This is only
+# ever used to decide whether the legacy v1->v2 text migration below
+# needs to run; migrate_conf_to_json() further down builds the real
+# JSON config everything else actually reads from, once $conf has
+# settled into its final v2, block-structured form.
+version="$(grep '^version=' "$conf" 2>/dev/null | tail -1 | cut -d= -f2)"
+version="${version:-1}"
 
-# check for migration
-version="$(getconf version 1)" # if version is not set, it is 1
 # check for a user wanting to switch to v2
 if [ "$(grep ".*={" "$conf" | head -n 1)" == "" ] && [ "$version" = "2" ]; then
+  # migrate() reads the user's current settings via getconf() to carry
+  # them into the new block structure - but config_load_global() now
+  # reads PowerSentinel.json, which doesn't exist yet at this point (this
+  # whole branch only runs for someone still on the pre-block v1 flat
+  # format). Populate PS_CONFIG directly from the old flat $conf just for
+  # this one legacy step, so migrate()'s getconf calls see the user's
+  # actual values instead of silently falling back to every default.
+  PS_CONFIG=()
+  while IFS=$'\t' read -r key value; do
+    [ -n "$key" ] || continue
+    PS_CONFIG["$key"]="$value"
+  done < <(awk '
+    /^[A-Za-z_][A-Za-z0-9_]*=/ {
+      eq = index($0, "=")
+      key = substr($0, 1, eq - 1)
+      value = substr($0, eq + 1)
+      print key "\t" value
+    }
+  ' "$conf")
   migrate
-  config_load_global
-  version="$(getconf version 1)"
+  version="$(grep '^version=' "$conf" 2>/dev/null | tail -1 | cut -d= -f2)"
+  version="${version:-1}"
 fi
+
+# One-time upgrade path: convert the now-finalized $conf into
+# PowerSentinel.json. No-op if PowerSentinel.json already exists (an
+# already-migrated install, or a build tool created one directly) - see
+# PowerSentinel-config.sh for the full rationale.
+migrate_conf_to_json
+
+# Load the top-level configuration once, now from PowerSentinel.json.
+# Event-specific values are read separately when their event is
+# evaluated.
+config_load_global
+version="$(getconf version 1)"
 
 # setup logging
 log_file=$(getconf log_file "/sdcard/PowerSentinel.log")
@@ -1394,16 +1413,15 @@ ctl_file=$(getconf ctl_file "/data/local/tmp/PowerSentinel/powersentinel")
 ensure_ctl_file "$ctl_file"
 
 # persistent safe mode
-safe=$(getconf safemode 0)
-if [ "$safe" = "1" ]; then
+safe=$(getconf safemode false)
+if [ "$safe" = "true" ]; then
   log_msg 1 "Safemode was found in the config file, Entering safemode."
   notif "Safe Mode is Active"
-  until [ "$resume" = "resume" ] || [ "$(config_get safemode 0)" = "0" ]; do
+  until [ "$resume" = "resume" ] || [ "$(config_get safemode false)" = "false" ]; do
     config_load_global
     resume=$(cat "$ctl_file")
   done
-  sed -i '/safemode=1/d' "$conf"
-  sed -i '/safemode=0/d' "$conf"
+  config_set_global safemode false
   log_msg 1 "Safemode was exited. Restarting the daemon."
   exec "$0"
 fi
