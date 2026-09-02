@@ -3,16 +3,13 @@
 conf="/data/local/tmp/PowerSentinel/PowerSentinel.conf"
 
 getconf() {
-  # change made here to set default
-  # if not set
   opt=$(grep "^$1=" "$conf" | cut -d= -f2)
   [ "$opt" != "" ] && echo "$opt" || echo "$2"
 }
 
-# SECURITY: see the matching comment in PowerSentineld - default lives inside
-# /data/local/tmp/PowerSentinel/ (not the world-writable /data/local/tmp
-# itself), and a pre-existing file not owned by root is replaced rather
-# than trusted, to close a pre-creation race on a shared directory.
+# Keep the control file in PowerSentinel's private data directory and repair
+# it if an untrusted process pre-created it. The daemon performs the same
+# ownership check before consuming commands.
 ensure_ctl_file() {
   local f="$1"
   local owner
@@ -31,19 +28,14 @@ ctl_file=$(getconf ctl_file "/data/local/tmp/PowerSentinel/powersentinel")
 ensure_ctl_file "$ctl_file"
 version=$(getconf version 1)
 
-
 print_help_v2() {
 cat << EOM
   PowerSentinel Controller Options:
 
   start		starts the manual event or a custom event
-
   stop		stops the manual event or a custom event
-
   pause		pauses the PowerSentinel daemon
-
   resume	resumes the PowerSentinel daemon or exits safe mode
-
   safe		stops all events and enters safe mode
 EOM
 }
@@ -53,20 +45,15 @@ cat << EOM
   PowerSentinel Controller Options:
 
   start		enables power save mode manually.
-
   stop		disables power save mode manually.
-
   reload	reloads the config file.
-
   pause		pauses the daemon.
-
   resume	resumes the daemon or exits Safe Mode.
-
   safe		Enters Safe Mode.
 EOM
 }
 
-case $1 in
+case "${1:-}" in
   ''|'-h'|'--help')
     if [ "$version" = 2 ]; then
       print_help_v2
@@ -75,10 +62,27 @@ case $1 in
     fi
     ;;
   *)
-    if [[ "$1" = "start" || "$1" = "stop" ]] && [ "$version" = "2" ] && [ ! "$2" ]; then
+    # The daemon consumes a small text command protocol. Reject shell
+    # metacharacters, option-like arguments and excessive argument counts
+    # before anything reaches the control file. This preserves custom event
+    # names while preventing the CLI from becoming a shell-command tunnel.
+    if [ "$#" -gt 2 ]; then
+      echo "PowerSentinelctl: too many arguments" >&2
+      exit 2
+    fi
+    for arg in "$@"; do
+      case "$arg" in
+        ''|-[!-]*|*[!a-zA-Z0-9_.:-]*)
+          echo "PowerSentinelctl: invalid argument" >&2
+          exit 2
+          ;;
+      esac
+    done
+
+    if [[ "$1" = "start" || "$1" = "stop" ]] && [ "$version" = "2" ] && [ "$#" -eq 1 ]; then
       echo "start manual" > "$ctl_file"
     else
-      echo "$@" > "$ctl_file"
+      printf '%s\n' "$*" > "$ctl_file"
     fi
     ;;
 esac
