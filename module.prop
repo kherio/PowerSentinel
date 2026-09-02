@@ -4,3 +4,4 @@ version=v3.8.0
 versionCode=380
 author=kherio
 description=A policy-driven, rooted Android battery optimization module with a native KernelSU WebUI.
+updateJson=https://raw.githubusercontent.com/kherio/PowerSentinel/main/update.json
