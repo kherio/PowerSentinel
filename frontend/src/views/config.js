@@ -228,10 +228,24 @@ function renderEvents() {
 
       const fieldsDiv = document.createElement('div');
       body.appendChild(fieldsDiv);
-      renderFieldsForm(fieldsDiv, block.fields, FIELD_DEFS, coreList, () => { markDirty(true); summary.textContent = summarizeFields(block.fields); });
-
       const appsDiv = document.createElement('div');
       body.appendChild(appsDiv);
+
+      // Mounting the apps picker is tied to handle_apps' current value
+      // (mountAppsPicker no-ops unless it's kill/nice/suspend), but
+      // renderFieldsForm's own onChange callback fires for ANY field
+      // change within this event - handle_apps included, since it's
+      // just another field. Re-mounting on every change (not only at
+      // initial card-expand time) is what makes the picker actually
+      // react to the user flipping handle_apps on/off, instead of only
+      // ever reflecting whatever its value happened to be the moment
+      // the card was first expanded.
+      renderFieldsForm(fieldsDiv, block.fields, FIELD_DEFS, coreList, () => {
+        markDirty(true);
+        summary.textContent = summarizeFields(block.fields);
+        mountAppsPicker(appsDiv, block.fields, () => markDirty(true));
+      });
+
       mountAppsPicker(appsDiv, block.fields, () => markDirty(true));
 
       card.appendChild(body);
