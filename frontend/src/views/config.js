@@ -17,19 +17,29 @@ let loaded = false;
 
 let editor, highlightCode, dirtyFlag;
 
+// Tokenizes one line of the raw JSON the developer-mode editor shows -
+// good enough highlighting (keys, string values, punctuation) without
+// pulling in a full JSON tokenizer, matching the same line-by-line
+// approach the old .conf-grammar highlighter used. Reuses the same CSS
+// classes that grammar already defined (tok-key/tok-op/tok-val/
+// tok-punct) - nothing new needed in style.css.
 function highlightLine(line) {
-  if (/^\s*#/.test(line)) return `<span class="tok-comment">${escapeHtml(line)}</span>`;
-  const blockMatch = line.match(/^(\s*)([a-zA-Z0-9_-]+)(=\{)(\s*)$/);
-  if (blockMatch) {
-    return blockMatch[1] + `<span class="tok-block">${escapeHtml(blockMatch[2])}</span>` +
-      `<span class="tok-punct">${escapeHtml(blockMatch[3])}</span>` + blockMatch[4];
-  }
-  if (/^\s*\}\s*$/.test(line)) return `<span class="tok-punct">${escapeHtml(line)}</span>`;
-  const kv = line.match(/^(\s*)([a-zA-Z0-9_]+)(\s*=\s*)(.*)$/);
+  const kv = line.match(/^(\s*)"([^"]*)"(\s*:\s*)(.*)$/);
   if (kv) {
-    return kv[1] + `<span class="tok-key">${escapeHtml(kv[2])}</span>` +
-      `<span class="tok-op">${escapeHtml(kv[3])}</span>` +
-      `<span class="tok-val">${escapeHtml(kv[4])}</span>`;
+    const indent = kv[1], key = kv[2], sep = kv[3], rest = kv[4];
+    const strVal = rest.match(/^"([^"]*)"(,?)\s*$/);
+    if (strVal) {
+      return indent + `<span class="tok-key">"${escapeHtml(key)}"</span>` +
+        `<span class="tok-op">${escapeHtml(sep)}</span>` +
+        `<span class="tok-val">"${escapeHtml(strVal[1])}"</span>` +
+        `<span class="tok-punct">${escapeHtml(strVal[2])}</span>`;
+    }
+    return indent + `<span class="tok-key">"${escapeHtml(key)}"</span>` +
+      `<span class="tok-op">${escapeHtml(sep)}</span>` +
+      `<span class="tok-punct">${escapeHtml(rest)}</span>`;
+  }
+  if (/^\s*[{}[\],]*\s*$/.test(line)) {
+    return `<span class="tok-punct">${escapeHtml(line)}</span>`;
   }
   return escapeHtml(line);
 }
@@ -159,7 +169,7 @@ function renderEvents() {
       while (existing.indexOf(name) !== -1) { name = base + n; n++; }
       const clonedFields = Object.assign({}, block.fields);
       delete clonedFields.__apps; // don't share the (unsaved) apps-picker state between events
-      model.blocks.push({ name, fields: clonedFields, extra: [], __expanded: true });
+      model.blocks.push({ name, fields: clonedFields, __expanded: true });
       markDirty(true);
       renderEvents();
     });
@@ -343,10 +353,24 @@ async function loadFile(showToast) {
 }
 
 async function saveFile() {
+  // Guard against writing invalid JSON to disk: switching *out* of the
+  // text tab already validates (see switchSubTab), but saving directly
+  // while still in it never did - the daemon reads this file with jq,
+  // so broken JSON there would silently break every setting, not just
+  // whatever the user was mid-editing.
+  if (activeView === 'text') {
+    try {
+      parseConfig(editor.value);
+    } catch (e) {
+      toast(t('config.parseError'), 'error');
+      return;
+    }
+  }
+
   const content = currentText();
   try {
     await writeConfig(content);
-    // Apps picker edits live outside PowerSentinel.conf (separate allow/deny
+    // Apps picker edits live outside PowerSentinel.json (separate allow/deny
     // files), so they're persisted alongside it here rather than being
     // part of the serialized config text.
     await Promise.all(model.blocks.map((b) => persistAppsPicker(b.fields)));
@@ -398,7 +422,7 @@ export function initConfig() {
     if (!sel.value) return;
     const fields = sel.value === 'night' ? { night_start: '23:00', night_end: '07:00' } :
       sel.value === 'thermal' ? { thermal_threshold: '45' } : {};
-    model.blocks.push({ name: sel.value, fields, extra: [], __expanded: true });
+    model.blocks.push({ name: sel.value, fields, __expanded: true });
     markDirty(true);
     renderEvents();
   });
@@ -410,7 +434,7 @@ export function initConfig() {
     if (model.blocks.some((b) => b.name === name)) {
       toast(t('config.eventExists'), 'error'); return;
     }
-    model.blocks.push({ name, fields: {}, extra: [], __expanded: true });
+    model.blocks.push({ name, fields: {}, __expanded: true });
     input.value = '';
     markDirty(true);
     renderEvents();

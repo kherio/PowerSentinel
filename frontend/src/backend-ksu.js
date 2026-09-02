@@ -5,12 +5,18 @@ import { PowerSentinelApiError } from './errors.js';
 // KernelSU/WebUI-X-capable manager WebView, where `exec()` is provided by
 // the `kernelsu` JavaScript API and executes commands with root privileges.
 const DATA_DIR = '/data/local/tmp/PowerSentinel';
-const CONF_FILE = `${DATA_DIR}/PowerSentinel.conf`;
+const CONF_FILE = `${DATA_DIR}/PowerSentinel.json`;
 const STATUS_FILE = `${DATA_DIR}/PowerSentinel.status`;
 const DEFAULT_LOG_FILE = `${DATA_DIR}/PowerSentinel.log`;
 
+// Reads log_file the same way the daemon itself does now (jq against
+// the JSON config) rather than grepping the old .conf text - that grep
+// was a fourth independent parser of the config file, on top of the
+// daemon's own (PowerSentinel-config.sh), this frontend's
+// (config-form.js), and the one that used to live inline in
+// handle_event() before it was centralized too.
 const RESOLVE_LOG_PATH =
-  `f=$(grep '^log_file=' '${CONF_FILE}' 2>/dev/null | cut -d= -f2); ` +
+  `f=$(jq -r '.global.log_file // empty' '${CONF_FILE}' 2>/dev/null); ` +
   `echo "\${f:-${DEFAULT_LOG_FILE}}"`;
 
 async function run(command) {

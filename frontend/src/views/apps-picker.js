@@ -203,7 +203,7 @@ export function mountAppsPicker(container, fields, onDirty) {
 }
 
 // Called from config.js's saveFile() for every block/v1Fields whose
-// picker was touched, alongside the main PowerSentinel.conf write.
+// picker was touched, alongside the main PowerSentinel.json write.
 export async function persistAppsPicker(fields) {
   const state = fields.__apps;
   if (!state || !state.dirty) return;

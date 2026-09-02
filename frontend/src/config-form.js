@@ -1,4 +1,4 @@
-// Parser / serializer / form renderer for PowerSentinel.conf (v1 flat + v2 event blocks)
+// Parser / serializer / form renderer for PowerSentinel.json (event-block based config)
 import { t } from './i18n.js';
 
 var PREDEFINED_EVENTS = ['boot', 'charging', 'screen_off', 'low_power', 'night', 'thermal', 'adaptive_tier1', 'adaptive_tier2', 'adaptive_tier3', 'manual'];
@@ -147,112 +147,90 @@ function buildRecommendedModel() {
     log_file: '/sdcard/PowerSentinel.log',
     log_level: '2',
     notify: 'true',
-    globalExtra: [],
     blocks: [
-      { name: 'boot', fields: {}, extra: [] },
-      { name: 'charging', fields: Object.assign({}, EVENT_PRESETS.balanced.fields), extra: [] },
-      { name: 'screen_off', fields: Object.assign({}, EVENT_PRESETS.balanced.fields), extra: [] },
-      { name: 'low_power', fields: Object.assign({}, EVENT_PRESETS.aggressive.fields), extra: [] },
-      { name: 'night', fields: Object.assign({ night_start: '23:00', night_end: '07:00' }, EVENT_PRESETS.balanced.fields), extra: [] }
+      { name: 'boot', fields: {} },
+      { name: 'charging', fields: Object.assign({}, EVENT_PRESETS.balanced.fields) },
+      { name: 'screen_off', fields: Object.assign({}, EVENT_PRESETS.balanced.fields) },
+      { name: 'low_power', fields: Object.assign({}, EVENT_PRESETS.aggressive.fields) },
+      { name: 'night', fields: Object.assign({ night_start: '23:00', night_end: '07:00' }, EVENT_PRESETS.balanced.fields) }
     ]
   };
 }
 
 // ---------- Parsing ----------
-
-var KNOWN_FIELD_KEYS = (function () {
-  var set = {};
-  FIELD_DEFS.forEach(function (d) { set[d.key] = true; });
-  return set;
-})();
-// Built from GLOBAL_DEFS itself (plus 'version', a special top-level key
-// not in GLOBAL_DEFS) rather than a separately-maintained static list -
-// a static list silently went stale when charge_limit/charge_limit_node
-// were added to GLOBAL_DEFS without updating it, so parseConfig treated
-// them as "known" (correctly recognized, no globalExtra fallback -
-// see below) while never actually copying them onto the returned
-// model, and serializeConfig had no matching model field to read them
-// back from either.
-var KNOWN_GLOBAL_KEYS = (function () {
-  var set = { version: true };
-  GLOBAL_DEFS.forEach(function (d) { set[d.key] = true; });
-  return set;
-})();
+//
+// The on-disk/wire format is now plain JSON ({"global": {...}, "events":
+// {name: {...}}}), matching what the daemon itself reads via jq
+// (PowerSentinel-config.sh) - previously both sides parsed a bespoke
+// text grammar independently, which is exactly the kind of duplicated,
+// drift-prone parsing this project has been trying to move away from.
+//
+// Because JSON round-trips arbitrary keys generically, there's no need
+// for the old KNOWN_FIELD_KEYS/KNOWN_GLOBAL_KEYS "is this a field we
+// recognize, or do we need to preserve it verbatim so we don't silently
+// drop it" distinction, or the globalExtra/extra arrays that existed
+// solely to carry unrecognized lines through a parse->serialize round
+// trip - every key a block or the global object has just survives
+// automatically, recognized or not, so an event field this version of
+// the form doesn't have a control for (a newer daemon feature, a
+// hand-edited addition, etc.) is never lost.
 
 function parseConfig(text) {
-  var lines = text.split('\n');
-  var top = {};
-  var globalExtra = [];
-  var blocks = [];
-  var current = null;
-  var blockHeaderRe = /^([a-zA-Z0-9_-]+)=\{\s*$/;
-  var kvRe = /^([a-zA-Z0-9_]+)\s*=\s*(.*)$/;
+  var data = JSON.parse(text); // deliberately not caught here - callers
+  // (see switchSubTab) already handle invalid JSON as a parse error and
+  // warn the user, exactly like they handled a malformed .conf before.
 
-  lines.forEach(function (raw) {
-    var trimmed = raw.trim();
-    if (current && trimmed === '}') { current = null; return; }
-    var m;
-    if (!current && (m = trimmed.match(blockHeaderRe))) {
-      current = { name: m[1], fields: {}, extra: [] };
-      blocks.push(current);
-      return;
-    }
-    // Drop pure blank lines entirely (they'd otherwise accumulate on every
-    // parse -> serialize round trip). Only real comments are preserved.
-    if (trimmed === '') return;
-    if (trimmed.charAt(0) === '#') {
-      (current ? current.extra : globalExtra).push(raw);
-      return;
-    }
-    if ((m = trimmed.match(kvRe))) {
-      var key = m[1], val = m[2];
-      var known = current ? KNOWN_FIELD_KEYS[key] : KNOWN_GLOBAL_KEYS[key];
-      if (known) {
-        (current ? current.fields : top)[key] = val;
-      } else {
-        // Unrecognized top-level key: preserve verbatim rather than
-        // silently dropping it. This is also where a legacy v1 config's
-        // flat fields (handle_apps=..., low_ram=..., etc. with no event
-        // block) land, since the form no longer edits v1 configs - the
-        // original lines are kept intact instead of being lost.
-        (current ? current.extra : globalExtra).push(raw);
-      }
-      return;
-    }
-    (current ? current.extra : globalExtra).push(raw);
+  if (!data || typeof data !== 'object') data = {};
+  var global = (data.global && typeof data.global === 'object') ? data.global : {};
+  var events = (data.events && typeof data.events === 'object') ? data.events : {};
+
+  var model = { version: '2' };
+  Object.keys(global).forEach(function (k) {
+    model[k] = global[k] === null || global[k] === undefined ? '' : String(global[k]);
   });
 
-  var model = {
-    version: '2',
-    globalExtra: globalExtra,
-    blocks: blocks
-  };
-  GLOBAL_DEFS.forEach(function (d) { model[d.key] = top[d.key]; });
+  model.blocks = Object.keys(events).map(function (name) {
+    var raw = (events[name] && typeof events[name] === 'object') ? events[name] : {};
+    var fields = {};
+    Object.keys(raw).forEach(function (k) {
+      fields[k] = raw[k] === null || raw[k] === undefined ? '' : String(raw[k]);
+    });
+    return { name: name, fields: fields };
+  });
+
   return model;
 }
 
 function serializeConfig(model) {
-  var out = [];
-  out.push('version=2');
-  GLOBAL_DEFS.forEach(function (d) {
-    var v = model[d.key];
-    if (v !== undefined && v !== '') out.push(d.key + '=' + v);
+  var global = {};
+  Object.keys(model).forEach(function (k) {
+    if (k === 'blocks' || k === 'version') return;
+    if (model[k] === undefined) return;
+    global[k] = model[k];
   });
-  if (model.globalExtra && model.globalExtra.length) {
-    out = out.concat(model.globalExtra);
-  }
 
+  var events = {};
   model.blocks.forEach(function (b) {
-    out.push('');
-    out.push(b.name + '={');
-    FIELD_DEFS.forEach(function (d) {
-      var v = b.fields[d.key];
-      if (v !== undefined && v !== '') out.push('  ' + d.key + '=' + v);
+    var fields = {};
+    Object.keys(b.fields).forEach(function (k) {
+      // '__'-prefixed keys are in-memory-only UI bookkeeping (e.g.
+      // __eventName, the apps-picker's __apps cache) and never belong in
+      // the saved config. Everything else is written as-is, INCLUDING an
+      // empty string - unlike the old serializer, which skipped empty
+      // values entirely. That was a real, if minor, latent bug: a cores
+      // field left in "Personalizado, nothing picked yet" (a legitimate
+      // value of '') would be dropped from the output entirely, then
+      // silently reappear as "Desactivado" after the next save+reload -
+      // the same class of bug fixed for the *live* UI in a previous
+      // version, just reachable through a save/reload instead.
+      if (k.indexOf('__') === 0) return;
+      if (b.fields[k] === undefined) return;
+      fields[k] = b.fields[k];
     });
-    if (b.extra && b.extra.length) out = out.concat(b.extra);
-    out.push('}');
+    events[b.name] = fields;
   });
-  return out.join('\n') + '\n';
+
+  return JSON.stringify({ version: 2, global: global, events: events }, null, 2) + '\n';
 }
 
 // ---------- Rendering helpers ----------
