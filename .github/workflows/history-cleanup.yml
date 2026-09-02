@@ -31,6 +31,9 @@ jobs:
           git config user.name "$NEW_NAME"
           git config user.email "$NEW_EMAIL"
 
+          # Make the second branch an explicit local ref for filter-branch.
+          git fetch origin powersentinel/identity-migration:refs/heads/powersentinel/identity-migration
+
           # Commit the removal first so filter-branch has a clean worktree.
           rm -f .github/workflows/history-cleanup.yml
           git add -u .github/workflows/history-cleanup.yml
@@ -48,8 +51,6 @@ jobs:
 
           git filter-branch -f --env-filter "$FILTER_ENV" --msg-filter "$FILTER_MSG" --tag-name-filter cat -- main powersentinel/identity-migration
 
-          # The backup branch is intentionally untouched and is not pushed by
-          # this workflow, so the pre-cleanup history remains recoverable.
           if git log main powersentinel/identity-migration --format='%an <%ae>%n%cn <%ce>%n%B' | grep -Eiq 'DethByte64|vikasmistry|dethbyte777@gmail\.com|86263062\+vikasmistry@users\.noreply\.github\.com'; then
             echo 'Legacy identity remains in rewritten branch history.'
             exit 1
