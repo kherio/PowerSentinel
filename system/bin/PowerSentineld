@@ -2,6 +2,9 @@
 conf="/data/local/tmp/PowerSentinel/PowerSentinel.conf"
 . "$(dirname "$0")/PowerSentinel-config.sh"
 . "$(dirname "$0")/PowerSentinel-detect.sh"
+. "$(dirname "$0")/PowerSentinel-policy.sh"
+. "$(dirname "$0")/PowerSentinel-capabilities.sh"
+. "$(dirname "$0")/PowerSentinel-actions.sh"
 declare -a active_events
 declare -a cpus
 declare -a cpu_freqs
@@ -41,64 +44,12 @@ ensure_ctl_file() {
   chmod 600 "$f" 2>/dev/null
 }
 
-# Independent, time-of-day based profile (feature request: "perfil
-# nocturno"). Unlike the other events, "night" isn't tied to any device
-# state (charging/screen/battery) - it's purely a clock range read from
-# its own event block's night_start/night_end fields (HH:MM), and can be
-# active at the same time as any other event.
-get_night_times() {
-  night_start="$(config_get_event_raw night night_start "")"
-  night_end="$(config_get_event_raw night night_end "")"
-}
-
-is_night_now() {
-  if [ -z "$night_start" ] || [ -z "$night_end" ]; then
-    echo false
-    return
-  fi
-  # "10#" forces base-10 parsing: bash treats a leading-zero number like
-  # 08/09 as invalid octal in arithmetic context otherwise.
-  local now_h now_m now_min start_h start_m start_min end_h end_m end_min
-  now_h=$(date +%H); now_m=$(date +%M)
-  start_h=${night_start%%:*}; start_m=${night_start##*:}
-  end_h=${night_end%%:*}; end_m=${night_end##*:}
-  now_min=$(( 10#$now_h * 60 + 10#$now_m ))
-  start_min=$(( 10#$start_h * 60 + 10#$start_m ))
-  end_min=$(( 10#$end_h * 60 + 10#$end_m ))
-
-  if [ "$start_min" -le "$end_min" ]; then
-    # same-day range, e.g. 13:00-18:00
-    if [ "$now_min" -ge "$start_min" ] && [ "$now_min" -lt "$end_min" ]; then echo true; else echo false; fi
-  else
-    # wraps past midnight, e.g. 23:00-07:00
-    if [ "$now_min" -ge "$start_min" ] || [ "$now_min" -lt "$end_min" ]; then echo true; else echo false; fi
-  fi
-}
-
-# Independent, temperature-based profile (companion to "night" above,
-# same idea: an event that isn't tied to charging/screen state, active
-# whenever the battery is at or above a configured temperature). Reads
-# its threshold from the "thermal" event block's thermal_threshold field
-# (whole degrees Celsius). Hysteresis (3C below the threshold) avoids
-# rapidly flapping on/off when the temperature hovers right at the line.
-get_thermal_threshold() {
-  thermal_threshold="$(config_get_event_raw thermal thermal_threshold "")"
-}
-
-is_thermal_now() {
-  if [ -z "$thermal_threshold" ]; then
-    echo false
-    return
-  fi
-  local temp_c hysteresis_c
-  temp_c="$(detect_battery_temp_c)"
-  if [ "$was_thermal" = "true" ]; then
-    hysteresis_c=$(( thermal_threshold - 3 ))
-    [ "$temp_c" -ge "$hysteresis_c" ] && echo true || echo false
-  else
-    [ "$temp_c" -ge "$thermal_threshold" ] && echo true || echo false
-  fi
-}
+# get_night_times/is_night_now, get_thermal_threshold/is_thermal_now, and
+# the adaptive pressure engine (compute_pressure_score/
+# pressure_tier_for_score) now live in PowerSentinel-policy.sh - they're
+# pure decisions (given detected state + config, what should be active),
+# not actions, so they moved out alongside detect.sh in the same
+# architecture pass.
 
 # Optional charge limiter: stops charging once the battery reaches
 # $charge_limit%, resumes 5% below it (hysteresis, same idea as the
@@ -107,7 +58,10 @@ is_thermal_now() {
 # controls charging varies by device/kernel and there's no universal
 # one. Writes "0"/"1" (the most common convention for a
 # "charging_enabled"-style node); if the path is wrong the write simply
-# fails silently rather than touching anything else.
+# fails silently rather than touching anything else. Left in the daemon
+# itself (not moved to policy.sh) since it both decides *and* acts
+# (writes to charge_limit_node directly) - untangling that mix is
+# action-extraction work for a later phase, not this one.
 was_charge_paused="false"
 check_charge_limit() {
   local charge_limit charge_limit_node level charging
@@ -125,83 +79,6 @@ check_charge_limit() {
     fi
   elif [ "$was_charge_paused" = "true" ] && { [ "$charging" != "true" ] || [ "$level" -le "$((charge_limit - 5))" ]; }; then
     echo 1 > "$charge_limit_node" 2>/dev/null && was_charge_paused="false" && log_msg 2 "Resuming charging (${level}%)"
-  fi
-}
-
-# ---------- Adaptive pressure engine ----------
-#
-# Opt-in (adaptive_mode=true) alternative to the classic per-device-state
-# events (charging/low_power/screen_off/night/thermal): instead of an
-# all-or-nothing profile switching on/off around a single state change,
-# this computes one 0-100 "pressure" score each poll cycle from several
-# real-time signals at once, then maps that score to one of three
-# escalating tiers - adaptive_tier1/2/3, plain config blocks with the
-# exact same fields any other event has (handle_apps, handle_cores,
-# doze, ...), so the existing form UI/handle_event/apps-picker machinery
-# needs no changes to support them. When enabled, this fully replaces
-# the classic automatic triggers below; "manual", "boot", and safe mode
-# are unaffected in either mode.
-#
-# Score composition (each term is independent, then the total is
-# clamped to 0-100 - see docs/adaptive-engine.md for the reasoning
-# behind these specific weights):
-#   - Battery level: linear, an empty battery contributes up to +40
-#   - Temperature: starts contributing above 30C, capped at +30 by 40C+
-#   - Charging: flat -40 (charging relieves pressure - no urgency)
-#   - Screen off: flat +15 (headroom to act without the user noticing)
-#   - Night hours (if configured on the night event): flat +10
-#   - CPU load (1-min average, whole-number part only - bash has no
-#     float comparison): high load holds pressure back (-10 to -20),
-#     since a busy device is the one time aggressive action would
-#     actually be felt
-compute_pressure_score() {
-  local level temp_c charging_flag score
-  local screen_on load_int night_now over
-
-  level="$DETECT_BATTERY_LEVEL"
-  temp_c="$(detect_battery_temp_c)"
-  charging_flag="$DETECT_BATTERY_CHARGING"
-
-  screen_on="$(is_device screen)"
-  get_night_times
-  night_now="$(is_night_now)"
-
-  score=0
-  score=$(( score + (100 - level) * 40 / 100 ))
-  if [ "$temp_c" -gt 30 ]; then
-    over=$(( temp_c - 30 ))
-    [ "$over" -gt 10 ] && over=10
-    score=$(( score + over * 3 ))
-  fi
-  [ "$charging_flag" = "true" ] && score=$(( score - 40 ))
-  [ "$screen_on" = "false" ] && score=$(( score + 15 ))
-  [ "$night_now" = "true" ] && score=$(( score + 10 ))
-
-  load_int="${DETECT_LOAD1%%.*}"
-  case "$load_int" in ''|*[!0-9]*) load_int=0 ;; esac
-  if [ "$load_int" -ge 2 ]; then
-    score=$(( score - 20 ))
-  elif [ "$load_int" -ge 1 ]; then
-    score=$(( score - 10 ))
-  fi
-
-  [ "$score" -lt 0 ] && score=0
-  [ "$score" -gt 100 ] && score=100
-  echo "$score"
-}
-
-# Maps a 0-100 score to a tier (0 = no intervention), using
-# user-configurable thresholds so advanced users can tune sensitivity
-# without touching the scoring formula itself.
-pressure_tier_for_score() {
-  local score="$1" t1 t2 t3
-  t1=$(getconf adaptive_tier1_threshold 20)
-  t2=$(getconf adaptive_tier2_threshold 45)
-  t3=$(getconf adaptive_tier3_threshold 70)
-  if [ "$score" -ge "$t3" ]; then echo 3
-  elif [ "$score" -ge "$t2" ]; then echo 2
-  elif [ "$score" -ge "$t1" ]; then echo 1
-  else echo 0
   fi
 }
 
@@ -314,63 +191,9 @@ migrate() {
   log_msg 1 "Migration complete!"
 }
 
-auto_map_cores() {
-  log_msg 2 "Auto-mapping CPU cores"
-  # high power cores
-  for cpu in $(ls "$cpu_base_path/" | grep cpu[00-99]); do
-    cpus+=( "$cpu" )
-    cpu_freqs+=( "$(cat $cpu_base_path/$cpu/cpufreq/cpuinfo_max_freq)" )
-  done
-  for high_freq in $(echo "${cpu_freqs[@]}" | tr ' ' '\n' | uniq -u); do
-    for index in "${!cpu_freqs[@]}"; do
-      if [ "${cpu_freqs[$index]}" = "$high_freq" ]; then
-        hp_cpus+=( "${cpus[$index]}" )
-      fi
-    done
-  done
-  for i in ${!hp_cpus[@]}; do
-    tmp_var+="${hp_cpus[$i]} "
-  done
-  log_msg 3 "High power cores: $tmp_var"
-  unset tmp_var
-  # Low Power Cores
-  for core in $(ls "$cpu_base_path/" | grep cpu[00-99]); do
-    match="false"
-    for hp_core in ${hp_cpus[@]}; do
-      [ "$core" = "$hp_core" ] && match="true"
-    done
-    if [ "$match" = "false" ] && grep -q " powersave " "$cpu_base_path/$core/cpufreq/scaling_available_governors"; then
-      lp_govs+=( "$(cat $cpu_base_path/$core/cpufreq/scaling_governor)" )
-      lp_default_govs[$core]="$(cat $cpu_base_path/$cpu/cpufreq/scaling_governor )"
-      lp_cpus+=( "$core" )
-    fi
-  done
-    for i in ${!lp_cpus[@]}; do
-    tmp_var+="${lp_cpus[$i]} "
-  done
-  log_msg 3 "Low power cores: $tmp_var"
-  unset tmp_var
-}
-
-find_rfkill_command() {
-  log_msg 2 "Searching for a valid rfkill command..."
-  if command -v rfkill >/dev/null 2>&1; then
-    RFKILL_CMD="rfkill"
-  elif command -v toybox >/dev/null 2>&1 && toybox --help | grep -q rfkill; then
-    RFKILL_CMD="toybox rfkill"
-  else
-    local busybox_path="$(find /data/adb/ -type f -name busybox)"
-    if [ -f "$busybox_path" ] && "$busybox_path" --help | grep -q rfkill; then
-      RFKILL_CMD="$busybox_path rfkill"
-    fi
-  fi
-
-  if [ -n "$RFKILL_CMD" ]; then
-    log_msg 2 "Found rfkill command: $RFKILL_CMD"
-  else
-    log_msg 2 "No rfkill command found. Will rely on svc for WiFi control."
-  fi
-}
+# auto_map_cores() and find_rfkill_command() now live in
+# PowerSentinel-detect.sh - both are one-time, side-effect-free hardware
+# detection (CPU topology, available rfkill mechanism), not actions.
 
 update_status() {
   status_file="/data/local/tmp/PowerSentinel/PowerSentinel.status"
@@ -532,138 +355,14 @@ enable_pwr_save() {
     notif "Enabling PowerSentinel..."
     log_msg 1 "Enabling PowerSentinel"
   fi
-  # Handle Apps
-  if [ "$handle_apps" != "false" ]; then
-    # SECURITY: iterate with a hardened while-read instead of an unquoted
-    # for-loop - the old `for app in $(...)` word-splits AND glob-expands
-    # every line, so a denylist entry containing a shell glob character
-    # (e.g. "*") could unexpectedly match filenames in the daemon's
-    # working directory instead of being treated as a literal package
-    # name. `grep -Fxq` (fixed string, whole line) instead of `-E`
-    # likewise avoids a package name being misinterpreted as a regex
-    # pattern against the allowlist (dots match any character in a
-    # regex) and avoids partial/substring matches against other entries.
-    while IFS= read -r app; do
-      [ -n "$app" ] || continue
-      if grep -Fxq -- "$app" "$allowlist"; then
-        continue
-      fi
-      if [ "$handle_apps" = "nice" ]; then
-        for i in $(pgrep "$app"); do
-          log_msg 3 "Renicing $i"
-          renice -n 19 "$i" &>/dev/null &
-        done
-      elif [ "$handle_apps" = "kill" ]; then
-        log_msg 3 "Stopping $app"
-        am force-stop "$app" &>/dev/null &
-      else
-        log_msg 3 "Suspending $app"
-        am force-stop "$app" &>/dev/null &
-        pm suspend "$app" &>/dev/null &
-      fi
-    done < <(pm list packages -3 | cut -d: -f2-; [ -s "$denylist" ] && cat "$denylist")
-  fi
 
-  # Handle GMS , this will be leaving soon.
-  # Not many need it, and proc_file can handle it
-  if [ "$handle_gms" = "nice" ]; then
-    log_msg 3 "Renicing GMS"
-    renice -n 19 "$(pgrep com.google.android.gms)"
-  elif [ "$handle_gms" = "kill" ]; then
-    log_msg 3 "Disabling GMS"
-    pm disable com.google.android.gms
-    am force-stop com.google.android.gms
-  else
-    : # Do nothing
-  fi
-  # Handle processes
-  if [ "$handle_proc" = "true" ]; then
-    while [ "$lock" = "1" ]; do
-      while IFS= read -r proc nice; do
-        pid="$(pgrep "$proc")"
-        [ ! "$nice" ] && nice="10"
-        if [ "$(cat /proc/$pid/stat | cut -d' ' -f19)" != "$nice" ]; then
-          log_msg 3 "Renicing $proc to $nice"
-          renice -n "$nice" "$pid"
-        fi
-      done < "$proc_file"
-      sleep "$delay"
-    done &
-  fi
-  # Low RAM
-  if [ "$low_ram" = "true" ]; then
-    log_msg 3 "Setting the low_ram flag"
-    resetprop -n ro.config.low_ram true
-  fi
-
-  # Handle WiFi
-  if [ "$kill_wifi" = "true" ]; then
-    log_msg 3 "Disabling WiFi"
-    if [ -n "$RFKILL_CMD" ]; then
-      log_msg 3 "Attempting to block with: $RFKILL_CMD"
-      "$RFKILL_CMD" block wifi
-      
-      # Check if rfkill actually worked, if not, use svc as a final fallback
-      if [ "$("$RFKILL_CMD" list wifi | grep Soft | cut -d: -f2 | cut -d' ' -f2)" != "yes" ]; then
-         log_msg 3 "rfkill failed to block. Falling back to svc."
-         svc wifi disable
-      fi
-    else
-      log_msg 3 "No rfkill command available. Using svc."
-      svc wifi disable
-    fi
-  fi
-
-  # Handle Doze
-  if [ "$doze" = "light" ]; then
-    log_msg 3 "Enabling $doze Doze mode"
-    dumpsys deviceidle force-idle light &>/dev/null
-  fi
-  if [ "$doze" = "deep" ]; then
-    log_msg 3 "Enabling $doze Doze mode"
-    dumpsys deviceidle force-idle deep &>/dev/null
-  fi
-
-  # Handle Cores
-
-  if [ "$handle_cores" != "false" ] || [ "$disable_cores" != "false" ]; then
-    if [ -d "/data/adb/modules" ]; then
-      # magisk mount read-write
-      magic_remount_rw &>/dev/null
-    fi
-    if [ "$disable_cores" = "auto" ]; then
-      for cpu in ${hp_cpus[@]}; do
-        log_msg 3 "Disabling $cpu"
-        echo "0" > "$cpu_base_path/$cpu/online"
-      done
-    else
-      # manual
-      for core in $disable_cores; do
-        if [ -d "$cpu_base_path/$core" ]; then
-          log_msg 3 "Disabling $core"
-          echo "0" > "$cpu_base_path/$core/online"
-        fi
-      done
-    fi
-    if [ "$handle_cores" = "auto" ]; then
-      for cpu in ${lp_cpus[@]}; do
-        log_msg 3 "Setting powersave on $cpu"
-        echo "powersave" > "$cpu_base_path/$cpu/cpufreq/scaling_governor"
-      done
-    else
-      # manual
-      for core in $handle_cores; do
-        [ -d "$cpu_base_path/$core/" ] && \
-        grep -q " powersave " "$cpu_base_path/$core/cpufreq/scaling_available_governors" && \
-        log_msg 3 "Setting powersave on $core" && \
-        echo "powersave" > "$cpu_base_path/$cpu/cpufreq/scaling_governor"
-      done
-    fi
-    if [ -d "/data/adb/modules" ]; then
-      # magisk mount read-only
-      magic_remount_ro &>/dev/null
-    fi
-  fi
+  action_apps_apply
+  action_gms_apply
+  action_proc_apply
+  action_low_ram_apply
+  action_wifi_apply
+  action_doze_apply
+  action_cores_apply
 
   if [ "$version" != "2" ]; then
     echo " - [done]"
@@ -680,117 +379,14 @@ disable_pwr_save() {
     notif "Disabling PowerSentinel..."
     log_msg 1 "Disabling PowerSentinel"
   fi
-  # Handle Cores
 
-  if [ "$handle_cores" != "false" ] || [ "$disable_cores" != "false" ]; then
-    if [ -d "/data/adb/modules" ]; then
-      # magisk mount read-write
-      magic_remount_rw &>/dev/null
-    fi
-    if [ "$disable_cores" = "auto" ]; then
-      for cpu in ${hp_cpus[@]}; do
-        log_msg 3 "Enabling $cpu"
-        echo "1" > "$cpu_base_path/$cpu/online"
-      done
-    else
-      # the user manually set it
-      for cpu in $disable_cores; do
-        if [ -d "$cpu_base_path/$cpu/" ]; then
-          log_msg 3 "Enabling $cpu"
-          echo "1" > "$cpu_base_path/$cpu/online"
-        fi
-      done
-    fi
-    if [ "$handle_cores" = "auto" ]; then
-      for index in ${!lp_cpus[@]}; do
-        # TBH, i have no fucking clue
-        # what i did here but its
-        # magical and it works
-        # so, i will just leave it.
-        log_msg 3 "Resetting ${lp_cpus[$index]}"
-        echo "${lp_govs[$index]}" > "$cpu_base_path/${lp_cpus[$index]}/cpufreq/scaling_governor"
-      done
-    else
-      # the user manually set it
-      for cpu in $handle_cores; do
-        if [ -d "$cpu_base_path/$cpu/" ]; then
-          log_msg 3 "Resetting $cpu"
-          echo "${lp_default_govs[$cpu]}" > "$cpu_base_path/$cpu/cpufreq/scaling_governor"
-        fi
-      done
-    fi
-    if [ -d "/data/adb/modules" ]; then
-      # magisk mount read-only
-      magic_remount_ro &>/dev/null
-    fi
-  fi
-
-  # Handle Doze
-  if [ "$doze" != "false" ]; then
-    log_msg 3 "Disabling Doze mode"
-    dumpsys deviceidle unforce &>/dev/null
-  fi
-
-  # Handle WiFi
-  if [ "$kill_wifi" = "true" ]; then
-    log_msg 3 "Enabling WiFi"
-    if [ -n "$RFKILL_CMD" ]; then
-      log_msg 3 "Attempting to unblock with: $RFKILL_CMD"
-      "$RFKILL_CMD" unblock wifi
-      
-      # Check if rfkill actually worked, if not, use svc as a final fallback
-      if [ "$("$RFKILL_CMD" list wifi | grep Soft | cut -d: -f2 | cut -d' ' -f2)" != "no" ]; then
-         log_msg 3 "rfkill failed to unblock. Falling back to svc."
-         svc wifi enable
-      fi
-    else
-      log_msg 3 "No rfkill command available. Using svc."
-      svc wifi enable
-    fi
-  fi
-
-  # Handle Apps
-  if [ "$handle_apps" != "false" ]; then
-    # SECURITY: see the matching comment in enable_pwr_save() above.
-    while IFS= read -r app; do
-      [ -n "$app" ] || continue
-      if grep -Fxq -- "$app" "$allowlist"; then
-        continue
-      fi
-      if [ "$handle_apps" = "nice" ]; then
-        for i in $(pgrep "$app"); do
-          log_msg 3 "Resetting the nice level for $app"
-          renice -n 0 "$i" &>/dev/null &
-        done
-      else
-        log_msg 3 "Unsuspending $app"
-        pm unsuspend "$app" &>/dev/null &
-      fi
-    done < <(pm list packages -3 | cut -d: -f2-; [ -s "$denylist" ] && cat "$denylist")
-  fi
-
-  # Handle GMS
-  if [ "$handle_gms" = "nice" ]; then
-    log_msg 3 "Resetting the nice level for GMS"
-    renice -n 0 "$(pgrep com.google.android.gms)"
-  elif [ "$handle_gms" = "kill" ]; then
-    log_msg 3 "Enabling GMS"
-    pm enable com.google.android.gms
-  else
-    : # Do nothing
-  fi
-  # Handle Processes
-  if [ "$handle_proc" = "true" ]; then
-    while IFS= read -r proc nice; do
-      log_msg 3 "Resetting the nice level for $proc"
-      renice -n 0 "$(pgrep "$proc")"
-    done < "$proc_file"
-  fi
-  # Low RAM
-  if [ "$low_ram" = "true" ]; then
-    log_msg 3 "Setting low_ram to false"
-    resetprop -n ro.config.low_ram false
-  fi
+  action_cores_undo
+  action_doze_undo
+  action_wifi_undo
+  action_apps_undo
+  action_gms_undo
+  action_proc_undo
+  action_low_ram_undo
 
   if [ "$version" != "2" ]; then
     lock="0"
@@ -800,18 +396,6 @@ disable_pwr_save() {
   fi
 
   update_status
-}
-
-# Event stuff for V2
-
-is_event_locked() {
-  event="$1"
-  for i in ${!active_events[@]}; do
-    if [ "${active_events[$i]}" = "$event" ]; then
-      return 1
-    fi
-  done
-  return 0
 }
 
 handle_event() {
@@ -1433,6 +1017,13 @@ auto_map_cores
 
 # Find the rfkill command once and for all
 find_rfkill_command
+
+# Capability Manager: probe once what this device/ROM can actually do,
+# so actions.sh can skip (with a clear log message) instead of blindly
+# attempting something unsupported every single cycle. Runs after the
+# two detections above since the rfkill_wifi capability depends on
+# RFKILL_CMD already being set.
+capabilities_detect
 
 # check version and init
 if [ "$version" = 2 ]; then

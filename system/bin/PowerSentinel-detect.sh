@@ -86,3 +86,85 @@ detect_refresh() {
 detect_battery_temp_c() {
   echo $(( DETECT_BATTERY_TEMP_RAW / 10 ))
 }
+
+# One-time CPU topology detection at startup: classifies cores into
+# "high power" (hp_cpus) vs "low power" (lp_cpus), and records each low-
+# power core's own original cpufreq governor (lp_default_govs) so
+# actions.sh can restore it later, and each low-power core's governor at
+# detection time (lp_govs, used for the "auto" cores mode's restore
+# path). No writes - purely reads /sys/devices/system/cpu.
+#
+# BUG FIX: lp_default_govs[$core] used to read
+# "$cpu_base_path/$cpu/cpufreq/scaling_governor" - "$cpu" instead of
+# "$core" - a stale loop variable left over from the earlier loop in
+# this same function (which builds cpus[]/cpu_freqs[] using "cpu" as its
+# own loop variable). Since $cpu doesn't change across this second
+# loop's iterations, EVERY entry in lp_default_govs ended up with the
+# same wrong value (whichever core "$cpu" was left pointing at), instead
+# of each core's own actual governor - so disabling an event with a
+# manually-specified handle_cores (not "auto") could reset every one of
+# those cores to the same incorrect governor instead of each one's own
+# original setting. Verified against a controlled scenario (two cores
+# with genuinely different governors) that the fix makes each core keep
+# its own value; the original code collapsed them to one shared
+# (wrong) value.
+auto_map_cores() {
+  log_msg 2 "Auto-mapping CPU cores"
+  # high power cores
+  for cpu in $(ls "$cpu_base_path/" | grep cpu[00-99]); do
+    cpus+=( "$cpu" )
+    cpu_freqs+=( "$(cat $cpu_base_path/$cpu/cpufreq/cpuinfo_max_freq)" )
+  done
+  for high_freq in $(echo "${cpu_freqs[@]}" | tr ' ' '\n' | uniq -u); do
+    for index in "${!cpu_freqs[@]}"; do
+      if [ "${cpu_freqs[$index]}" = "$high_freq" ]; then
+        hp_cpus+=( "${cpus[$index]}" )
+      fi
+    done
+  done
+  for i in ${!hp_cpus[@]}; do
+    tmp_var+="${hp_cpus[$i]} "
+  done
+  log_msg 3 "High power cores: $tmp_var"
+  unset tmp_var
+  # Low Power Cores
+  for core in $(ls "$cpu_base_path/" | grep cpu[00-99]); do
+    match="false"
+    for hp_core in ${hp_cpus[@]}; do
+      [ "$core" = "$hp_core" ] && match="true"
+    done
+    if [ "$match" = "false" ] && grep -q " powersave " "$cpu_base_path/$core/cpufreq/scaling_available_governors"; then
+      lp_govs+=( "$(cat $cpu_base_path/$core/cpufreq/scaling_governor)" )
+      lp_default_govs[$core]="$(cat $cpu_base_path/$core/cpufreq/scaling_governor )"
+      lp_cpus+=( "$core" )
+    fi
+  done
+    for i in ${!lp_cpus[@]}; do
+    tmp_var+="${lp_cpus[$i]} "
+  done
+  log_msg 3 "Low power cores: $tmp_var"
+  unset tmp_var
+}
+
+# One-time detection of which rfkill invocation (if any) actually works
+# on this device - actions.sh's WiFi action falls back to `svc wifi` if
+# this never finds one. No writes.
+find_rfkill_command() {
+  log_msg 2 "Searching for a valid rfkill command..."
+  if command -v rfkill >/dev/null 2>&1; then
+    RFKILL_CMD="rfkill"
+  elif command -v toybox >/dev/null 2>&1 && toybox --help | grep -q rfkill; then
+    RFKILL_CMD="toybox rfkill"
+  else
+    local busybox_path="$(find /data/adb/ -type f -name busybox)"
+    if [ -f "$busybox_path" ] && "$busybox_path" --help | grep -q rfkill; then
+      RFKILL_CMD="$busybox_path rfkill"
+    fi
+  fi
+
+  if [ -n "$RFKILL_CMD" ]; then
+    log_msg 2 "Found rfkill command: $RFKILL_CMD"
+  else
+    log_msg 2 "No rfkill command found. Will rely on svc for WiFi control."
+  fi
+}
