@@ -1,0 +1,74 @@
+name: Rewrite history to remove legacy contributor identities
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Rewrite legacy identities and messages
+        env:
+          TARGET_AUTHOR_EMAIL_1: dethbyte777@gmail.com
+          TARGET_AUTHOR_EMAIL_2: 86263062+vikasmistry@users.noreply.github.com
+          TARGET_NAME_1: DethByte64
+          TARGET_NAME_2: vikasmistry
+          NEW_NAME: kherio
+          NEW_EMAIL: kherio@users.noreply.github.com
+        run: |
+          set -euo pipefail
+
+          # Remove this one-shot workflow from the resulting tree so the
+          # cleanup cannot be triggered again after the force-push.
+          rm -f .github/workflows/history-cleanup.yml
+
+          git config user.name "$NEW_NAME"
+          git config user.email "$NEW_EMAIL"
+
+          # Rewrite every commit reachable from the two real branches.
+          # Matching is deliberately based on the exact known legacy emails,
+          # with the legacy display names covered as a second safeguard.
+          FILTER_ENV=''
+          FILTER_ENV+='if [ "$GIT_AUTHOR_EMAIL" = "$TARGET_AUTHOR_EMAIL_1" ] || '
+          FILTER_ENV+='[ "$GIT_AUTHOR_EMAIL" = "$TARGET_AUTHOR_EMAIL_2" ] || '
+          FILTER_ENV+='[ "$GIT_AUTHOR_NAME" = "$TARGET_NAME_1" ]; then '
+          FILTER_ENV+='GIT_AUTHOR_NAME="$NEW_NAME"; GIT_AUTHOR_EMAIL="$NEW_EMAIL"; fi; '
+          FILTER_ENV+='if [ "$GIT_COMMITTER_EMAIL" = "$TARGET_AUTHOR_EMAIL_1" ] || '
+          FILTER_ENV+='[ "$GIT_COMMITTER_EMAIL" = "$TARGET_AUTHOR_EMAIL_2" ] || '
+          FILTER_ENV+='[ "$GIT_COMMITTER_NAME" = "$TARGET_NAME_1" ]; then '
+          FILTER_ENV+='GIT_COMMITTER_NAME="$NEW_NAME"; GIT_COMMITTER_EMAIL="$NEW_EMAIL"; fi; '
+          export FILTER_ENV
+
+          FILTER_MSG='sed -e "s/DethByte64/kherio/g" -e "s/vikasmistry/kherio/g"'
+          export FILTER_MSG
+
+          git filter-branch -f --env-filter "$FILTER_ENV" --msg-filter "$FILTER_MSG" --tag-name-filter cat -- main powersentinel/identity-migration
+
+          # Re-apply the clean identity to the commit created by the workflow
+          # itself if filter-branch left any workflow-generated metadata behind.
+          git filter-branch -f --env-filter "$FILTER_ENV" --msg-filter "$FILTER_MSG" --tag-name-filter cat -- main powersentinel/identity-migration >/dev/null 2>&1 || true
+
+          # Verify that no reachable commit still exposes either identity or
+          # the legacy names in commit metadata/messages.
+          if git log --all --format='%an <%ae>%n%cn <%ce>%n%B' | grep -Eiq 'DethByte64|vikasmistry|dethbyte777@gmail\.com|86263062\+vikasmistry@users\.noreply\.github\.com'; then
+            echo 'Legacy identity remains in reachable history.'
+            exit 1
+          fi
+
+          # Push rewritten branches and rewritten tags. Existing tags are
+          # preserved, but now point at the rewritten history.
+          git push origin --force refs/heads/main:refs/heads/main
+          git push origin --force refs/heads/powersentinel/identity-migration:refs/heads/powersentinel/identity-migration
+          git push origin --force --tags
