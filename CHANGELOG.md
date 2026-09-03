@@ -1,3 +1,6 @@
+### v3.16.2
+  - **Security fix**: `PowerSentinel.json` (and `.state`/`.journal`) were world-writable (`666`) on some devices - readable and writable by any app, not just root. Found by a user while helping diagnose an unrelated issue. Every write path now sets `600` permissions, and existing installs get corrected automatically on their next daemon start.
+
 ### v3.16.1
   - **CRITICAL FIX: `is_event_locked()` was accidentally deleted in v3.13.0.** This has meant that **no event has ever actually applied its settings on any release from v3.13.0 through v3.16.0** - screen_off, adaptive tiers, low power, all of it. Every single "enable" attempt silently failed and returned early. Found during a full-codebase audit. If you're on any version from v3.13.0 to v3.16.0, this update is essential - please update immediately.
   - **CRITICAL FIX: `PowerSentinelconf` (the terminal CLI configurator, documented in the README as a full WebUI alternative) has silently done nothing since v3.10.0** - it read and wrote the old `.conf` file directly, but the daemon has only read `PowerSentinel.json` since then. Every `set`/`add-event`/`rm-event` command reported success while having zero real effect. Rewritten to operate on the actual JSON config. `PowerSentinelctl` had a narrower version of the same issue (only affecting a customized `ctl_file` path) - also fixed.
