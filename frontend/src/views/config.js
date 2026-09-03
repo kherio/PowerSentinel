@@ -267,6 +267,46 @@ async function toggleSafeMode() {
   }
 }
 
+// Traduce un objeto de campos (los mismos que se aplican de verdad,
+// via AGGRESSION_PRESETS) a frases legibles - un texto por campo
+// presente, para el desglose de "qué hace este nivel" en el modo
+// básico. Si un mecanismo nuevo se añade alguna vez a
+// AGGRESSION_PRESETS sin tener aquí una traducción, se muestra el
+// propio nombre técnico del campo como último recurso, en vez de
+// omitirlo silenciosamente.
+const FIELD_DESCRIPTIONS = {
+  handle_apps: { nice: 'config.basicFieldAppsNice' },
+  doze: { light: 'config.basicFieldDozeLight', deep: 'config.basicFieldDozeDeep' },
+  handle_gms: { nice: 'config.basicFieldGmsNice' },
+  low_ram: { true: 'config.basicFieldLowRam' }
+};
+
+function describeTierFields(fields) {
+  return Object.keys(fields).map((key) => {
+    const key_i18n = FIELD_DESCRIPTIONS[key] && FIELD_DESCRIPTIONS[key][fields[key]];
+    return key_i18n ? t(key_i18n) : `${key}=${fields[key]}`;
+  });
+}
+
+function renderAggressionDetail(level) {
+  const el = document.getElementById('cb-aggression-detail');
+  const preset = level && AGGRESSION_PRESETS[level];
+  if (!preset) { el.innerHTML = ''; return; }
+  const tierLabels = {
+    adaptive_tier1: t('config.basicTier1Label'),
+    adaptive_tier2: t('config.basicTier2Label'),
+    adaptive_tier3: t('config.basicTier3Label')
+  };
+  el.innerHTML = Object.keys(preset.tiers).map((tierName) => {
+    const items = describeTierFields(preset.tiers[tierName]);
+    if (!items.length) return '';
+    return `<div class="aggression-tier">` +
+      `<div class="aggression-tier-title">${escapeHtml(tierLabels[tierName] || tierName)}</div>` +
+      `<ul class="aggression-tier-list">${items.map((i) => `<li>${escapeHtml(i)}</li>`).join('')}</ul>` +
+      `</div>`;
+  }).join('');
+}
+
 function renderAggressionButtons() {
   const wrap = document.getElementById('cb-aggression-buttons');
   const current = currentAggressionLevel();
@@ -284,6 +324,7 @@ function renderAggressionButtons() {
     wrap.appendChild(card);
   });
   document.getElementById('cb-aggression-hint').textContent = current ? '' : t('config.basicCustomHint');
+  renderAggressionDetail(current);
 }
 
 async function saveBasicChanges() {

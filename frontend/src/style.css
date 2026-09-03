@@ -342,6 +342,34 @@ main {
   color: var(--accent);
 }
 
+/* Detailed, tier-by-tier breakdown of what the selected aggressiveness
+   level actually does - fills the remaining free space below the
+   picker, generated directly from the same AGGRESSION_PRESETS data
+   used to apply the setting, so it can never drift out of sync with
+   reality. */
+.aggression-detail {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.aggression-tier {
+  margin-bottom: 12px;
+}
+.aggression-tier:last-child { margin-bottom: 0; }
+.aggression-tier-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+.aggression-tier-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.aggression-tier-list li { margin-bottom: 2px; }
+
 .battery-summary {
   font-size: 20px;
   font-weight: 600;
