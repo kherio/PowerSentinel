@@ -114,12 +114,41 @@ function applyMode() {
   document.getElementById('c-restore-btn').style.display = advanced ? '' : 'none';
 }
 
+// Meta por nivel: icono (reutiliza los mismos ya usados para las tiers
+// adaptativas reales en el editor avanzado - hoja/gauge/rayo, la misma
+// progresión visual de intensidad) y clave de la descripción de una
+// línea que se muestra en la tarjeta.
+const AGGRESSION_META = {
+  low: { icon: 'leaf', descKey: 'config.basicLowDesc' },
+  medium: { icon: 'gauge', descKey: 'config.basicMediumDesc' },
+  high: { icon: 'bolt', descKey: 'config.basicHighDesc' }
+};
+
 function renderBasicMode() {
   if (!model) return;
   const enabled = model.adaptive_mode === 'true';
   document.getElementById('cb-adaptive-toggle').checked = enabled;
   document.getElementById('cb-aggression-wrap').style.display = enabled ? 'block' : 'none';
   renderAggressionButtons();
+
+  // Feedback real de si el ahorro adaptativo está haciendo algo AHORA
+  // MISMO, no solo si está "activado" en la configuración - responde
+  // directamente a la idea de que esto se evalúe como un sistema real,
+  // no como un simple interruptor que se asume que funciona.
+  const statusLine = document.getElementById('cb-status-line');
+  if (!enabled) {
+    statusLine.style.display = 'none';
+    return;
+  }
+  statusLine.style.display = 'block';
+  const activeTier = ['adaptive_tier3', 'adaptive_tier2', 'adaptive_tier1'].find((name) => activeEventNames.has(name));
+  if (activeTier) {
+    statusLine.textContent = t('config.basicStatusActive', { n: activeTier.slice(-1) });
+    statusLine.classList.add('is-active');
+  } else {
+    statusLine.textContent = t('config.basicStatusIdle');
+    statusLine.classList.remove('is-active');
+  }
 }
 
 function renderAggressionButtons() {
@@ -128,17 +157,17 @@ function renderAggressionButtons() {
   const labels = { low: t('config.basicLow'), medium: t('config.basicMedium'), high: t('config.basicHigh') };
   wrap.innerHTML = '';
   Object.keys(AGGRESSION_PRESETS).forEach((level) => {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'btn' + (level === current ? ' primary' : ' ghost');
-    btn.style.padding = '8px 12px';
-    btn.style.fontSize = '13px';
-    btn.textContent = labels[level];
-    btn.addEventListener('click', () => applyAggressionPreset(level));
-    wrap.appendChild(btn);
+    const meta = AGGRESSION_META[level];
+    const card = document.createElement('div');
+    card.className = 'aggression-card' + (level === current ? ' selected' : '');
+    card.innerHTML =
+      `<div class="aggression-icon">${ICONS[meta.icon]}</div>` +
+      `<div class="aggression-title">${escapeHtml(labels[level])}</div>` +
+      `<div class="aggression-desc">${escapeHtml(t(meta.descKey))}</div>`;
+    card.addEventListener('click', () => applyAggressionPreset(level));
+    wrap.appendChild(card);
   });
-  document.getElementById('cb-aggression-hint').textContent =
-    current ? '' : t('config.basicCustomHint');
+  document.getElementById('cb-aggression-hint').textContent = current ? '' : t('config.basicCustomHint');
 }
 
 async function saveBasicChanges() {
@@ -482,6 +511,7 @@ function filterEventCards() {
 function renderVersionView() {
   renderGlobalFields();
   renderEvents();
+  renderBasicMode();
 }
 
 function switchSubTab(view) {
