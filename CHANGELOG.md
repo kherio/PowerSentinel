@@ -1,3 +1,7 @@
+### v3.24.0
+  - The mode switcher now sits in its own row above the action toolbar, separate from Guardar/Recargar/Restaurar recomendados - clearer that it's a state indicator, not a fourth action button.
+  - Each aggressiveness level's description now says a bit more about what actually happens (e.g. "Alta" mentions deep Doze and low-RAM mode specifically) instead of a vague "máximo ahorro".
+
 ### v3.23.1
   - Removed the redundant "Modo avanzado" checkbox in Config - since the "?" button already lets you switch modes via the explanation screen, having a separate toggle was two ways to do the same thing. The single remaining button now shows your current mode as its own label and opens that same screen when tapped.
 
