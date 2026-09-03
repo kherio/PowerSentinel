@@ -17,6 +17,132 @@ let loaded = false;
 
 let editor, highlightCode, dirtyFlag;
 
+// ---------- Modo básico / avanzado ----------
+//
+// Puramente una capa de presentación: el modo básico nunca escribe nada
+// que el modo avanzado no pudiera escribir también - ambos pasan por el
+// mismo `model` y el mismo serializeConfig()/writeConfig(). El demonio
+// no sabe ni le importa en qué modo está el WebUI.
+//
+// Por defecto (ninguna preferencia guardada todavía, instalación
+// nueva) se muestra el modo básico - ver AGGRESSION_PRESETS más abajo
+// para el razonamiento de seguridad detrás de cada nivel.
+const ADVANCED_MODE_KEY = 'powersentinel-advanced-mode';
+
+function isAdvancedMode() {
+  try { return localStorage.getItem(ADVANCED_MODE_KEY) === 'true'; } catch (e) { return false; }
+}
+
+// Los 3 niveles de "Agresividad" del modo básico. Deliberadamente
+// nunca usan handle_apps=suspend (una app suspendida sin que el
+// usuario haya curado una allowlist es justo el tipo de sorpresa que
+// el modo básico existe para evitar) - solo "nice" (reversible, sin
+// riesgo de perder acceso a una app), además de doze/GMS/low_ram
+// escalando con el nivel. Los umbrales (adaptive_tierN_threshold) son
+// los mismos campos reales que ya existían en el modo avanzado -
+// "Media" usa exactamente los valores por defecto de siempre.
+const AGGRESSION_PRESETS = {
+  low: {
+    thresholds: { adaptive_tier1_threshold: '35', adaptive_tier2_threshold: '60', adaptive_tier3_threshold: '85' },
+    tiers: {
+      adaptive_tier1: { handle_apps: 'nice' },
+      adaptive_tier2: { handle_apps: 'nice', doze: 'light' },
+      adaptive_tier3: { handle_apps: 'nice', doze: 'light', handle_gms: 'nice' }
+    }
+  },
+  medium: {
+    thresholds: { adaptive_tier1_threshold: '20', adaptive_tier2_threshold: '45', adaptive_tier3_threshold: '70' },
+    tiers: {
+      adaptive_tier1: { handle_apps: 'nice' },
+      adaptive_tier2: { handle_apps: 'nice', doze: 'light', handle_gms: 'nice' },
+      adaptive_tier3: { handle_apps: 'nice', doze: 'deep', handle_gms: 'nice' }
+    }
+  },
+  high: {
+    thresholds: { adaptive_tier1_threshold: '10', adaptive_tier2_threshold: '30', adaptive_tier3_threshold: '55' },
+    tiers: {
+      adaptive_tier1: { handle_apps: 'nice', doze: 'light' },
+      adaptive_tier2: { handle_apps: 'nice', doze: 'deep', handle_gms: 'nice' },
+      adaptive_tier3: { handle_apps: 'nice', doze: 'deep', handle_gms: 'nice', low_ram: 'true' }
+    }
+  }
+};
+
+function currentAggressionLevel() {
+  if (!model) return null;
+  const t1 = model.adaptive_tier1_threshold;
+  return Object.keys(AGGRESSION_PRESETS).find((lvl) => AGGRESSION_PRESETS[lvl].thresholds.adaptive_tier1_threshold === t1) || null;
+}
+
+function applyMode() {
+  const advanced = isAdvancedMode();
+  document.getElementById('c-advanced-toggle').checked = advanced;
+  document.getElementById('c-view-basic').style.display = advanced ? 'none' : 'block';
+  document.getElementById('c-view-advanced').style.display = advanced ? 'block' : 'none';
+  // Guardar/recargar/restaurar son conceptos del modo avanzado (el
+  // básico guarda solo, sin un paso de "guardar" separado que alguien
+  // que "no quiere o no entiende" tendría que descubrir).
+  document.getElementById('c-save-btn').style.display = advanced ? '' : 'none';
+  document.getElementById('c-reload-btn').style.display = advanced ? '' : 'none';
+  document.getElementById('c-restore-btn').style.display = advanced ? '' : 'none';
+}
+
+function renderBasicMode() {
+  if (!model) return;
+  const enabled = model.adaptive_mode === 'true';
+  document.getElementById('cb-adaptive-toggle').checked = enabled;
+  document.getElementById('cb-aggression-wrap').style.display = enabled ? 'block' : 'none';
+  renderAggressionButtons();
+}
+
+function renderAggressionButtons() {
+  const wrap = document.getElementById('cb-aggression-buttons');
+  const current = currentAggressionLevel();
+  const labels = { low: t('config.basicLow'), medium: t('config.basicMedium'), high: t('config.basicHigh') };
+  wrap.innerHTML = '';
+  Object.keys(AGGRESSION_PRESETS).forEach((level) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn' + (level === current ? ' primary' : ' ghost');
+    btn.style.padding = '8px 12px';
+    btn.style.fontSize = '13px';
+    btn.textContent = labels[level];
+    btn.addEventListener('click', () => applyAggressionPreset(level));
+    wrap.appendChild(btn);
+  });
+  document.getElementById('cb-aggression-hint').textContent =
+    current ? '' : t('config.basicCustomHint');
+}
+
+async function saveBasicChanges() {
+  activeView = 'form'; // currentText()/saveFile() usan serializeConfig(model), no el editor de texto
+  await saveFile();
+  renderBasicMode();
+}
+
+function applyAggressionPreset(level) {
+  const preset = AGGRESSION_PRESETS[level];
+  if (!preset || !model) return;
+  model.adaptive_mode = 'true';
+  Object.keys(preset.thresholds).forEach((k) => { model[k] = preset.thresholds[k]; });
+  Object.keys(preset.tiers).forEach((tierName) => {
+    let block = model.blocks.find((b) => b.name === tierName);
+    if (!block) { block = { name: tierName, fields: {} }; model.blocks.push(block); }
+    block.fields = Object.assign({}, preset.tiers[tierName]);
+  });
+  saveBasicChanges();
+}
+
+function setAdaptiveEnabled(enabled) {
+  if (!model) return;
+  model.adaptive_mode = enabled ? 'true' : 'false';
+  if (enabled && !currentAggressionLevel()) {
+    applyAggressionPreset('medium'); // primera vez, sin preset previo - un punto de partida sensato
+  } else {
+    saveBasicChanges();
+  }
+}
+
 // Tokenizes one line of the raw JSON the developer-mode editor shows -
 // good enough highlighting (keys, string values, punctuation) without
 // pulling in a full JSON tokenizer, matching the same line-by-line
@@ -447,12 +573,19 @@ export function initConfig() {
   document.getElementById('c-reload-btn').addEventListener('click', () => loadFile(true));
   document.getElementById('c-restore-btn').addEventListener('click', restoreRecommended);
 
+  document.getElementById('c-advanced-toggle').addEventListener('change', (e) => {
+    try { localStorage.setItem(ADVANCED_MODE_KEY, e.target.checked ? 'true' : 'false'); } catch (err) {}
+    applyMode();
+  });
+  document.getElementById('cb-adaptive-toggle').addEventListener('change', (e) => setAdaptiveEnabled(e.target.checked));
+  applyMode();
+
   // Detect core count + currently-active events from the live status so
   // cores in the form get real chips and event cards can show an
   // "active now" badge (best-effort - fine if it stays empty at first).
   refreshLiveStatus();
 
-  loadFile(false);
+  loadFile(false).then(renderBasicMode);
 }
 
 function refreshLiveStatus() {

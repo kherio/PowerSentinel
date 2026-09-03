@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PowerSentinel</title>
-  <script type="module" crossorigin src="./assets/index-B9VPl643.js"></script>
+  <script type="module" crossorigin src="./assets/index-D99VxVbS.js"></script>
   <link rel="stylesheet" crossorigin href="./assets/index-BgE1k0Sl.css">
 </head>
 <body class="app-shell">
@@ -101,44 +101,74 @@
         <button class="btn ghost" id="c-reload-btn"></button>
         <button class="btn ghost" id="c-restore-btn"></button>
         <div class="spacer"></div>
+        <label class="switch">
+          <input type="checkbox" id="c-advanced-toggle"> <span data-i18n="config.advancedMode">Modo avanzado</span>
+        </label>
         <span id="c-dirty-flag" style="visibility:hidden;"></span>
       </div>
 
-      <div class="subtabs">
-        <button id="c-tab-form" class="active" data-i18n="config.tabForm">Formulario</button>
-        <button id="c-tab-text" data-i18n="config.tabText">Texto sin formato</button>
-      </div>
+      <!-- Modo básico: perfiles + un puñado de controles de alto nivel.
+           Es el modo por defecto en toda instalación nueva - nada aquí
+           toca el JSON directamente salvo a través del mismo model/
+           serializeConfig que ya usa el modo avanzado, así que ambos
+           modos son, por debajo, exactamente la misma configuración. -->
+      <div id="c-view-basic" class="scroll-area">
+        <div class="card">
+          <div class="section-title" style="margin-top:0;" data-i18n="config.basicTitle">Ahorro de batería</div>
+          <label class="switch">
+            <input type="checkbox" id="cb-adaptive-toggle"> <span data-i18n="config.basicAdaptive">Ahorro adaptativo</span>
+          </label>
+          <p class="hint" data-i18n="config.basicAdaptiveHint">Ajusta automáticamente el consumo según el estado de la batería - no necesitas configurar nada más.</p>
 
-      <div id="c-view-form" class="scroll-area">
-        <div class="card" style="margin-bottom:14px;">
-          <div class="section-title" style="margin-top:0;" data-i18n="config.general">General</div>
-          <div id="c-global-fields"></div>
+          <div id="cb-aggression-wrap" style="display:none;margin-top:14px;">
+            <div class="section-title" data-i18n="config.basicAggression">Agresividad</div>
+            <div id="cb-aggression-buttons" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+            <p class="hint" id="cb-aggression-hint"></p>
+          </div>
         </div>
 
-        <div id="c-v2-section">
-          <div class="section-title-row">
-            <div class="section-title" style="margin:0;" data-i18n="config.events">Eventos</div>
-            <input class="filter c-event-search" id="c-event-search" type="text" data-i18n-placeholder="config.searchPlaceholder" placeholder="Buscar campo…">
-          </div>
-          <div id="c-events-list"></div>
-          <div class="card">
-            <div style="font-size:13px;font-weight:500;margin-bottom:8px;" data-i18n="config.addEvent">Añadir evento</div>
-            <div class="add-event-row">
-              <select class="filter" id="c-predefined-event-select"></select>
-              <button class="btn" id="c-add-predefined-btn" data-i18n="config.add">Añadir</button>
-            </div>
-            <div class="add-event-row">
-              <input class="filter" id="c-custom-event-input" type="text" data-i18n-placeholder="config.addCustomPlaceholder" placeholder="nombre_evento_personalizado" style="flex:1;">
-              <button class="btn" id="c-add-custom-btn" data-i18n="config.addCustom">Añadir personalizado</button>
-            </div>
-          </div>
+        <div class="card">
+          <p class="hint" data-i18n="config.basicAdvancedHint">¿Necesitas más control? Activa el "Modo avanzado" arriba para configurar cada evento manualmente (apps, núcleos, WiFi, Doze...).</p>
         </div>
       </div>
 
-      <div id="c-view-text" class="fill-area" style="display:none;">
-        <div class="editor-wrap">
-          <pre id="c-highlight"><code></code></pre>
-          <textarea id="c-editor" spellcheck="false" wrap="soft"></textarea>
+      <div id="c-view-advanced" style="display:none;">
+        <div class="subtabs">
+          <button id="c-tab-form" class="active" data-i18n="config.tabForm">Formulario</button>
+          <button id="c-tab-text" data-i18n="config.tabText">Texto sin formato</button>
+        </div>
+
+        <div id="c-view-form" class="scroll-area">
+          <div class="card" style="margin-bottom:14px;">
+            <div class="section-title" style="margin-top:0;" data-i18n="config.general">General</div>
+            <div id="c-global-fields"></div>
+          </div>
+
+          <div id="c-v2-section">
+            <div class="section-title-row">
+              <div class="section-title" style="margin:0;" data-i18n="config.events">Eventos</div>
+              <input class="filter c-event-search" id="c-event-search" type="text" data-i18n-placeholder="config.searchPlaceholder" placeholder="Buscar campo…">
+            </div>
+            <div id="c-events-list"></div>
+            <div class="card">
+              <div style="font-size:13px;font-weight:500;margin-bottom:8px;" data-i18n="config.addEvent">Añadir evento</div>
+              <div class="add-event-row">
+                <select class="filter" id="c-predefined-event-select"></select>
+                <button class="btn" id="c-add-predefined-btn" data-i18n="config.add">Añadir</button>
+              </div>
+              <div class="add-event-row">
+                <input class="filter" id="c-custom-event-input" type="text" data-i18n-placeholder="config.addCustomPlaceholder" placeholder="nombre_evento_personalizado" style="flex:1;">
+                <button class="btn" id="c-add-custom-btn" data-i18n="config.addCustom">Añadir personalizado</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="c-view-text" class="fill-area" style="display:none;">
+          <div class="editor-wrap">
+            <pre id="c-highlight"><code></code></pre>
+            <textarea id="c-editor" spellcheck="false" wrap="soft"></textarea>
+          </div>
         </div>
       </div>
     </section>
