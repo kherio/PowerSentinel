@@ -395,7 +395,7 @@ while true; do
         log_msg 1 "The stop command was received. Stopping manual event"
         handle_event manual 0
       else
-        log_msg 1 "The stop command was received. Attempting to start $cmd_event"
+        log_msg 1 "The stop command was received. Attempting to stop $cmd_event"
         for i in ${!active_events[@]}; do
           if [ "${active_events[$i]}" = "$cmd_event" ]; then
             handle_event "${active_events[$i]}" 0
@@ -418,7 +418,16 @@ while true; do
         pm unsuspend "$pkg"
       done
       emit safemode critical "Safe Mode is Active"
+      # BUG FIX: this loop had no sleep at all (unlike the near-identical
+      # "pause" command handler above it, which does) - a pre-existing
+      # bug dating back to before this project's PowerSentinel identity,
+      # found during a full-codebase audit. It span-checked the control
+      # file as fast as the CPU would allow for as long as safe mode
+      # remained active - a battery-saving module burning a full CPU
+      # core precisely while its own emergency/escape-hatch mode was
+      # engaged.
       until [ "$ready" = "resume" ]; do
+        sleep "$delay"
         ready="$(cat $ctl_file)"
       done
       log_msg 1 "Resume command received. Safe Mode Exited."
@@ -531,6 +540,21 @@ done
 # migrate() trigger below
 
 [ ! -d /data/local/tmp/PowerSentinel/ ] && mkdir /data/local/tmp/PowerSentinel/
+
+# Sanity-check that jq actually runs on this device before relying on
+# it for the config migration and every JSON read/write from here on -
+# if it doesn't (wrong CPU architecture, a corrupted/incompletely
+# extracted binary, a permission or SELinux denial), every one of those
+# would otherwise fail silently, eventually surfacing as a confusing
+# "could not migrate config to v2" FATAL exit with no indication of
+# WHY. This gives a specific, actionable message instead, as early as
+# possible.
+if ! echo '{}' | "$JQ" -e . >/dev/null 2>&1; then
+  msg="FATAL: jq ($JQ) does not appear to work on this device - cannot read or write configuration. Check that the file exists, is executable (chmod 755), and matches your device's CPU architecture (this build is arm64)."
+  echo "$msg" >&2
+  log -t PowerSentinel "$msg" 2>/dev/null
+  exit 1
+fi
 
 if [ ! -s "$conf" ]; then
   cat << EOF > "$conf"
@@ -684,7 +708,11 @@ safe=$(getconf safemode false)
 if [ "$safe" = "true" ]; then
   log_msg 1 "Safemode was found in the config file, Entering safemode."
   emit safemode critical "Safe Mode is Active"
+  # BUG FIX: see the matching comment on the other safe-mode wait loop
+  # above (the "safe" command handler) - same pre-existing, no-sleep
+  # busy-spin bug, here too.
   until [ "$resume" = "resume" ] || [ "$(config_get safemode false)" = "false" ]; do
+    sleep "$(getconf delay 3)"
     config_load_global
     resume=$(cat "$ctl_file")
   done

@@ -211,9 +211,16 @@ action_doze_undo() {
 
 action_cores_apply() {
   { [ "$handle_cores" != "false" ] || [ "$disable_cores" != "false" ]; } || return
-  if [ -d "/data/adb/modules" ]; then
-    magic_remount_rw &>/dev/null
-  fi
+  # BUG FIX: magic_remount_rw/magic_remount_ro (here and further below)
+  # were never defined anywhere in this project's history - going all
+  # the way back to its very first commit. Wrapped in &>/dev/null, they
+  # always failed silently with "command not found". Confirmed via
+  # extensive testing that writing to /sys/devices/system/cpu (a
+  # virtual filesystem controlled by kernel driver permissions, not by
+  # whether /system itself is mounted read-write) works correctly
+  # without any remount step - removed rather than "fixed", since there
+  # was never a working implementation to restore and the feature has
+  # never needed one.
   if [ "$disable_cores" = "auto" ]; then
     if capability_has cores_online; then
       for cpu in ${hp_cpus[@]}; do
@@ -264,16 +271,10 @@ action_cores_apply() {
       echo "powersave" > "$cpu_base_path/$core/cpufreq/scaling_governor"
     done
   fi
-  if [ -d "/data/adb/modules" ]; then
-    magic_remount_ro &>/dev/null
-  fi
 }
 
 action_cores_undo() {
   { [ "$handle_cores" != "false" ] || [ "$disable_cores" != "false" ]; } || return
-  if [ -d "/data/adb/modules" ]; then
-    magic_remount_rw &>/dev/null
-  fi
   if [ "$disable_cores" = "auto" ]; then
     if capability_has cores_online; then
       for cpu in ${hp_cpus[@]}; do
@@ -311,8 +312,5 @@ action_cores_undo() {
         echo "${lp_default_govs[$cpu]}" > "$cpu_base_path/$cpu/cpufreq/scaling_governor"
       fi
     done
-  fi
-  if [ -d "/data/adb/modules" ]; then
-    magic_remount_ro &>/dev/null
   fi
 }

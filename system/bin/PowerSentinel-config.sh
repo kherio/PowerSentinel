@@ -59,9 +59,12 @@ config_get_event_raw() {
   [ -n "$value" ] && printf '%s\n' "$value" || printf '%s\n' "$default"
 }
 
-# List of every event block name currently defined (used by handle_event's
-# active_events bookkeeping and anywhere else that needs to enumerate
-# events rather than name one directly).
+# Lists every event block name currently defined. Not called by
+# anything in this codebase yet (the previous comment here incorrectly
+# claimed handle_event() used it, which was never true) - kept as a
+# ready-to-use utility for a future WebUI/diagnostic feature that needs
+# to enumerate events rather than name one directly, since it's cheap
+# and already correctly implemented.
 config_list_events() {
   [ -r "$json_conf" ] || return 0
   "$JQ" -r '.events // {} | keys[]' "$json_conf" 2>/dev/null
@@ -138,7 +141,22 @@ config_set_global() {
 # characters in a user's own config values can't affect the filter being
 # run.
 migrate_conf_to_json() {
-  [ -s "$json_conf" ] && return 0
+  # Only treat a pre-existing $json_conf as "already migrated" if it has
+  # a real version key - not just any non-empty file. A plain
+  # [ -s "$json_conf" ] check can't tell a genuinely-migrated config
+  # apart from a minimal "{"global":{},"events":{}}" stub left behind
+  # by a PARTIALLY failed migration (e.g. every jq call inside the loop
+  # below failing on a device where jq doesn't run correctly for some
+  # reason - the loop's `&&` guards mean the merge step is silently
+  # skipped, but the file still gets written and still passes -s). This
+  # makes migration self-healing: a transient failure gets a genuine
+  # retry on the next daemon start, instead of being permanently
+  # accepted as "done" the first time an empty-looking result appears.
+  if [ -s "$json_conf" ]; then
+    local existing_version
+    existing_version="$("$JQ" -r '.global.version? // empty' "$json_conf" 2>/dev/null)"
+    [ -n "$existing_version" ] && return 0
+  fi
   [ -s "$conf" ] || return 0
 
   local dir tmp
