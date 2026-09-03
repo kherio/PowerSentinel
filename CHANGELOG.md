@@ -1,3 +1,6 @@
+### v3.20.0
+  - **Problematic-app detection (observational only).** A new watch, using the stable `/proc/[pid]/stat` kernel interface rather than any fragile Android dumpsys command, flags apps sustaining real, measurable CPU use while the screen is off - recorded to the Event Journal, no automatic action taken. This is groundwork for a future per-app policy system to target apps that are actually measured as heavy, instead of an arbitrary manually-curated list.
+
 ### v3.19.0
   - **Energy log: real validation, not just correctness.** A new `PowerSentinel.energylog` records battery level, temperature, and what was active, but only when something actually changed - not every cycle. This is raw data collection for after-the-fact analysis (e.g. "did aggressiveness High actually drain slower than Medium last night", "did temperature actually drop after thermal fired") - no built-in conclusions, no new WebUI view yet, honestly a correlation tool for your own device rather than a scientific power model.
 
