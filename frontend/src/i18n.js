@@ -270,8 +270,9 @@ const DICT = {
     'acerca.repoLink': 'Repositorio en GitHub',
     'acerca.changelogLink': 'Historial de cambios (CHANGELOG)',
     'acerca.issuesLink': 'Reportar un problema',
+    'acerca.telegramLink': 'Canal de Telegram',
     'acerca.credits': 'Créditos',
-    'acerca.creditsText': 'Fork mantenido por <strong>kherio</strong>, basado en el trabajo original de <strong>DethByte64</strong>.',
+    'acerca.creditsText': 'Desarrollado y mantenido por <strong>kherio</strong>.',
 
     'field.nightStart.label': 'Hora de inicio',
     'field.nightStart.help': 'Formato 24h HH:MM. El perfil nocturno se activa/desactiva por horario, en paralelo a los demás eventos (pantalla, carga, batería baja...).',
@@ -597,8 +598,9 @@ const DICT = {
     'acerca.repoLink': 'GitHub repository',
     'acerca.changelogLink': 'Changelog',
     'acerca.issuesLink': 'Report an issue',
+    'acerca.telegramLink': 'Telegram channel',
     'acerca.credits': 'Credits',
-    'acerca.creditsText': 'Fork maintained by <strong>kherio</strong>, based on the original work by <strong>DethByte64</strong>.',
+    'acerca.creditsText': 'Developed and maintained by <strong>kherio</strong>.',
 
     'field.nightStart.label': 'Start time',
     'field.nightStart.help': '24h HH:MM format. The night profile activates/deactivates by schedule, in parallel with the other events (screen, charging, low battery...).',

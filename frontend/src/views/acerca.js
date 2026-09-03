@@ -92,7 +92,8 @@ export function initAcerca() {
   const linkMeta = [
     { icon: ICONS.github, label: t('acerca.repoLink') },
     { icon: ICONS.list, label: t('acerca.changelogLink') },
-    { icon: ICONS.info, label: t('acerca.issuesLink') }
+    { icon: ICONS.info, label: t('acerca.issuesLink') },
+    { icon: ICONS.telegram, label: t('acerca.telegramLink') }
   ];
   links.forEach((a, i) => {
     a.innerHTML = linkMeta[i].icon + '<span>' + linkMeta[i].label + '</span>';
