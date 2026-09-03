@@ -28,9 +28,36 @@ let editor, highlightCode, dirtyFlag;
 // nueva) se muestra el modo básico - ver AGGRESSION_PRESETS más abajo
 // para el razonamiento de seguridad detrás de cada nivel.
 const ADVANCED_MODE_KEY = 'powersentinel-advanced-mode';
+// Distinto de ADVANCED_MODE_KEY: registra si el usuario ha visto/
+// elegido activamente un modo alguna vez, para diferenciar "nunca se
+// ha decidido nada, es la primera visita" de "ya eligió básico
+// explícitamente" - solo el primer caso abre la pantalla de elección
+// automáticamente.
+const MODE_CHOSEN_KEY = 'powersentinel-mode-chosen';
 
 function isAdvancedMode() {
   try { return localStorage.getItem(ADVANCED_MODE_KEY) === 'true'; } catch (e) { return false; }
+}
+
+function hasChosenMode() {
+  try { return localStorage.getItem(MODE_CHOSEN_KEY) === 'true'; } catch (e) { return false; }
+}
+
+function chooseMode(advanced) {
+  try {
+    localStorage.setItem(ADVANCED_MODE_KEY, advanced ? 'true' : 'false');
+    localStorage.setItem(MODE_CHOSEN_KEY, 'true');
+  } catch (e) {}
+  closeModeModal();
+  applyMode();
+}
+
+function openModeModal() {
+  document.getElementById('mode-modal-overlay').style.display = 'flex';
+}
+
+function closeModeModal() {
+  document.getElementById('mode-modal-overlay').style.display = 'none';
 }
 
 // Los 3 niveles de "Agresividad" del modo básico. Deliberadamente
@@ -594,11 +621,27 @@ export function initConfig() {
   document.getElementById('c-restore-btn').addEventListener('click', restoreRecommended);
 
   document.getElementById('c-advanced-toggle').addEventListener('change', (e) => {
-    try { localStorage.setItem(ADVANCED_MODE_KEY, e.target.checked ? 'true' : 'false'); } catch (err) {}
+    try {
+      localStorage.setItem(ADVANCED_MODE_KEY, e.target.checked ? 'true' : 'false');
+      localStorage.setItem(MODE_CHOSEN_KEY, 'true');
+    } catch (err) {}
     applyMode();
   });
   document.getElementById('cb-adaptive-toggle').addEventListener('change', (e) => setAdaptiveEnabled(e.target.checked));
+
+  document.getElementById('c-mode-info-btn').textContent = '?';
+  document.getElementById('c-mode-info-btn').title = t('config.modeInfoTitle');
+  document.getElementById('c-mode-info-btn').setAttribute('aria-label', t('config.modeInfoTitle'));
+  document.getElementById('c-mode-info-btn').addEventListener('click', openModeModal);
+  document.getElementById('mode-choice-basic-btn').addEventListener('click', () => chooseMode(false));
+  document.getElementById('mode-choice-advanced-btn').addEventListener('click', () => chooseMode(true));
+  document.getElementById('mode-modal-close-btn').addEventListener('click', () => {
+    try { localStorage.setItem(MODE_CHOSEN_KEY, 'true'); } catch (err) {}
+    closeModeModal();
+  });
+
   applyMode();
+  if (!hasChosenMode()) openModeModal();
 
   // Detect core count + currently-active events from the live status so
   // cores in the form get real chips and event cards can show an

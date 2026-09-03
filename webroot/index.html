@@ -4,8 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PowerSentinel</title>
-  <script type="module" crossorigin src="./assets/index-D-SH6v_1.js"></script>
-  <link rel="stylesheet" crossorigin href="./assets/index-BN0AGJJY.css">
+  <script type="module" crossorigin src="./assets/index-DbnHzWr2.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-5l1x58iY.css">
 </head>
 <body class="app-shell">
   <header class="app-header">
@@ -101,6 +101,7 @@
         <button class="btn ghost" id="c-reload-btn"></button>
         <button class="btn ghost" id="c-restore-btn"></button>
         <div class="spacer"></div>
+        <button class="icon-btn" id="c-mode-info-btn" type="button" title="" aria-label=""></button>
         <label class="switch">
           <input type="checkbox" id="c-advanced-toggle"> <span data-i18n="config.advancedMode">Modo avanzado</span>
         </label>
@@ -310,6 +311,43 @@
   </nav>
 
   <div id="toast-container"></div>
+
+  <!-- Pantalla de elección de modo básico/avanzado. Se muestra sola la
+       primera vez que se visita Config (sin preferencia guardada
+       todavía), y también bajo demanda con el icono de ayuda junto al
+       interruptor "Modo avanzado". -->
+  <div id="mode-modal-overlay" class="modal-overlay" style="display:none;">
+    <div class="modal-card">
+      <div class="modal-title" data-i18n="modeModal.title">¿Qué modo prefieres?</div>
+      <p class="hint" data-i18n="modeModal.intro">Puedes cambiar esto cuando quieras desde el interruptor "Modo avanzado" en Config.</p>
+
+      <div class="mode-choice-grid">
+        <div class="mode-choice-card">
+          <div class="mode-choice-title" data-i18n="modeModal.basicTitle">Básico</div>
+          <p class="hint" data-i18n="modeModal.basicDesc">Activa el ahorro automático eligiendo solo un nivel de agresividad. No necesitas entender eventos, apps, núcleos ni nada técnico.</p>
+          <ul class="mode-choice-list">
+            <li data-i18n="modeModal.basicPoint1">Un interruptor y 3 niveles: Baja, Media, Alta</li>
+            <li data-i18n="modeModal.basicPoint2">Se guarda solo, sin pasos extra</li>
+            <li data-i18n="modeModal.basicPoint3">Nunca suspende apps sin que tú lo configures</li>
+          </ul>
+          <button class="btn primary" id="mode-choice-basic-btn" data-i18n="modeModal.chooseBasic">Elegir Básico</button>
+        </div>
+
+        <div class="mode-choice-card">
+          <div class="mode-choice-title" data-i18n="modeModal.advancedTitle">Avanzado</div>
+          <p class="hint" data-i18n="modeModal.advancedDesc">Control total: configura cada evento por separado (pantalla apagada, carga, arranque...), qué apps gestionar, núcleos, WiFi, Doze y más.</p>
+          <ul class="mode-choice-list">
+            <li data-i18n="modeModal.advancedPoint1">Editor de eventos completo, campo a campo</li>
+            <li data-i18n="modeModal.advancedPoint2">Editor de JSON directo (modo desarrollador)</li>
+            <li data-i18n="modeModal.advancedPoint3">Requiere entender los términos técnicos</li>
+          </ul>
+          <button class="btn ghost" id="mode-choice-advanced-btn" data-i18n="modeModal.chooseAdvanced">Elegir Avanzado</button>
+        </div>
+      </div>
+
+      <button class="btn ghost" id="mode-modal-close-btn" style="margin-top:14px;width:100%;" data-i18n="modeModal.keepCurrent">Mantener como está</button>
+    </div>
+  </div>
 
 </body>
 </html>
