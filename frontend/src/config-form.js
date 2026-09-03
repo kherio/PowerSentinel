@@ -1,6 +1,18 @@
 // Parser / serializer / form renderer for PowerSentinel.json (event-block based config)
 import { t } from './i18n.js';
 
+// Real, detected device manufacturer (lowercase), set once by config.js
+// after reading PowerSentinel.status - used to only show a device-
+// specific risk warning (see disable_cores/low_ram below) when it's
+// actually relevant to THIS device, instead of every user seeing the
+// same generic warning regardless of what they're running. null until
+// the first status read completes, in which case device-specific
+// warnings simply don't show yet rather than showing on a guess.
+var detectedManufacturer = null;
+function setDetectedManufacturer(m) {
+  detectedManufacturer = (m || '').toLowerCase();
+}
+
 var PREDEFINED_EVENTS = ['boot', 'charging', 'screen_off', 'low_power', 'night', 'thermal', 'adaptive_tier1', 'adaptive_tier2', 'adaptive_tier3', 'manual'];
 
 var FIELD_DEFS = [
@@ -47,7 +59,8 @@ var FIELD_DEFS = [
     help: t('field.handleCores.help') },
   { key: 'disable_cores', label: t('field.disableCores.label'), type: 'cores', def: 'false', group: 'cpu',
     help: t('field.disableCores.help'),
-    warn: t('field.disableCores.warn') },
+    warn: t('field.disableCores.warn'),
+    warnIf: function () { return !!detectedManufacturer && detectedManufacturer.indexOf('samsung') !== -1; } },
   {
     key: 'handle_gms', label: t('field.handleGms.label'), type: 'select', def: 'false', group: 'sistema',
     options: [
@@ -67,7 +80,8 @@ var FIELD_DEFS = [
   },
   { key: 'low_ram', label: t('field.lowRam.label'), type: 'toggle', def: 'false', group: 'sistema',
     help: t('field.lowRam.help'),
-    warn: t('field.lowRam.warn') },
+    warn: t('field.lowRam.warn'),
+    warnIf: function () { return !!detectedManufacturer && detectedManufacturer.indexOf('oneplus') !== -1; } },
   {
     key: 'doze', label: t('field.doze.label'), type: 'select', def: 'false', group: 'sistema',
     options: [
@@ -446,7 +460,7 @@ function renderFieldRow(def, fields, coreList, onChange) {
     help.textContent = def.help;
     row.appendChild(help);
   }
-  if (def.warn) {
+  if (def.warn && (!def.warnIf || def.warnIf())) {
     var warn = document.createElement('div');
     warn.style.fontSize = '13px';
     warn.style.lineHeight = '1.4';
@@ -493,5 +507,6 @@ function renderFieldsForm(container, fields, defs, coreList, onDirty) {
 
 export {
   PREDEFINED_EVENTS, FIELD_DEFS, GLOBAL_DEFS, EVENT_PRESETS,
-  parseConfig, serializeConfig, renderFieldsForm, renderFieldRow, buildRecommendedModel
+  parseConfig, serializeConfig, renderFieldsForm, renderFieldRow, buildRecommendedModel,
+  setDetectedManufacturer
 };

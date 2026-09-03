@@ -8,7 +8,8 @@ import { t } from '../i18n.js';
 import { mountAppsPicker, persistAppsPicker } from './apps-picker.js';
 import {
   PREDEFINED_EVENTS, FIELD_DEFS, GLOBAL_DEFS, EVENT_PRESETS,
-  parseConfig, serializeConfig, renderFieldsForm, renderFieldRow, buildRecommendedModel
+  parseConfig, serializeConfig, renderFieldsForm, renderFieldRow, buildRecommendedModel,
+  setDetectedManufacturer
 } from '../config-form.js';
 
 // Splits the per-event field list so the apps picker widget (allow/
@@ -28,6 +29,9 @@ let coreList = null;
 let activeEventNames = new Set();
 let lastBattery = null;
 let lastCriticalAppsCount = null;
+let lastManufacturer = null;
+let lastModel = null;
+let lastCapabilities = null;
 let activeView = 'form';
 let loaded = false;
 
@@ -846,6 +850,17 @@ function refreshLiveStatus() {
         lastBattery = { level: parseInt(m[1], 10), charging: m[2] === 'true' };
       } else if ((m = line.match(/^criticalappscount:\s*(\d+)/i))) {
         lastCriticalAppsCount = parseInt(m[1], 10);
+      } else if ((m = line.match(/^manufacturer:\s*(.*)$/i))) {
+        lastManufacturer = m[1].trim();
+        setDetectedManufacturer(lastManufacturer);
+      } else if ((m = line.match(/^model:\s*(.*)$/i))) {
+        lastModel = m[1].trim();
+      } else if ((m = line.match(/^capabilities:\s*(.*)$/i))) {
+        lastCapabilities = {};
+        m[1].trim().split(/\s+/).forEach((pair) => {
+          const [k, v] = pair.split('=');
+          if (k) lastCapabilities[k] = v === 'true';
+        });
       }
     });
     if (cores.length) coreList = cores.sort((a, b) => a - b);

@@ -275,6 +275,17 @@ update_status() {
   # actual package list, which isn't particularly meaningful to
   # someone who didn't choose those apps themselves.
   echo "CriticalAppsCount: ${#DETECT_CRITICAL_APPS[@]}" >> "$status_file"
+
+  # Real device identification (ro.product.* - standard, stable Android
+  # build properties, not a dumpsys parse) and the already-computed
+  # Capability Manager results (PowerSentinel-capabilities.sh), so the
+  # WebUI can show what this specific device actually is and actually
+  # supports - "detección automática de hardware" from the roadmap -
+  # instead of every user seeing the same generic warnings regardless
+  # of whether they're actually relevant to their device.
+  echo "Manufacturer: $(getprop ro.product.manufacturer 2>/dev/null)" >> "$status_file"
+  echo "Model: $(getprop ro.product.model 2>/dev/null)" >> "$status_file"
+  echo "Capabilities: $(capabilities_summary)" >> "$status_file"
 }
 
 # read_config() (V1) removed - see below, v1 support has been

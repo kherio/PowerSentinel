@@ -1,7 +1,7 @@
 import { ICONS } from '../icons.js';
 import { readModuleInfo, readStatus, readLog } from '../api.js';
 import { t, getLocaleOverride, setLocaleOverride } from '../i18n.js';
-import { toast } from '../helpers.js';
+import { toast, escapeHtml } from '../helpers.js';
 
 let loaded = false;
 
@@ -41,6 +41,51 @@ function initLanguageSelector() {
     setLocaleOverride(select.value === 'auto' ? null : select.value);
     location.reload();
   });
+}
+
+// Reads the same status file the raw diagnostics text already
+// includes, but formats manufacturer/model/capabilities as a plain,
+// readable list instead of a copyable technical blob - "detección
+// automática de hardware" so a person can actually see what their
+// specific device supports without needing to interpret raw daemon
+// output. The underlying data (Manufacturer/Model/Capabilities lines)
+// comes straight from getprop and the already-existing Capability
+// Manager (PowerSentinel-capabilities.sh) - nothing new is detected
+// here, this is purely a friendlier presentation of data the daemon
+// already computes at startup.
+async function renderHardwareInfo() {
+  const el = document.getElementById('a-hardware-info');
+  const capLabels = {
+    cores_online: t('acerca.capCoresOnline'),
+    cores_governor: t('acerca.capCoresGovernor'),
+    rfkill_wifi: t('acerca.capRfkillWifi'),
+    svc_wifi: t('acerca.capSvcWifi'),
+    doze_force: t('acerca.capDoze'),
+    gms_installed: t('acerca.capGms'),
+    pm_suspend: t('acerca.capSuspend')
+  };
+  try {
+    const status = await readStatus();
+    const manufacturer = (/^manufacturer:\s*(.*)$/im.exec(status) || [])[1] || '';
+    const model = (/^model:\s*(.*)$/im.exec(status) || [])[1] || '';
+    const capsLine = (/^capabilities:\s*(.*)$/im.exec(status) || [])[1] || '';
+    const caps = {};
+    capsLine.trim().split(/\s+/).forEach((pair) => {
+      const eq = pair.indexOf('=');
+      if (eq > 0) caps[pair.slice(0, eq)] = pair.slice(eq + 1) === 'true';
+    });
+
+    let html = `<div class="hw-device">${escapeHtml((manufacturer + ' ' + model).trim() || '?')}</div>`;
+    html += '<ul class="hw-cap-list">';
+    Object.keys(capLabels).forEach((key) => {
+      const supported = !!caps[key];
+      html += `<li class="${supported ? 'hw-cap-yes' : 'hw-cap-no'}">${supported ? '✓' : '✕'} ${escapeHtml(capLabels[key])}</li>`;
+    });
+    html += '</ul>';
+    el.innerHTML = html;
+  } catch (e) {
+    el.textContent = t('acerca.hardwareError');
+  }
 }
 
 // Bundles version + current status + the tail of the log into one text
@@ -103,6 +148,7 @@ export function initAcerca() {
 
   document.getElementById('a-diagnostics-btn').innerHTML = ICONS.download + ' ' + t('acerca.copyDiagnostics');
   document.getElementById('a-diagnostics-btn').addEventListener('click', copyDiagnostics);
+  renderHardwareInfo();
 }
 
 export function activateAcerca() {
