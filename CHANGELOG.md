@@ -1,3 +1,6 @@
+### v3.23.0
+  - **Per-app policy in 4 levels**, replacing the binary allowlist/denylist-only model: 0 (never touch), 1 (gentle only, capped at "nice"), 2 (default, follow the event as configured), 3 (always aggressive, forces suspend). Global rather than per-event, built on top of the real CPU detection added in v3.20.0 - a level can now be an informed decision rather than a guess. Manage it now via `PowerSentinelconf app-policy set/get/rm/list`; a WebUI section is planned for a later polish pass.
+
 ### v3.22.0
   - **Redesigned Basic mode's Config screen.** The three aggressiveness levels are now cards with an icon and a one-line description of what each actually means, instead of plain unexplained buttons. A new live status line shows whether adaptive savings are genuinely doing something right now ("Ahorrando ahora mismo" / "Sin ahorro activo ahora mismo"), not just whether the setting is turned on.
 
