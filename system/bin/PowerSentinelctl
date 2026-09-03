@@ -1,10 +1,20 @@
 #!/system/bin/bash
 
-conf="/data/local/tmp/PowerSentinel/PowerSentinel.conf"
+# CRITICAL FIX (found during a full-codebase audit): getconf() used to
+# read the .conf text file directly - but the daemon has read
+# PowerSentinel.json exclusively since v3.10.0. In the common case
+# (default ctl_file path) this happened to still work by coincidence,
+# since the default hardcoded here matched the daemon's own default -
+# but a user who customized ctl_file via the WebUI (writing to JSON)
+# would have this tool silently keep using the stale default from the
+# frozen .conf, writing commands to a file the daemon isn't watching.
+json_conf="/data/local/tmp/PowerSentinel/PowerSentinel.json"
+JQ="$(dirname "$0")/jq"
 
 getconf() {
-  opt=$(grep "^$1=" "$conf" | cut -d= -f2)
-  [ "$opt" != "" ] && echo "$opt" || echo "$2"
+  local value
+  value="$("$JQ" -r --arg k "$1" '.global[$k]? // empty' "$json_conf" 2>/dev/null)"
+  [ -n "$value" ] && echo "$value" || echo "$2"
 }
 
 # Keep the control file in PowerSentinel's private data directory and repair
@@ -26,40 +36,26 @@ ensure_ctl_file() {
 
 ctl_file=$(getconf ctl_file "/data/local/tmp/PowerSentinel/powersentinel")
 ensure_ctl_file "$ctl_file"
-version=$(getconf version 1)
 
-print_help_v2() {
+# v1 support has been removed from the daemon entirely (every install
+# auto-migrates to v2 on first boot) - the version-dependent help text
+# and command-format branching this used to have are gone; there's only
+# ever one behavior now.
+print_help() {
 cat << EOM
   PowerSentinel Controller Options:
 
-  start		starts the manual event or a custom event
-  stop		stops the manual event or a custom event
-  pause		pauses the PowerSentinel daemon
-  resume	resumes the PowerSentinel daemon or exits safe mode
-  safe		stops all events and enters safe mode
-EOM
-}
-
-print_help_v1() {
-cat << EOM
-  PowerSentinel Controller Options:
-
-  start		enables power save mode manually.
-  stop		disables power save mode manually.
-  reload	reloads the config file.
-  pause		pauses the daemon.
-  resume	resumes the daemon or exits Safe Mode.
-  safe		Enters Safe Mode.
+  start\t\tstarts the manual event or a custom event
+  stop\t\tstops the manual event or a custom event
+  pause\t\tpauses the PowerSentinel daemon
+  resume\tresumes the PowerSentinel daemon or exits safe mode
+  safe\t\tstops all events and enters safe mode
 EOM
 }
 
 case "${1:-}" in
   ''|'-h'|'--help')
-    if [ "$version" = 2 ]; then
-      print_help_v2
-    else
-      print_help_v1
-    fi
+    print_help
     ;;
   *)
     # The daemon consumes a small text command protocol. Reject shell
@@ -79,7 +75,7 @@ case "${1:-}" in
       esac
     done
 
-    if [[ "$1" = "start" || "$1" = "stop" ]] && [ "$version" = "2" ] && [ "$#" -eq 1 ]; then
+    if [[ "$1" = "start" || "$1" = "stop" ]] && [ "$#" -eq 1 ]; then
       echo "start manual" > "$ctl_file"
     else
       printf '%s\n' "$*" > "$ctl_file"

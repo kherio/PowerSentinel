@@ -1,8 +1,19 @@
 #!/system/bin/bash
 # PowerSentinelconf - terminal-based configurator for PowerSentinel.
 #
-# Generates/edits PowerSentinel.conf directly on-device, without starting the
-# local httpd or opening a browser. Meant to be run as root:
+# CRITICAL FIX (found during a full-codebase audit): this tool used to
+# read/write PowerSentinel.conf directly - but the daemon has read
+# PowerSentinel.json exclusively since v3.10.0 ($conf is migrated once,
+# then never read again - see PowerSentinel-config.sh). Every get/set/
+# add-event/rm-event command run through this tool since v3.10.0 wrote
+# to a file the daemon no longer looked at, silently having zero effect
+# on actual behavior. Rewritten to operate on the real JSON config via
+# jq, mirroring the exact same access pattern PowerSentinel-config.sh
+# uses (temp file + atomic rename for every write). Also drops the
+# wizard's old "v1 · Simple (heredado)" choice, since v1 support was
+# removed from the daemon entirely.
+#
+# Meant to be run as root:
 #   su -c PowerSentinelconf              # from ADB or a terminal emulator (Termux, etc.)
 #   PowerSentinelconf                    # if already in a root shell
 #
@@ -11,14 +22,14 @@
 #   PowerSentinelconf show         print the current effective settings
 #   PowerSentinelconf get KEY [--event NAME]
 #   PowerSentinelconf set KEY VAL [--event NAME]
-#   PowerSentinelconf events                       list configured v2 events
-#   PowerSentinelconf add-event NAME               add an empty v2 event block
-#   PowerSentinelconf rm-event NAME                remove a v2 event block
+#   PowerSentinelconf events                       list configured events
+#   PowerSentinelconf add-event NAME               add an empty event block
+#   PowerSentinelconf rm-event NAME                remove an event block
 
 CONF_DIR="/data/local/tmp/PowerSentinel"
-CONF="$CONF_DIR/PowerSentinel.conf"
+JSON_CONF="$CONF_DIR/PowerSentinel.json"
+JQ="$(dirname "$0")/jq"
 
-FIELD_KEYS="handle_apps allowlist denylist handle_cores disable_cores handle_gms handle_proc proc_file low_ram doze kill_wifi keep_on_charge"
 PREDEFINED_EVENTS="boot charging screen_off low_power night thermal adaptive_tier1 adaptive_tier2 adaptive_tier3 manual"
 
 require_root() {
@@ -30,110 +41,76 @@ require_root() {
 
 ensure_conf() {
   mkdir -p "$CONF_DIR"
-  [ -f "$CONF" ] || : > "$CONF"
+  [ -s "$JSON_CONF" ] || echo '{"global":{},"events":{}}' > "$JSON_CONF"
 }
 
 backup_conf() {
-  [ -f "$CONF" ] && cp "$CONF" "$CONF.bak" 2>/dev/null
+  [ -f "$JSON_CONF" ] && cp "$JSON_CONF" "$JSON_CONF.bak" 2>/dev/null
 }
 
-# Collapses runs of 2+ blank lines into a single one, so repeated
-# add-event/rm-event/set cycles don't leave the file growing empty lines.
-normalize_blanks() {
-  awk 'BEGIN{blank=0} /^[[:space:]]*$/{blank++; if(blank>1) next} !/^[[:space:]]*$/{blank=0} {print}' "$CONF" > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"
-}
-
-# ---------- low-level read/write on the real conf file ----------
-
-# getval KEY [EVENT]  -> prints the value or empty
-getval() {
-  local key="$1" event="$2"
-  if [ -z "$event" ]; then
-    awk -F= -v k="$key" '
-      /^[a-zA-Z0-9_-]+=\{[[:space:]]*$/ { inblock=1 }
-      /^\}[[:space:]]*$/ { inblock=0 }
-      !inblock && $1==k { sub(/^[^=]+=/,""); print; found=1 }
-      END { if (!found) exit 1 }
-    ' "$CONF"
-  else
-    awk -F= -v k="$key" -v ev="$event" '
-      $0 ~ "^"ev"=\\{[[:space:]]*$" { inblock=1; next }
-      inblock && /^\}[[:space:]]*$/ { inblock=0 }
-      inblock {
-        line=$0; sub(/^[[:space:]]+/,"",line)
-        split(line,a,"="); if (a[1]==k) { sub(/^[^=]+=/,"",line); print line; found=1 }
-      }
-      END { if (!found) exit 1 }
-    ' "$CONF"
+# Runs a jq filter against $JSON_CONF and atomically replaces it with the
+# result - every write in this file goes through this one function, so
+# there's exactly one place that knows how to do it safely (temp file +
+# validate + atomic rename, same pattern PowerSentinel-config.sh uses).
+# A jq failure (bad filter, unreadable input) leaves $JSON_CONF
+# completely untouched rather than risking a partial/corrupt write.
+apply_jq() {
+  local tmp
+  tmp="$(mktemp "$CONF_DIR/.PowerSentinel.json.XXXXXX")" || { echo "No se pudo crear un fichero temporal." >&2; return 1; }
+  if "$JQ" "$@" "$JSON_CONF" > "$tmp" 2>/dev/null && [ -s "$tmp" ] && "$JQ" -e . "$tmp" >/dev/null 2>&1; then
+    mv "$tmp" "$JSON_CONF"
+    return 0
   fi
+  rm -f "$tmp"
+  echo "Error al escribir la configuración (¿falló jq?)." >&2
+  return 1
 }
 
-# setval KEY VALUE [EVENT] -> updates in place, creating the key/block if needed
+# ---------- low-level read/write on the real JSON config ----------
+
+# getval KEY [EVENT] -> prints the value or empty, exit 1 if not found
+getval() {
+  local key="$1" event="$2" value
+  if [ -z "$event" ]; then
+    value="$("$JQ" -r --arg k "$key" '.global[$k]? // empty' "$JSON_CONF" 2>/dev/null)"
+  else
+    value="$("$JQ" -r --arg e "$event" --arg k "$key" '.events[$e][$k]? // empty' "$JSON_CONF" 2>/dev/null)"
+  fi
+  [ -n "$value" ] || return 1
+  printf '%s\n' "$value"
+}
+
+# setval KEY VALUE [EVENT] -> creates the global key or event block if needed
 setval() {
   local key="$1" val="$2" event="$3"
   backup_conf
   if [ -z "$event" ]; then
-    if grep -qE "^${key}=" "$CONF" 2>/dev/null; then
-      sed -i -E "s|^${key}=.*|${key}=${val}|" "$CONF"
-    else
-      # Insert right at the end of the top global section: before the first
-      # blank line or the first event block, whichever comes first. Falls
-      # back to appending at the end of the file if there's neither.
-      awk -v k="$key" -v v="$val" '
-        inserted { print; next }
-        /^[[:space:]]*$/ || /^[a-zA-Z0-9_-]+=\{[[:space:]]*$/ {
-          print k"="v; inserted=1; print; next
-        }
-        { print }
-        END { if (!inserted) print k"="v }
-      ' "$CONF" > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"
-    fi
+    apply_jq --arg k "$key" --arg v "$val" '.global[$k] = $v'
   else
-    if ! grep -qE "^${event}=\{[[:space:]]*$" "$CONF" 2>/dev/null; then
-      printf '\n%s={\n}\n' "$event" >> "$CONF"
-    fi
-    awk -v ev="$event" -v k="$key" -v v="$val" '
-      $0 ~ "^"ev"=\\{[[:space:]]*$" { print; inblock=1; next }
-      inblock && /^\}[[:space:]]*$/ {
-        if (!seen) print "  "k"="v
-        print; inblock=0; next
-      }
-      inblock {
-        line=$0; t=line; sub(/^[[:space:]]+/,"",t); split(t,a,"=")
-        if (a[1]==k) { print "  "k"="v; seen=1; next }
-      }
-      { print }
-    ' "$CONF" > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"
+    apply_jq --arg e "$event" --arg k "$key" --arg v "$val" \
+      '.events[$e] = ((.events[$e] // {}) + {($k): $v})'
   fi
 }
 
 list_events() {
-  grep -oE '^[a-zA-Z0-9_-]+=\{[[:space:]]*$' "$CONF" 2>/dev/null | sed 's/={.*//'
+  "$JQ" -r '.events // {} | keys[]' "$JSON_CONF" 2>/dev/null
 }
 
 add_event() {
   local name="$1"
   name=$(echo "$name" | tr -cd 'a-zA-Z0-9_-')
   [ -z "$name" ] && { echo "Nombre de evento no válido."; return 1; }
-  if grep -qE "^${name}=\{[[:space:]]*$" "$CONF" 2>/dev/null; then
+  if "$JQ" -e --arg e "$name" '.events | has($e)' "$JSON_CONF" >/dev/null 2>&1; then
     echo "El evento '$name' ya existe."; return 1
   fi
   backup_conf
-  printf '\n%s={\n}\n' "$name" >> "$CONF"
-  normalize_blanks
-  echo "Evento '$name' añadido."
+  apply_jq --arg e "$name" '.events[$e] = {}' && echo "Evento '$name' añadido."
 }
 
 rm_event() {
   local name="$1"
   backup_conf
-  awk -v ev="$name" '
-    $0 ~ "^"ev"=\\{[[:space:]]*$" { skip=1; next }
-    skip && /^\}[[:space:]]*$/ { skip=0; next }
-    !skip { print }
-  ' "$CONF" > "$CONF.tmp" && mv "$CONF.tmp" "$CONF"
-  normalize_blanks
-  echo "Evento '$name' eliminado (si existía)."
+  apply_jq --arg e "$name" 'del(.events[$e])' && echo "Evento '$name' eliminado (si existía)."
 }
 
 # ---------- interactive prompts ----------
@@ -176,12 +153,11 @@ ask_yesno() {
   esac
 }
 
-# Prompts for the shared field set (used for v1 flat settings and for each v2
-# event block). Prints one "key=value" per line (only non-empty), to be
-# captured by the caller.
+# Prompts for the shared event field set. Prints one "key=value" per
+# line (only non-empty), to be captured by the caller and merged into
+# the event's JSON object one key at a time via apply_jq.
 prompt_fields() {
-  local ctx="$1"   # label for messages, e.g. "screen_off" or "ajustes generales"
-  local cur_handle_apps cur_allowlist cur_denylist
+  local ctx="$1"   # label for messages, e.g. "screen_off"
   echo >&2
   echo "--- $ctx ---" >&2
 
@@ -227,15 +203,24 @@ prompt_fields() {
   echo "keep_on_charge=$(ask_yesno '¿Mantener ajustes mientras carga?' 'true')"
 }
 
+# Merges "key=value" lines (as produced by prompt_fields) into the given
+# event's JSON object, one apply_jq call per key - simplest way to reuse
+# prompt_fields' existing line-based output without teaching it about
+# JSON directly.
+save_fields_to_event() {
+  local event="$1" fields="$2" k v
+  while IFS='=' read -r k v; do
+    [ -n "$k" ] || continue
+    apply_jq --arg e "$event" --arg k "$k" --arg v "$v" \
+      '.events[$e] = ((.events[$e] // {}) + {($k): $v})'
+  done <<< "$fields"
+}
+
 wizard() {
   echo "=== Asistente de configuración de PowerSentinel ==="
-  echo "Este asistente reescribe $CONF por completo."
-  [ -f "$CONF" ] && echo "(Se guardará una copia de seguridad en $CONF.bak)"
+  echo "Este asistente reescribe $JSON_CONF por completo."
+  [ -s "$JSON_CONF" ] && echo "(Se guardará una copia de seguridad en $JSON_CONF.bak)"
   echo
-
-  local version
-  version=$(ask_choice "Formato de configuración" "2" \
-    "2:v2 · Eventos (recomendado)" "1:v1 · Simple (heredado)")
 
   local delay log_file log_level notify
   delay=$(ask "Intervalo de sondeo en segundos (delay)" "3")
@@ -244,44 +229,29 @@ wizard() {
   notify=$(ask_yesno "¿Mostrar notificaciones?" "true")
 
   backup_conf
-  {
-    echo "version=$version"
-    echo "delay=$delay"
-    echo "log_file=$log_file"
-    echo "log_level=$log_level"
-    echo "notify=$notify"
-  } > "$CONF"
-
-  if [ "$version" = "1" ]; then
-    local trigger
-    trigger=$(ask_choice "Disparador (trigger)" "auto" \
-      "auto:Automático (ahorro de batería)" "boot:Al arrancar" "manual:Manual")
-    echo "trigger=$trigger" >> "$CONF"
-    prompt_fields "ajustes generales" >> "$CONF"
-  else
-    echo
-    echo "Ahora vamos a definir los eventos (screen_off, low_power, boot, etc)."
-    echo "Puedes añadir tantos como quieras, incluidos personalizados."
-    while true; do
-      echo
-      echo "Eventos predefinidos disponibles: $PREDEFINED_EVENTS"
-      local name
-      read -rp "Nombre del evento a añadir (vacío para terminar): " name
-      [ -z "$name" ] && break
-      name=$(echo "$name" | tr -cd 'a-zA-Z0-9_-')
-      [ -z "$name" ] && { echo "Nombre no válido, usa letras/números/_/-"; continue; }
-      {
-        echo
-        echo "${name}={"
-        prompt_fields "$name" | sed 's/^/  /'
-        echo "}"
-      } >> "$CONF"
-      echo "Evento '$name' guardado."
-    done
-  fi
+  "$JQ" -n --arg delay "$delay" --arg log_file "$log_file" --arg log_level "$log_level" --arg notify "$notify" \
+    '{global: {version: "2", delay: $delay, log_file: $log_file, log_level: $log_level, notify: $notify}, events: {}}' \
+    > "$JSON_CONF"
 
   echo
-  echo "Configuración escrita en $CONF"
+  echo "Ahora vamos a definir los eventos (screen_off, low_power, boot, etc)."
+  echo "Puedes añadir tantos como quieras, incluidos personalizados."
+  while true; do
+    echo
+    echo "Eventos predefinidos disponibles: $PREDEFINED_EVENTS"
+    local name
+    read -rp "Nombre del evento a añadir (vacío para terminar): " name
+    [ -z "$name" ] && break
+    name=$(echo "$name" | tr -cd 'a-zA-Z0-9_-')
+    [ -z "$name" ] && { echo "Nombre no válido, usa letras/números/_/-"; continue; }
+
+    apply_jq --arg e "$name" '.events[$e] = ((.events[$e]) // {})'
+    save_fields_to_event "$name" "$(prompt_fields "$name")"
+    echo "Evento '$name' guardado."
+  done
+
+  echo
+  echo "Configuración escrita en $JSON_CONF"
   echo "Aplica los cambios con: su -c 'PowerSentinelctl reload'  (o reinicia el dispositivo)"
 }
 
@@ -295,7 +265,7 @@ case "$1" in
     wizard
     ;;
   show)
-    cat "$CONF"
+    "$JQ" . "$JSON_CONF" 2>/dev/null || cat "$JSON_CONF"
     ;;
   get)
     shift
@@ -313,8 +283,7 @@ case "$1" in
       echo "Uso: PowerSentinelconf set KEY VALOR [--event NOMBRE]" >&2
       exit 1
     fi
-    setval "$key" "$val" "$event"
-    echo "$key=$val actualizado$( [ -n "$event" ] && echo " en el evento $event" )."
+    setval "$key" "$val" "$event" && echo "$key=$val actualizado$( [ -n "$event" ] && echo " en el evento $event" )."
     ;;
   events)
     list_events
@@ -326,7 +295,7 @@ case "$1" in
     rm_event "$2"
     ;;
   -h|--help)
-    sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'
     ;;
   *)
     echo "Comando desconocido: $1" >&2
