@@ -120,6 +120,16 @@ export async function setAppPolicy(pkg, level) {
   await run(cmd);
 }
 
+// One-shot, on-demand CPU consumption ranking (PowerSentinel-cpurank) -
+// deliberately never called automatically by any poll/refresh loop in
+// this WebUI. Takes ~2+ seconds (it samples twice, a couple of seconds
+// apart) and involves real overhead (reading every installed third-
+// party app's /proc/[pid]/stat), so it only runs when a person
+// explicitly asks to see it.
+export async function readCpuRanking() {
+  return run(`PowerSentinel-cpurank 2 2>/dev/null || echo '[]'`);
+}
+
 // ---------- Apps (allowlist/denylist picker) ----------
 
 export async function listPackages(includeSystem) {

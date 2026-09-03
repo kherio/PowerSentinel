@@ -1,0 +1,67 @@
+#!/system/bin/bash
+# PowerSentinel-cpurank [interval_seconds] - one-shot, on-demand CPU
+# consumption ranking for installed third-party apps, sorted by
+# percentage of one core.
+#
+# Deliberately NOT part of the continuously-running daemon, and
+# deliberately NOT a background watcher like PowerSentinel-appwatch.sh
+# - this script only runs, and only costs anything at all, when
+# something (the WebUI's monitoring view) explicitly invokes it. A
+# general "what's using my battery right now" question doesn't need a
+# permanent watcher: sampling twice, a few seconds apart, only when a
+# person actually wants to look, is real information with zero ongoing
+# cost - directly in line with this project's own stated objective of
+# minimizing unnecessary CPU activity, not just applying it to the
+# rest of the daemon while adding a new always-on cost here.
+#
+# Same /proc/[pid]/stat delta technique already used by appwatch.sh
+# (utime+stime over a real wall-clock interval, with the same "comm
+# can contain spaces" handling `man proc` warns about) - but as a
+# single sample-wait-sample cycle, not a persistent watch loop.
+#
+# Unlike appwatch.sh, this is NOT scoped to screen-off: "which app is
+# using the most CPU right now" is a reasonable question regardless of
+# whether the screen is on, since it's general information rather than
+# a background-behavior judgment.
+
+SAMPLE_INTERVAL="${1:-2}"
+JQ="$(dirname "$0")/jq"
+
+case "$SAMPLE_INTERVAL" in
+  ''|*[!0-9]*) SAMPLE_INTERVAL=2 ;;
+esac
+[ "$SAMPLE_INTERVAL" -ge 1 ] || SAMPLE_INTERVAL=2
+
+_current_ticks() {
+  local stat_line
+  stat_line="$(cat "/proc/$1/stat" 2>/dev/null)"
+  [ -n "$stat_line" ] || return 1
+  stat_line="${stat_line##*) }"
+  echo "$stat_line" | awk '{print ($12 + $13)}'
+}
+
+declare -A _ticks1 _pid_of
+
+while IFS= read -r pkg; do
+  [ -n "$pkg" ] || continue
+  pid="$(pgrep "$pkg" 2>/dev/null | head -1)"
+  [ -n "$pid" ] || continue
+  t="$(_current_ticks "$pid")"
+  [ -n "$t" ] || continue
+  _pid_of["$pkg"]="$pid"
+  _ticks1["$pkg"]="$t"
+done < <(pm list packages -3 2>/dev/null | cut -d: -f2-)
+
+sleep "$SAMPLE_INTERVAL"
+
+{
+  for pkg in "${!_pid_of[@]}"; do
+    pid="${_pid_of[$pkg]}"
+    t2="$(_current_ticks "$pid")"
+    [ -n "$t2" ] || continue
+    delta=$(( t2 - _ticks1[$pkg] ))
+    [ "$delta" -ge 0 ] || continue
+    pct=$(( delta * 100 / 100 / SAMPLE_INTERVAL ))
+    "$JQ" -cn --arg p "$pkg" --argjson pc "$pct" '{package: $p, pct: $pc}' 2>/dev/null
+  done
+} | "$JQ" -s 'sort_by(-.pct)' 2>/dev/null || echo '[]'

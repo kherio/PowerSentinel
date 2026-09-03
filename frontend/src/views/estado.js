@@ -1,5 +1,5 @@
 import { ICONS } from '../icons.js';
-import { readStatus } from '../api.js';
+import { readStatus, readCpuRanking } from '../api.js';
 import { toast, escapeHtml } from '../helpers.js';
 import { t } from '../i18n.js';
 
@@ -330,6 +330,38 @@ async function loadStatus(silent) {
 export function initEstado() {
   document.getElementById('e-refresh-btn').innerHTML = ICONS.reload + ' ' + t('common.update');
   document.getElementById('e-refresh-btn').addEventListener('click', () => loadStatus(false));
+  document.getElementById('e-cpurank-btn').textContent = t('estado.cpuRankButton');
+  document.getElementById('e-cpurank-btn').addEventListener('click', loadCpuRanking);
+}
+
+// Deliberately only ever called from the button click above - never
+// from activateEstado()'s poll loop, since this involves real,
+// non-trivial cost (a multi-second /proc sample across every
+// installed app) that shouldn't run just because the tab happens to
+// be open.
+async function loadCpuRanking() {
+  const btn = document.getElementById('e-cpurank-btn');
+  const list = document.getElementById('e-cpurank-list');
+  btn.disabled = true;
+  btn.textContent = t('estado.cpuRankMeasuring');
+  list.innerHTML = '';
+  try {
+    const text = await readCpuRanking();
+    const apps = JSON.parse(text);
+    if (!Array.isArray(apps) || apps.length === 0) {
+      list.innerHTML = `<p class="hint">${escapeHtml(t('estado.cpuRankEmpty'))}</p>`;
+    } else {
+      list.innerHTML = apps.slice(0, 10).map((a) =>
+        `<div class="cpurank-row"><span class="cpurank-name">${escapeHtml(a.package)}</span>` +
+        `<span class="cpurank-pct">${escapeHtml(String(a.pct))}%</span></div>`
+      ).join('');
+    }
+  } catch (e) {
+    toast(t('estado.cpuRankError', { msg: e.message }), 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = t('estado.cpuRankButton');
+  }
 }
 
 // Called when the Estado tab becomes visible - (re)starts the 3s poll.

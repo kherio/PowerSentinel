@@ -4,8 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PowerSentinel</title>
-  <script type="module" crossorigin src="./assets/index-DLakJQaT.js"></script>
-  <link rel="stylesheet" crossorigin href="./assets/index-OD7pHkU9.css">
+  <script type="module" crossorigin src="./assets/index-D6W0dmii.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-CWsibZGb.css">
 </head>
 <body class="app-shell">
   <header class="app-header">
@@ -85,6 +85,13 @@
         <div id="e-unmatched-box" class="card" style="margin-top:14px;display:none;">
           <div class="label" style="font-size:12px;color:var(--muted);margin-bottom:6px;" data-i18n="estado.unmatchedTitle">Otras líneas del estado (sin interpretar)</div>
           <div class="value2" style="font-size:12px;font-family:var(--mono);"></div>
+        </div>
+
+        <div class="card" style="margin-bottom:14px;">
+          <div class="section-title" style="margin-top:0;" data-i18n="estado.cpuRankTitle">Consumo de CPU por app</div>
+          <p class="hint" data-i18n="estado.cpuRankHint">Mide durante unos segundos - no se ejecuta automáticamente para no gastar batería vigilando esto de forma continua.</p>
+          <button class="btn" id="e-cpurank-btn" style="width:100%;margin-top:8px;"></button>
+          <div id="e-cpurank-list" style="margin-top:10px;"></div>
         </div>
 
         <details class="raw">

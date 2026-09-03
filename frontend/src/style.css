@@ -386,6 +386,26 @@ main {
 .hw-cap-yes { color: var(--accent); }
 .hw-cap-no { color: var(--muted); }
 
+.cpurank-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 0;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+}
+.cpurank-row:first-child { border-top: none; }
+.cpurank-name {
+  color: var(--muted);
+  word-break: break-all;
+}
+.cpurank-pct {
+  flex: 0 0 auto;
+  font-weight: 600;
+  color: var(--text);
+  font-family: var(--mono);
+}
+
 .battery-summary {
   font-size: 20px;
   font-weight: 600;
