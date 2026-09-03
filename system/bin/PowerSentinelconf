@@ -29,10 +29,13 @@
 #   PowerSentinelconf app-policy get PACKAGE               show a package's level (0-3, default 2)
 #   PowerSentinelconf app-policy set PACKAGE LEVEL         set a package's level (0=never, 1=gentle-only, 2=follow event, 3=always aggressive)
 #   PowerSentinelconf app-policy rm PACKAGE                reset a package to the default (2)
+#   PowerSentinelconf flagged-apps list                    list apps flagged by appwatch for sustained background CPU use
+#   PowerSentinelconf flagged-apps dismiss PACKAGE         remove a package from the flagged list
 
 CONF_DIR="/data/local/tmp/PowerSentinel"
 JSON_CONF="$CONF_DIR/PowerSentinel.json"
 APP_POLICY_FILE="$CONF_DIR/PowerSentinel.apppolicy"
+FLAGGED_APPS_FILE="$CONF_DIR/PowerSentinel.flagged"
 JQ="$(dirname "$0")/jq"
 
 PREDEFINED_EVENTS="boot charging screen_off low_power night thermal adaptive_tier1 adaptive_tier2 adaptive_tier3 manual"
@@ -179,6 +182,32 @@ app_policy_list() {
   ensure_app_policy
   echo "0=nunca tocar  1=solo suave  2=seguir el evento (defecto)  3=siempre agresivo"
   "$JQ" -r 'to_entries[] | "\(.key)\t\(.value)"' "$APP_POLICY_FILE" 2>/dev/null
+}
+
+# ---------- flagged apps (appwatch) ----------
+# Apps que el demonio ha marcado por consumo real y sostenido de CPU en
+# segundo plano (ver PowerSentinel-appwatch.sh) - solo lectura y
+# descarte aquí; la propia marca la pone el demonio, nunca esta
+# herramienta.
+
+flagged_apps_list() {
+  [ -s "$FLAGGED_APPS_FILE" ] || { echo "(ninguna app marcada)"; return 0; }
+  "$JQ" -r '.[]?' "$FLAGGED_APPS_FILE" 2>/dev/null
+}
+
+flagged_apps_dismiss() {
+  local app="$1" tmp
+  [ -s "$FLAGGED_APPS_FILE" ] || { echo "(ninguna app marcada)"; return 0; }
+  tmp="$(mktemp "$CONF_DIR/.PowerSentinel.flagged.XXXXXX")" || return 1
+  if "$JQ" --arg p "$app" 'map(select(. != $p))' "$FLAGGED_APPS_FILE" > "$tmp" 2>/dev/null \
+      && [ -s "$tmp" ] && "$JQ" -e . "$tmp" >/dev/null 2>&1; then
+    chmod 600 "$tmp" 2>/dev/null
+    mv "$tmp" "$FLAGGED_APPS_FILE"
+    echo "$app descartada de la lista de marcadas."
+  else
+    rm -f "$tmp"
+    return 1
+  fi
 }
 
 # ---------- interactive prompts ----------
@@ -373,8 +402,16 @@ case "$1" in
       *) echo "Uso: PowerSentinelconf app-policy [set PAQUETE NIVEL|get PAQUETE|rm PAQUETE|list]" >&2; exit 1 ;;
     esac
     ;;
+  flagged-apps)
+    shift
+    case "$1" in
+      dismiss) flagged_apps_dismiss "$2" ;;
+      list|'') flagged_apps_list ;;
+      *) echo "Uso: PowerSentinelconf flagged-apps [list|dismiss PAQUETE]" >&2; exit 1 ;;
+    esac
+    ;;
   -h|--help)
-    sed -n '2,31p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,33p' "$0" | sed 's/^# \{0,1\}//'
     ;;
   *)
     echo "Comando desconocido: $1" >&2

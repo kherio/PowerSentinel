@@ -53,6 +53,51 @@ declare -gA _appwatch_last_ticks=()
 declare -gA _appwatch_last_ts=()
 declare -gA _appwatch_high_count=()
 
+# Flagged apps persist here so the WebUI/CLI can show and act on them -
+# previously this only ever lived in the in-memory
+# $_appwatch_high_count array and a one-off Journal line, with no way
+# for anything outside the daemon's own process to know which apps are
+# currently flagged. One-directional by design: appwatch_flag() only
+# ever ADDS an app here (once, the first time it's confirmed) - it
+# never removes one on its own, even if that app's CPU use later drops
+# back to normal, since the point is for a person to actually review
+# it. Removal (resolved or dismissed as a false positive) is a
+# deliberate action from the WebUI or PowerSentinelconf, not something
+# this file decides by itself.
+: "${flagged_apps_file:=/data/local/tmp/PowerSentinel/PowerSentinel.flagged}"
+
+appwatch_flag() {
+  local pkg="$1" dir tmp
+  dir="$(dirname "$flagged_apps_file")"
+  mkdir -p "$dir" 2>/dev/null
+  [ -s "$flagged_apps_file" ] || echo '[]' > "$flagged_apps_file"
+  if "$JQ" -e --arg p "$pkg" 'any(.[]?; . == $p)' "$flagged_apps_file" >/dev/null 2>&1; then
+    return 0
+  fi
+  tmp="$(mktemp "$dir/.PowerSentinel.flagged.XXXXXX")" || return 1
+  if "$JQ" --arg p "$pkg" '. + [$p]' "$flagged_apps_file" > "$tmp" 2>/dev/null \
+      && [ -s "$tmp" ] && "$JQ" -e . "$tmp" >/dev/null 2>&1; then
+    chmod 600 "$tmp" 2>/dev/null
+    mv "$tmp" "$flagged_apps_file"
+  else
+    rm -f "$tmp"
+  fi
+}
+
+appwatch_unflag() {
+  local pkg="$1" dir tmp
+  [ -s "$flagged_apps_file" ] || return 0
+  dir="$(dirname "$flagged_apps_file")"
+  tmp="$(mktemp "$dir/.PowerSentinel.flagged.XXXXXX")" || return 1
+  if "$JQ" --arg p "$pkg" 'map(select(. != $p))' "$flagged_apps_file" > "$tmp" 2>/dev/null \
+      && [ -s "$tmp" ] && "$JQ" -e . "$tmp" >/dev/null 2>&1; then
+    chmod 600 "$tmp" 2>/dev/null
+    mv "$tmp" "$flagged_apps_file"
+  else
+    rm -f "$tmp"
+  fi
+}
+
 # Called freely every main-loop cycle, same pattern as
 # energylog_sample() - internally throttles to $APPWATCH_INTERVAL_S so
 # the (comparatively heavier: one pgrep + one /proc read per installed
@@ -97,6 +142,7 @@ appwatch_check() {
           _appwatch_high_count[$pkg]=$(( ${_appwatch_high_count[$pkg]:-0} + 1 ))
           if [ "${_appwatch_high_count[$pkg]}" -eq "$APPWATCH_CONSECUTIVE_NEEDED" ]; then
             emit appwatch info "Sustained background CPU use detected: $pkg (~${pct}% of one core, screen off)"
+            appwatch_flag "$pkg"
           fi
         else
           _appwatch_high_count[$pkg]=0

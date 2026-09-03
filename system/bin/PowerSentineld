@@ -267,6 +267,14 @@ update_status() {
   # Currently-active events (empty list if none), for the WebUI to show
   # "what's applied right now" instead of just the aggregate savings %.
   echo "ActiveEvents: ${active_events[*]}" >> "$status_file"
+
+  # How many apps are unconditionally protected right now (device
+  # default dialer/SMS/emergency + anything already exempt from
+  # battery optimization) - for the WebUI to show simple reassurance
+  # ("N apps are always protected") without needing to expose the
+  # actual package list, which isn't particularly meaningful to
+  # someone who didn't choose those apps themselves.
+  echo "CriticalAppsCount: ${#DETECT_CRITICAL_APPS[@]}" >> "$status_file"
 }
 
 # read_config() (V1) removed - see below, v1 support has been
