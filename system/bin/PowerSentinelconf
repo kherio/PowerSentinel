@@ -41,7 +41,10 @@ require_root() {
 
 ensure_conf() {
   mkdir -p "$CONF_DIR"
-  [ -s "$JSON_CONF" ] || echo '{"global":{},"events":{}}' > "$JSON_CONF"
+  if [ ! -s "$JSON_CONF" ]; then
+    echo '{"global":{},"events":{}}' > "$JSON_CONF"
+    chmod 600 "$JSON_CONF" 2>/dev/null
+  fi
 }
 
 backup_conf() {
@@ -58,6 +61,7 @@ apply_jq() {
   local tmp
   tmp="$(mktemp "$CONF_DIR/.PowerSentinel.json.XXXXXX")" || { echo "No se pudo crear un fichero temporal." >&2; return 1; }
   if "$JQ" "$@" "$JSON_CONF" > "$tmp" 2>/dev/null && [ -s "$tmp" ] && "$JQ" -e . "$tmp" >/dev/null 2>&1; then
+    chmod 600 "$tmp" 2>/dev/null
     mv "$tmp" "$JSON_CONF"
     return 0
   fi
@@ -232,6 +236,7 @@ wizard() {
   "$JQ" -n --arg delay "$delay" --arg log_file "$log_file" --arg log_level "$log_level" --arg notify "$notify" \
     '{global: {version: "2", delay: $delay, log_file: $log_file, log_level: $log_level, notify: $notify}, events: {}}' \
     > "$JSON_CONF"
+  chmod 600 "$JSON_CONF" 2>/dev/null
 
   echo
   echo "Ahora vamos a definir los eventos (screen_off, low_power, boot, etc)."

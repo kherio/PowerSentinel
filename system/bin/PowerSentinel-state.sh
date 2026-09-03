@@ -44,6 +44,7 @@ state_save() {
   else
     "$JQ" -cn --args '$ARGS.positional' "${active_events[@]}" > "$tmp" 2>/dev/null
   fi
+  chmod 600 "$tmp" 2>/dev/null
   mv "$tmp" "$state_file"
 }
 

@@ -676,6 +676,21 @@ fi
 # PowerSentinel-config.sh for the full rationale.
 migrate_conf_to_json
 
+# SECURITY FIX: none of the writers that create these files applied an
+# explicit chmod until this version - mktemp's default mode depends on
+# the process's umask, which turned out permissive enough in practice
+# to leave PowerSentinel.json world-writable (666) on a real device (a
+# user reported exactly this while helping test an unrelated issue).
+# Every write path is now fixed to chmod 600 as it writes, but an
+# ALREADY-existing file from before this fix stays wrongly-permissioned
+# until something happens to rewrite it - which might not be for a
+# while. Enforcing it unconditionally here, once per start, corrects
+# any existing install immediately on its next restart rather than
+# waiting for that.
+for f in "$json_conf" "$state_file" "$journal_file"; do
+  [ -e "$f" ] && chmod 600 "$f" 2>/dev/null
+done
+
 # Load the top-level configuration once, now from PowerSentinel.json.
 # Event-specific values are read separately when their event is
 # evaluated.

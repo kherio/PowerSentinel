@@ -16,6 +16,12 @@ journal_write() {
   ts="$(date +%s)"
   dir="$(dirname "$journal_file")"
   mkdir -p "$dir" 2>/dev/null
+  # First write ever: create the file with correct permissions before
+  # anything gets appended to it - >> alone would create it under
+  # whatever the process's umask happens to be, which is how this file
+  # (and PowerSentinel.json/.state, fixed alongside this) ended up
+  # world-writable in practice on a real device.
+  [ -e "$journal_file" ] || { : > "$journal_file"; chmod 600 "$journal_file" 2>/dev/null; }
 
   line="$("$JQ" -cn --arg ts "$ts" --arg event "$event" --arg severity "$severity" --arg message "$message" \
     '{ts: ($ts | tonumber), event: $event, severity: $severity, message: $message}' 2>/dev/null)"
@@ -30,7 +36,7 @@ journal_write() {
   local count
   count="$(wc -l < "$journal_file" 2>/dev/null)"
   if [ "${count:-0}" -gt 2000 ]; then
-    tail -n 1000 "$journal_file" > "$journal_file.tmp" 2>/dev/null && mv "$journal_file.tmp" "$journal_file"
+    tail -n 1000 "$journal_file" > "$journal_file.tmp" 2>/dev/null && chmod 600 "$journal_file.tmp" 2>/dev/null && mv "$journal_file.tmp" "$journal_file"
   fi
 }
 

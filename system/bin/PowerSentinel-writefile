@@ -40,7 +40,7 @@ if [ -f "$TARGET" ]; then
   cp -f "$TARGET" "${TARGET}.bak" 2>/dev/null
 fi
 
-chmod 0644 "$TMP_FILE" 2>/dev/null
+chmod 0600 "$TMP_FILE" 2>/dev/null
 mv -f "$TMP_FILE" "$TARGET" || fail "failed to move into place"
 
 echo "OK"

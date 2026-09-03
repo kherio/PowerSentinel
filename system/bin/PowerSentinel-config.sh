@@ -125,6 +125,7 @@ config_set_global() {
 
   tmp="$(mktemp "$dir/.PowerSentinel.json.XXXXXX")" || return 1
   if "$JQ" --arg k "$key" --arg v "$value" '.global[$k] = $v' "$json_conf" > "$tmp" 2>/dev/null; then
+    chmod 600 "$tmp" 2>/dev/null
     mv "$tmp" "$json_conf"
     config_load_global
     return 0
@@ -204,6 +205,7 @@ migrate_conf_to_json() {
     }
   ' "$conf")
 
+  chmod 600 "$tmp" 2>/dev/null
   mv "$tmp" "$json_conf"
   rm -f "$tmp.step"
 }
