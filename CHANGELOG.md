@@ -1,3 +1,7 @@
+### v3.20.1
+  - Fixed: Advanced mode's Config tab had no scrolling at all (a layout CSS rule silently stopped applying when Advanced mode's content got wrapped for the show/hide toggle in v3.18.0).
+  - Fixed: an event that's active (like `boot`, which fires at every daemon start and is never explicitly undone) had no way to reach it in Config unless already explicitly added. A hint now points you to "Añadir evento" for any active event with no configured block.
+
 ### v3.20.0
   - **Problematic-app detection (observational only).** A new watch, using the stable `/proc/[pid]/stat` kernel interface rather than any fragile Android dumpsys command, flags apps sustaining real, measurable CPU use while the screen is off - recorded to the Event Journal, no automatic action taken. This is groundwork for a future per-app policy system to target apps that are actually measured as heavy, instead of an arbitrary manually-curated list.
 
