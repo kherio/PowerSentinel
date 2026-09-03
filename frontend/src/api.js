@@ -7,7 +7,9 @@ export {
   listPackages, readAppListFile, writeAppListFile,
   startEvent, stopEvent,
   listProfiles, readProfile, saveProfile, deleteProfile,
-  readModuleInfo, listRunningPackages
+  readModuleInfo, listRunningPackages,
+  enterSafeMode, exitSafeMode,
+  readFlaggedApps, dismissFlaggedApp, setAppPolicy
 } from './backend-ksu.js';
 
 export { PowerSentinelApiError } from './errors.js';

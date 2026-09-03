@@ -1,5 +1,8 @@
 import { ICONS } from '../icons.js';
-import { readConfig, writeConfig, readStatus, startEvent, stopEvent } from '../api.js';
+import {
+  readConfig, writeConfig, readStatus, startEvent, stopEvent,
+  enterSafeMode, exitSafeMode, readFlaggedApps, dismissFlaggedApp, setAppPolicy
+} from '../api.js';
 import { toast, escapeHtml } from '../helpers.js';
 import { t } from '../i18n.js';
 import { mountAppsPicker, persistAppsPicker } from './apps-picker.js';
@@ -12,6 +15,8 @@ let model = null;
 let original = '';
 let coreList = null;
 let activeEventNames = new Set();
+let lastBattery = null;
+let lastCriticalAppsCount = null;
 let activeView = 'form';
 let loaded = false;
 
@@ -141,16 +146,113 @@ function renderBasicMode() {
   const statusLine = document.getElementById('cb-status-line');
   if (!enabled) {
     statusLine.style.display = 'none';
-    return;
-  }
-  statusLine.style.display = 'block';
-  const activeTier = ['adaptive_tier3', 'adaptive_tier2', 'adaptive_tier1'].find((name) => activeEventNames.has(name));
-  if (activeTier) {
-    statusLine.textContent = t('config.basicStatusActive', { n: activeTier.slice(-1) });
-    statusLine.classList.add('is-active');
   } else {
-    statusLine.textContent = t('config.basicStatusIdle');
-    statusLine.classList.remove('is-active');
+    statusLine.style.display = 'block';
+    const activeTier = ['adaptive_tier3', 'adaptive_tier2', 'adaptive_tier1'].find((name) => activeEventNames.has(name));
+    if (activeTier) {
+      statusLine.textContent = t('config.basicStatusActive', { n: activeTier.slice(-1) });
+      statusLine.classList.add('is-active');
+    } else {
+      statusLine.textContent = t('config.basicStatusIdle');
+      statusLine.classList.remove('is-active');
+    }
+  }
+
+  renderBatterySummary();
+  renderProtectedApps();
+  renderFlaggedApps();
+  renderSafeMode();
+}
+
+function renderBatterySummary() {
+  const el = document.getElementById('cb-battery-line');
+  if (!lastBattery) { el.textContent = ''; return; }
+  const icon = lastBattery.charging ? '⚡' : '🔋';
+  const statusText = lastBattery.charging ? t('config.basicCharging') : t('config.basicNotCharging');
+  el.textContent = `${icon} ${lastBattery.level}% · ${statusText}`;
+}
+
+function renderProtectedApps() {
+  const el = document.getElementById('cb-protected-line');
+  if (lastCriticalAppsCount === null) { el.textContent = ''; return; }
+  el.textContent = t('config.basicProtectedCount', { n: lastCriticalAppsCount });
+}
+
+// Apps que el demonio ha marcado por consumo real y sostenido de CPU en
+// segundo plano (PowerSentinel-appwatch.sh) - convierte un dato antes
+// solo observacional en algo accionable con un toque, sin exigir que el
+// usuario navegue listas de apps por sí mismo.
+function renderFlaggedApps() {
+  readFlaggedApps().then((text) => {
+    let apps = [];
+    try { apps = JSON.parse(text); } catch (e) { apps = []; }
+    const card = document.getElementById('cb-flagged-card');
+    const list = document.getElementById('cb-flagged-list');
+    if (!Array.isArray(apps) || apps.length === 0) {
+      card.style.display = 'none';
+      return;
+    }
+    card.style.display = 'block';
+    list.innerHTML = '';
+    apps.forEach((pkg) => {
+      const row = document.createElement('div');
+      row.className = 'flagged-app-row';
+      row.innerHTML =
+        `<span class="flagged-app-name">${escapeHtml(pkg)}</span>` +
+        `<button class="btn ghost flagged-dismiss">${escapeHtml(t('config.basicDismiss'))}</button>` +
+        `<button class="btn primary flagged-limit">${escapeHtml(t('config.basicLimitApp'))}</button>`;
+      row.querySelector('.flagged-limit').addEventListener('click', () => limitFlaggedApp(pkg));
+      row.querySelector('.flagged-dismiss').addEventListener('click', () => dismissFlagged(pkg));
+      list.appendChild(row);
+    });
+  }).catch(() => {});
+}
+
+async function limitFlaggedApp(pkg) {
+  try {
+    // Nivel 3 (siempre agresivo): la app ya se confirmó pesada por
+    // medición real, no por sospecha - ver PowerSentinel-apppolicy.sh.
+    await setAppPolicy(pkg, 3);
+    await dismissFlaggedApp(pkg);
+    toast(t('config.basicLimitedToast', { pkg }), 'success');
+    renderFlaggedApps();
+  } catch (e) {
+    toast(t('config.basicActionError', { msg: e.message }), 'error');
+  }
+}
+
+async function dismissFlagged(pkg) {
+  try {
+    await dismissFlaggedApp(pkg);
+    renderFlaggedApps();
+  } catch (e) {
+    toast(t('config.basicActionError', { msg: e.message }), 'error');
+  }
+}
+
+function renderSafeMode() {
+  const active = model.safemode === 'true';
+  const hint = document.getElementById('cb-safemode-hint');
+  const btn = document.getElementById('cb-safemode-btn');
+  hint.textContent = active ? t('config.basicSafeModeActiveHint') : t('config.basicSafeModeHint');
+  btn.textContent = active ? t('config.basicSafeModeExit') : t('config.basicSafeModeEnter');
+  btn.className = active ? 'btn primary' : 'btn ghost';
+}
+
+async function toggleSafeMode() {
+  const active = model.safemode === 'true';
+  try {
+    if (active) {
+      await exitSafeMode();
+      toast(t('config.basicSafeModeExitedToast'), 'success');
+    } else {
+      await enterSafeMode();
+      toast(t('config.basicSafeModeEnteredToast'), 'success');
+    }
+    model.safemode = active ? 'false' : 'true';
+    renderSafeMode();
+  } catch (e) {
+    toast(t('config.basicActionError', { msg: e.message }), 'error');
   }
 }
 
@@ -654,6 +756,7 @@ export function initConfig() {
   document.getElementById('c-restore-btn').addEventListener('click', restoreRecommended);
 
   document.getElementById('cb-adaptive-toggle').addEventListener('change', (e) => setAdaptiveEnabled(e.target.checked));
+  document.getElementById('cb-safemode-btn').addEventListener('click', toggleSafeMode);
 
   document.getElementById('c-mode-info-btn').addEventListener('click', openModeModal);
   document.getElementById('mode-choice-basic-btn').addEventListener('click', () => chooseMode(false));
@@ -684,6 +787,10 @@ function refreshLiveStatus() {
       if ((m = line.match(/^cpu(\d+):/i))) cores.push(parseInt(m[1], 10));
       else if ((m = line.match(/^activeevents:\s*(.*)$/i))) {
         activeEvents = m[1].trim() ? m[1].trim().split(/\s+/) : [];
+      } else if ((m = line.match(/^battery:\s*level=(\d+)\s+temp=\S+\s+voltage=\S+\s+charging=(\w+)/i))) {
+        lastBattery = { level: parseInt(m[1], 10), charging: m[2] === 'true' };
+      } else if ((m = line.match(/^criticalappscount:\s*(\d+)/i))) {
+        lastCriticalAppsCount = parseInt(m[1], 10);
       }
     });
     if (cores.length) coreList = cores.sort((a, b) => a - b);

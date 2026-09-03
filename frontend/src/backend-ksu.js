@@ -59,6 +59,67 @@ export async function readJournal() {
   return run(`cat '${JOURNAL_FILE}' 2>/dev/null || echo ''`);
 }
 
+// ---------- Safe mode ----------
+// Current state is read from the already-loaded config (model.safemode
+// === 'true'), not a separate call - these two only ever WRITE.
+
+export async function enterSafeMode() {
+  await run('PowerSentinelctl safe');
+}
+
+export async function exitSafeMode() {
+  await run('PowerSentinelctl resume');
+}
+
+// ---------- Flagged apps (appwatch) + per-app policy ----------
+// Direct jq manipulation of their own small JSON files, the same
+// pattern config/state/journal already use daemon-side - not by
+// shelling out to PowerSentinelconf, which is a separate, standalone
+// terminal tool for the same data, not something the WebUI depends on
+// being present in a particular way.
+//
+// Package names here can end up interpolated into a shell command, so
+// unlike startEvent/stopEvent above (which trust the caller since an
+// event name only ever comes from this project's own fixed list),
+// validate first - a flagged/installed package name should always be
+// a plain dotted identifier, and rejecting anything else here costs
+// nothing.
+const FLAGGED_FILE = `${DATA_DIR}/PowerSentinel.flagged`;
+const APP_POLICY_FILE = `${DATA_DIR}/PowerSentinel.apppolicy`;
+
+function assertPackageName(pkg) {
+  if (!/^[a-zA-Z0-9_.]+$/.test(pkg)) {
+    throw new PowerSentinelApiError(`Invalid package name: ${pkg}`);
+  }
+}
+
+export async function readFlaggedApps() {
+  return run(`cat '${FLAGGED_FILE}' 2>/dev/null || echo '[]'`);
+}
+
+export async function dismissFlaggedApp(pkg) {
+  assertPackageName(pkg);
+  const cmd =
+    `[ -s '${FLAGGED_FILE}' ] || echo '[]' > '${FLAGGED_FILE}'; ` +
+    `tmp=$(mktemp '${DATA_DIR}/.PowerSentinel.flagged.XXXXXX'); ` +
+    `jq --arg p '${pkg}' 'map(select(. != $p))' '${FLAGGED_FILE}' > "$tmp" ` +
+    `&& chmod 600 "$tmp" && mv "$tmp" '${FLAGGED_FILE}'`;
+  await run(cmd);
+}
+
+export async function setAppPolicy(pkg, level) {
+  assertPackageName(pkg);
+  if (![0, 1, 2, 3].includes(level)) {
+    throw new PowerSentinelApiError(`Invalid app policy level: ${level}`);
+  }
+  const cmd =
+    `[ -s '${APP_POLICY_FILE}' ] || echo '{}' > '${APP_POLICY_FILE}'; ` +
+    `tmp=$(mktemp '${DATA_DIR}/.PowerSentinel.apppolicy.XXXXXX'); ` +
+    `jq --arg a '${pkg}' --argjson l ${level} '.[$a] = $l' '${APP_POLICY_FILE}' > "$tmp" ` +
+    `&& chmod 600 "$tmp" && mv "$tmp" '${APP_POLICY_FILE}'`;
+  await run(cmd);
+}
+
 // ---------- Apps (allowlist/denylist picker) ----------
 
 export async function listPackages(includeSystem) {
