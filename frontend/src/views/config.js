@@ -11,6 +11,17 @@ import {
   parseConfig, serializeConfig, renderFieldsForm, renderFieldRow, buildRecommendedModel
 } from '../config-form.js';
 
+// Splits the per-event field list so the apps picker widget (allow/
+// deny app selection) can be inserted right after "Gestión de apps"
+// (handle_apps/allowlist/denylist, the "apps" group) instead of at the
+// very bottom of the card, after every other field (cores, doze,
+// GMS...). The one cross-field dependency within FIELD_DEFS
+// (allowlist's showIf checks handle_apps) stays entirely within this
+// same "apps" split, so rendering the two halves as separate,
+// independently-updating forms doesn't break it.
+const APPS_GROUP_DEFS = FIELD_DEFS.filter((d) => d.group === 'apps');
+const OTHER_FIELD_DEFS = FIELD_DEFS.filter((d) => d.group !== 'apps');
+
 let model = null;
 let original = '';
 let coreList = null;
@@ -547,6 +558,8 @@ function renderEvents() {
       body.appendChild(fieldsDiv);
       const appsDiv = document.createElement('div');
       body.appendChild(appsDiv);
+      const otherFieldsDiv = document.createElement('div');
+      body.appendChild(otherFieldsDiv);
 
       // Mounting the apps picker is tied to handle_apps' current value
       // (mountAppsPicker no-ops unless it's kill/nice/suspend), but
@@ -557,13 +570,14 @@ function renderEvents() {
       // react to the user flipping handle_apps on/off, instead of only
       // ever reflecting whatever its value happened to be the moment
       // the card was first expanded.
-      renderFieldsForm(fieldsDiv, block.fields, FIELD_DEFS, coreList, () => {
+      const onAnyFieldChange = () => {
         markDirty(true);
         summary.textContent = summarizeFields(block.fields);
         mountAppsPicker(appsDiv, block.fields, () => markDirty(true));
-      });
-
+      };
+      renderFieldsForm(fieldsDiv, block.fields, APPS_GROUP_DEFS, coreList, onAnyFieldChange);
       mountAppsPicker(appsDiv, block.fields, () => markDirty(true));
+      renderFieldsForm(otherFieldsDiv, block.fields, OTHER_FIELD_DEFS, coreList, onAnyFieldChange);
 
       card.appendChild(body);
     }
