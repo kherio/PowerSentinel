@@ -1,3 +1,7 @@
+### v3.25.0
+  - **Basic mode's Config screen expanded** with 4 new blocks: a live battery summary, a reassurance line showing how many apps are always protected, a list of apps flagged for real sustained background CPU use (each with one-tap "Limitar esta app" or "Ignorar"), and Safe Mode - previously only reachable via a terminal command, now a simple button that reflects its current state.
+  - `appwatch.sh`'s app detections are now persisted (`PowerSentinel.flagged`) instead of living only in memory - manageable via the new WebUI blocks or `PowerSentinelconf flagged-apps list/dismiss`.
+
 ### v3.24.0
   - The mode switcher now sits in its own row above the action toolbar, separate from Guardar/Recargar/Restaurar recomendados - clearer that it's a state indicator, not a fourth action button.
   - Each aggressiveness level's description now says a bit more about what actually happens (e.g. "Alta" mentions deep Doze and low-RAM mode specifically) instead of a vague "máximo ahorro".
