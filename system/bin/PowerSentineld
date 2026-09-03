@@ -5,6 +5,9 @@ conf="/data/local/tmp/PowerSentinel/PowerSentinel.conf"
 . "$(dirname "$0")/PowerSentinel-policy.sh"
 . "$(dirname "$0")/PowerSentinel-capabilities.sh"
 . "$(dirname "$0")/PowerSentinel-actions.sh"
+. "$(dirname "$0")/PowerSentinel-journal.sh"
+. "$(dirname "$0")/PowerSentinel-alertbridge.sh"
+. "$(dirname "$0")/PowerSentinel-events.sh"
 declare -a active_events
 declare -a cpus
 declare -a cpu_freqs
@@ -82,22 +85,11 @@ check_charge_limit() {
   fi
 }
 
-notif() {
-  if [ "$(getconf notify true)" = "true" ]; then
-    # SECURITY: "$1" is interpolated into a string that su -c hands to a
-    # NEW shell to parse and execute, so any shell metacharacters in it
-    # would be executed too - not just displayed. Some callers build "$1"
-    # from data that ultimately originates in the world-writable control
-    # file (see handle_event()'s $cmd_event / $active_notif), so this is
-    # a real injection path, not a theoretical one. Base64-encoding the
-    # message first neutralizes it: that alphabet has no shell
-    # metacharacters, so it can't break out of the quoting no matter what
-    # the original message contained.
-    local b64
-    b64="$(printf '%s' "$1" | base64 | tr -d '\n')"
-    su -lp 2000 -c "cmd notification post -S bigtext -t 'PowerSentinel' 'STATUS' \"\$(echo $b64 | base64 -d)\"" >/dev/null
-  fi
-}
+# notif() has been replaced by emit() (PowerSentinel-journal.sh) +
+# alert_dispatch() (PowerSentinel-alertbridge.sh) - see those files for
+# the full rationale. The base64-encoding security measure this
+# function used lives on in alert_dispatch(), which is now the only
+# place that actually calls `su -c ... cmd notification post`.
 
 log_msg() {
   case $1 in
@@ -299,7 +291,9 @@ read_config() {
   # everything without an allowlist. Will make
   # all apps unusable. Set handle_apps=false
   # and notify user
-  [ ! -s "$allowlist" ] && [ "$handle_apps" = "suspend" ] && handle_apps="false" && notif "Alert!\nYou MUST have an allowlist!\nWill not suspend apps without one!"
+  [ ! -s "$allowlist" ] && [ "$handle_apps" = "suspend" ] && handle_apps="false" && emit config_safety critical "Alert!
+You MUST have an allowlist!
+Will not suspend apps without one!"
   # log error here
 
   # denylist (system apps)
@@ -342,7 +336,7 @@ read_config() {
   # May need this later
 #  percent="$(dumpsys battery | grep level | cut -d' ' -f4)"
 
-  notif "Config Loaded"
+  emit config info "Config Loaded"
 }
 
 
@@ -352,7 +346,7 @@ enable_pwr_save() {
   if [ "$version" != "2" ]; then
     lock="1"
     echo -n "Enabling PowerSentinel"
-    notif "Enabling PowerSentinel..."
+    emit daemon info "Enabling PowerSentinel..."
     log_msg 1 "Enabling PowerSentinel"
   fi
 
@@ -366,7 +360,7 @@ enable_pwr_save() {
 
   if [ "$version" != "2" ]; then
     echo " - [done]"
-    notif "status: Enabled"
+    emit daemon info "status: Enabled"
     log_msg 1 "Enabled PowerSentinel"
   fi
 
@@ -376,7 +370,7 @@ enable_pwr_save() {
 disable_pwr_save() {
   if [ "$version" != "2" ]; then
     echo -n "Disabling PowerSentinel"
-    notif "Disabling PowerSentinel..."
+    emit daemon info "Disabling PowerSentinel..."
     log_msg 1 "Disabling PowerSentinel"
   fi
 
@@ -391,139 +385,17 @@ disable_pwr_save() {
   if [ "$version" != "2" ]; then
     lock="0"
     echo " - [done]"
-    notif "status: Disabled"
+    emit daemon info "status: Disabled"
     log_msg 1 "Disabled PowerSentinel"
   fi
 
   update_status
 }
 
-handle_event() {
-  event="$1"
-  flag="$2"
+# handle_event() now lives in PowerSentinel-events.sh - the Event
+# Manager: event locking/active_events bookkeeping, field resolution,
+# and dispatch to enable_pwr_save/disable_pwr_save.
 
-  if [ "$flag" = 1 ]; then # we are trying to enable
-    # check to see if its unlocked
-    is_event_locked "$event"
-    if [ $? != 0 ]; then
-      # we tried to enable an already active event
-      log_msg 2 "$event was triggered but it is currently enabled"
-      # return early
-      return 1
-    else
-      # lock the event
-      active_events+=( "$event" )
-    fi
-  fi
-
-  # set everything to false
-  quit=false
-  handle_cores=false
-  disable_cores=false
-  handle_apps=false
-  allowlist=null
-  denylist=null
-  handle_proc=false
-  proc_file=null
-  handle_gms=false
-  low_ram=false
-  doze=false
-  kill_wifi=false
-
-  log_msg 3 "Parsing the config for $event event"
-
-  # Centralized read: every field for this event now goes through
-  # config_get_event_raw() (PowerSentinel-config.sh, JSON-backed) instead
-  # of this function's own hand-rolled `grep -F -A99 "$event={" "$conf"`
-  # + while-read parser - removing what used to be a third, independent
-  # parser of the config file (config.sh's own functions, and the
-  # WebUI's frontend parser, are the other two), each of which could in
-  # principle drift out of sync about what a given field means. Same
-  # validation semantics as before for every field, just centralized.
-  local val
-
-  val="$(config_get_event_raw "$event" keep_on_charge false)"
-  if [ "$val" = "true" ] && [ "$flag" = "0" ] && [ "$event" != "charging" ] && [ "$charging" = "true" ]; then
-    log_msg 1 "$event has keep_on_charge set. We are keeping the settings until unplugged"
-    return 0
-  fi
-
-  val="$(config_get_event_raw "$event" quit false)"
-  [ "$val" = "true" ] && [ "$event" = "boot" ] && quit=true
-
-  val="$(config_get_event_raw "$event" handle_cores false)"
-  [ "$val" != "false" ] && handle_cores="$val"
-
-  val="$(config_get_event_raw "$event" disable_cores false)"
-  [ "$val" != "false" ] && disable_cores="$val"
-
-  val="$(config_get_event_raw "$event" handle_apps false)"
-  [ "$val" != "false" ] && handle_apps="$val"
-
-  val="$(config_get_event_raw "$event" allowlist "")"
-  [ -n "$val" ] && [ -f "$val" ] && allowlist="$val"
-
-  val="$(config_get_event_raw "$event" denylist "")"
-  [ -n "$val" ] && [ -f "$val" ] && denylist="$val"
-
-  val="$(config_get_event_raw "$event" handle_proc false)"
-  [ "$val" != "false" ] && handle_proc="$val"
-
-  val="$(config_get_event_raw "$event" proc_file "")"
-  [ -n "$val" ] && [ -f "$val" ] && proc_file="$val"
-
-  val="$(config_get_event_raw "$event" handle_gms false)"
-  [ "$val" != "false" ] && handle_gms="$val"
-
-  val="$(config_get_event_raw "$event" low_ram false)"
-  [ "$val" = "true" ] && low_ram="true"
-
-  val="$(config_get_event_raw "$event" doze false)"
-  [ "$val" != "false" ] && doze="$val"
-
-  val="$(config_get_event_raw "$event" kill_wifi false)"
-  [ "$val" = "true" ] && kill_wifi="true"
-
-  # perform sanity checks to prevent the user from killing themself
-  if [ "$handle_apps" != "false" ] && [ "$allowlist" = "null" ] && [ "$denylist" = "null" ]; then
-    handle_apps=false
-  fi
-  if [ "$handle_proc" != "false" ] && [ "$proc_file" = "null" ]; then
-    handle_proc="false"
-  fi
-
-  # perform action using the old way
-  # instead of a massive refactor which
-  # is probably coming in a later update
-  if [ "$flag" = 0 ]; then
-    log_msg 1 "Undoing actions for $event"
-    disable_pwr_save
-    # remove from active_events
-    for i in ${!active_events[@]}; do
-      if [ "${active_events[$i]}" = "$event" ]; then
-        unset "active_events[$i]"
-      fi
-    done
-    log_msg 1 "Actions for $event undone"
-  else
-    log_msg 1 "Performing actions for $event event"
-    enable_pwr_save
-    log_msg 1 "Actions for $event completed"
-    if [ "$event" = "boot" ] && \
-    [ "$quit" = "true" ]; then
-      log_msg 1 "Boot event has the quit option set. Killing the daemon."
-      exit 0
-    fi
-  fi
-
-  # build the active events notification
-  for i in ${!active_events[@]}; do
-    active_notif+="${active_events[$i]} "
-  done
-
-  notif "Active Events: $active_notif"
-  unset active_notif
-}
 
 init_v2() {
 
@@ -633,7 +505,7 @@ while true; do
       for pkg in $(pm list packages | cut -d: -f2-); do
         pm unsuspend "$pkg"
       done
-      notif "Safe Mode is Active"
+      emit safemode critical "Safe Mode is Active"
       until [ "$ready" = "resume" ]; do
         ready="$(cat $ctl_file)"
       done
@@ -812,7 +684,7 @@ init_v1() {
           for pkg in $(pm list packages | cut -d: -f2-); do
             pm unsuspend "$pkg"
           done
-          notif "Safe Mode is Active"
+          emit safemode critical "Safe Mode is Active"
           until [ "$ready" = "resume" ]; do
             ready="$(cat $ctl_file)"
           done
@@ -1000,7 +872,7 @@ ensure_ctl_file "$ctl_file"
 safe=$(getconf safemode false)
 if [ "$safe" = "true" ]; then
   log_msg 1 "Safemode was found in the config file, Entering safemode."
-  notif "Safe Mode is Active"
+  emit safemode critical "Safe Mode is Active"
   until [ "$resume" = "resume" ] || [ "$(config_get safemode false)" = "false" ]; do
     config_load_global
     resume=$(cat "$ctl_file")
