@@ -115,6 +115,42 @@ body.app-shell {
   height: auto;
 }
 
+/* Config's "Modo avanzado" wraps its content (subtabs + form/text) in
+   an extra #c-view-advanced div so the toggle can show/hide it as one
+   unit - but that broke every ".view.active > X" direct-child rule
+   above for its contents, since they're now grandchildren, not
+   children, of .view.active. #c-view-advanced itself needs the same
+   treatment .view.active gets (a transparent flex passthrough), and
+   its own children need the same rules their .view.active-direct-child
+   equivalents already have. */
+.view.active > #c-view-advanced {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+#c-view-advanced > .subtabs { flex: 0 0 auto; }
+#c-view-advanced > .scroll-area {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+#c-view-advanced > .fill-area {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+#c-view-advanced > .fill-area .editor-wrap,
+#c-view-advanced > .fill-area .log-wrap {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+}
+
 header.app-header {
   position: sticky;
   top: 0;

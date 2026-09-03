@@ -78,7 +78,7 @@ function applyMode() {
   const advanced = isAdvancedMode();
   document.getElementById('c-advanced-toggle').checked = advanced;
   document.getElementById('c-view-basic').style.display = advanced ? 'none' : 'block';
-  document.getElementById('c-view-advanced').style.display = advanced ? 'block' : 'none';
+  document.getElementById('c-view-advanced').style.display = advanced ? 'flex' : 'none';
   // Guardar/recargar/restaurar son conceptos del modo avanzado (el
   // básico guarda solo, sin un paso de "guardar" separado que alguien
   // que "no quiere o no entiende" tendría que descubrir).
@@ -215,6 +215,26 @@ function summarizeFields(fields) {
 function renderEvents() {
   const list = document.getElementById('c-events-list');
   list.innerHTML = '';
+
+  // Some events (notably "boot") are triggered unconditionally by the
+  // daemon itself and never explicitly undone, so they can show up as
+  // "active" (Estado, the is-active-now badge below) even when the
+  // user never added a block to configure them - there being no card
+  // for something the daemon reports as active is confusing on its
+  // own. Deliberately just a hint pointing at "Añadir evento" rather
+  // than silently synthesizing a block into `model` for this: doing
+  // that would risk it getting persisted to disk the next time
+  // anything saves, even though the user never asked to configure it.
+  const configuredNames = new Set(model.blocks.map((b) => b.name));
+  const unconfiguredActive = [...activeEventNames].filter((name) => !configuredNames.has(name));
+  const notice = document.getElementById('c-unconfigured-notice');
+  if (unconfiguredActive.length) {
+    notice.textContent = t('config.unconfiguredActive', { names: unconfiguredActive.join(', ') });
+    notice.style.display = 'block';
+  } else {
+    notice.style.display = 'none';
+  }
+
   model.blocks.forEach((block, idx) => {
     const card = document.createElement('div');
     const isActiveNow = activeEventNames.has(block.name);
