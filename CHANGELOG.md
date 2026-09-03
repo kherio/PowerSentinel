@@ -1,3 +1,7 @@
+### v3.18.0
+  - **Basic mode by default.** New installs now open to a simple Config view: one switch for adaptive savings and an Aggressiveness picker (Low/Medium/High) - no events, no per-field settings to understand. A visible "Modo avanzado" toggle reveals the full Form/Text editing that existed before, unchanged, for anyone who wants complete control. Purely a WebUI presentation layer - both modes read and write the exact same configuration.
+  - Basic mode's aggressiveness presets never suspend apps (only the safer, reversible "nice") - that level of control is exactly what Advanced mode is for.
+
 ### v3.17.0
   - **Critical app protection.** The device's default dialer, SMS, and emergency apps - plus anything already exempted from Android's own battery optimization - are now automatically protected from `handle_apps`' kill/nice/suspend, regardless of your allowlist/denylist configuration. Losing the ability to make a call or receive a text is a different category of risk than "an app I like lags a bit". Detected via official, documented Android commands (`cmd role get-role-holders`, `dumpsys deviceidle`) - not configurable, since this is specifically about safety, not general preference.
 
