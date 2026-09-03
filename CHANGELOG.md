@@ -1,3 +1,6 @@
+### v3.19.0
+  - **Energy log: real validation, not just correctness.** A new `PowerSentinel.energylog` records battery level, temperature, and what was active, but only when something actually changed - not every cycle. This is raw data collection for after-the-fact analysis (e.g. "did aggressiveness High actually drain slower than Medium last night", "did temperature actually drop after thermal fired") - no built-in conclusions, no new WebUI view yet, honestly a correlation tool for your own device rather than a scientific power model.
+
 ### v3.18.0
   - **Basic mode by default.** New installs now open to a simple Config view: one switch for adaptive savings and an Aggressiveness picker (Low/Medium/High) - no events, no per-field settings to understand. A visible "Modo avanzado" toggle reveals the full Form/Text editing that existed before, unchanged, for anyone who wants complete control. Purely a WebUI presentation layer - both modes read and write the exact same configuration.
   - Basic mode's aggressiveness presets never suspend apps (only the safer, reversible "nice") - that level of control is exactly what Advanced mode is for.
