@@ -47,6 +47,90 @@ is_event_locked() {
   return 0
 }
 
+# BUG FIX (found and confirmed via a real report, then reproduced with
+# a standalone simulation before being trusted): handle_event()'s undo
+# path only ever reverses the ONE event that's ending, using ITS OWN
+# resolved field values - it has no awareness of what OTHER events are
+# still active. Confirmed reproduction: two events both requesting
+# kill_wifi=true, one ending while the other stays active - the ending
+# event's undo (gated on its own kill_wifi=true) incorrectly
+# re-enabled WiFi, even though the still-active event also needed it
+# disabled. The same class of bug applies to handle_cores, doze,
+# handle_gms, and low_ram - any category two active events might both
+# want the same effect on.
+#
+# Fix: after any event ends and is removed from active_events, re-
+# resolve and re-apply whatever the REMAINING active events still
+# need - correcting anything the ending event's undo just wrongly
+# reversed.
+#
+# Deliberately a standalone re-resolution rather than refactoring
+# handle_event()'s own field-resolution to be shared: handle_event()
+# is the single most load-bearing function in this daemon, and
+# duplicating ~25 lines of its already-correct, heavily-tested
+# resolution logic here (everything except the undo-only
+# keep_on_charge/quit handling, which doesn't apply to a re-apply
+# pass) is a safer trade than restructuring it to fix this.
+#
+# Not a full policy-composition engine, and this doesn't pretend to
+# be one: if two still-active events want genuinely DIFFERENT things
+# for the same category (one wants nice, another wants suspend),
+# whichever is processed last here wins - there's no defined
+# precedence between them yet. What this DOES guarantee: a real,
+# currently-active event's own configuration gets correctly re-applied
+# after another event ends, rather than the ending event's undo being
+# left as the final word by default regardless of what's still active.
+reassert_active_events() {
+  local ev val
+  for ev in "${active_events[@]}"; do
+    [ -n "$ev" ] || continue
+
+    handle_cores=false
+    disable_cores=false
+    handle_apps=false
+    allowlist=null
+    denylist=null
+    handle_proc=false
+    proc_file=null
+    handle_gms=false
+    low_ram=false
+    doze=false
+    kill_wifi=false
+
+    val="$(config_get_event_raw "$ev" handle_cores false)"
+    [ "$val" != "false" ] && handle_cores="$val"
+    val="$(config_get_event_raw "$ev" disable_cores false)"
+    [ "$val" != "false" ] && disable_cores="$val"
+    val="$(config_get_event_raw "$ev" handle_apps false)"
+    [ "$val" != "false" ] && handle_apps="$val"
+    val="$(config_get_event_raw "$ev" allowlist "")"
+    [ -n "$val" ] && [ -f "$val" ] && allowlist="$val"
+    val="$(config_get_event_raw "$ev" denylist "")"
+    [ -n "$val" ] && [ -f "$val" ] && denylist="$val"
+    val="$(config_get_event_raw "$ev" handle_proc false)"
+    [ "$val" != "false" ] && handle_proc="$val"
+    val="$(config_get_event_raw "$ev" proc_file "")"
+    [ -n "$val" ] && [ -f "$val" ] && proc_file="$val"
+    val="$(config_get_event_raw "$ev" handle_gms false)"
+    [ "$val" != "false" ] && handle_gms="$val"
+    val="$(config_get_event_raw "$ev" low_ram false)"
+    [ "$val" = "true" ] && low_ram="true"
+    val="$(config_get_event_raw "$ev" doze false)"
+    [ "$val" != "false" ] && doze="$val"
+    val="$(config_get_event_raw "$ev" kill_wifi false)"
+    [ "$val" = "true" ] && kill_wifi="true"
+
+    if [ "$handle_apps" != "false" ] && [ "$allowlist" = "null" ] && [ "$denylist" = "null" ]; then
+      handle_apps=false
+    fi
+    if [ "$handle_proc" != "false" ] && [ "$proc_file" = "null" ]; then
+      handle_proc="false"
+    fi
+
+    enable_pwr_save
+  done
+}
+
 handle_event() {
   event="$1"
   flag="$2"
@@ -155,6 +239,7 @@ handle_event() {
       fi
     done
     state_save
+    reassert_active_events
     log_msg 1 "Actions for $event undone"
   else
     log_msg 1 "Performing actions for $event event"
