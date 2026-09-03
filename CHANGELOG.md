@@ -1,3 +1,6 @@
+### v3.21.0
+  - **Proper Basic/Advanced mode choice screen.** Instead of a bare toggle, a new screen explains both modes clearly (what Basic gives you vs what Advanced requires) and appears automatically the first time you visit Config. A "?" icon next to the toggle reopens the same explanation anytime.
+
 ### v3.20.1
   - Fixed: Advanced mode's Config tab had no scrolling at all (a layout CSS rule silently stopped applying when Advanced mode's content got wrapped for the show/hide toggle in v3.18.0).
   - Fixed: an event that's active (like `boot`, which fires at every daemon start and is never explicitly undone) had no way to reach it in Config unless already explicitly added. A hint now points you to "Añadir evento" for any active event with no configured block.
