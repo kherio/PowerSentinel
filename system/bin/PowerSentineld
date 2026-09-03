@@ -107,7 +107,7 @@ log_msg() {
 }
 
 migrate() {
-  log_msg 2 "It looks like version=2 was found in the config without a valid event block"
+  log_msg 2 "No event blocks found in the config - migrating to v2"
   log_msg 1 "Migrating to v2 config"
   # start with base conf values
   # delay, version, log_file, log_level
@@ -265,92 +265,16 @@ update_status() {
   echo "ActiveEvents: ${active_events[*]}" >> "$status_file"
 }
 
-# V1 read_config
-read_config() {
-  # Read config
-  # delay in seconds
-  delay=$(getconf delay 3)
+# read_config() (V1) removed - see below, v1 support has been
+# removed entirely: every install auto-migrates to v2 on first
+# boot (see the migrate() trigger further down), so there is no
+# longer a code path that ever runs in v1 mode.
 
-  # trigger
-  # auto|boot # <integer>
-  trigger=$(getconf trigger "")
-  [ -z "$trigger" ] && exit
-
-  # Keep state on charge
-  # true|false
-  keep_on_charge=$(getconf keep_on_charge true)
-
-  # handle_apps
-  # false|kill|nice|suspend
-  handle_apps=$(getconf handle_apps false)
-
-  # allowlist (user apps)
-  # a path /data/local/tmp/PowerSentinel/apps.allow
-  allowlist=$(getconf "allowlist" "/data/local/tmp/PowerSentinel/apps.allow")
-
-  # sanity check. Not allow user to suspend
-  # everything without an allowlist. Will make
-  # all apps unusable. Set handle_apps=false
-  # and notify user
-  [ ! -s "$allowlist" ] && [ "$handle_apps" = "suspend" ] && handle_apps="false" && emit config_safety critical "Alert!
-You MUST have an allowlist!
-Will not suspend apps without one!"
-  # log error here
-
-  # denylist (system apps)
-  # a path /data/local/tmp/PowerSentinel/apps.deny
-  denylist=$(getconf "denylist" "/data/local/tmp/PowerSentinel/apps.deny")
-
-  # handle_cores
-  # auto|false|"cpu4 cpu5"
-  handle_cores=$(getconf "handle_cores" "false")
-
-  # disable_cores
-  # false|auto|"cpu6 cpu7"
-  disable_cores=$(getconf "disable_cores" "false")
-
-  # handle_gms
-  # false|kill|nice
-  handle_gms=$(getconf "handle_gms" false)
-
-  # handle_proc
-  # true|false
-  handle_proc=$(getconf "handle_proc" false)
-
-  # proc_file
-  # a path /data/local/tmp/PowerSentinel/proc.list
-  proc_file=$(getconf "proc_file" "/data/local/tmp/PowerSentinel/proc.list")
-  [ ! -s "$proc_file" ] && handle_proc="false"
-
-  # set low_ram
-  # true|false
-  low_ram=$(getconf "low_ram" false)
-
-  # set doze
-  # false|light|deep
-  doze=$(getconf doze false)
-
-  # kill_wifi
-  # true|false
-  kill_wifi=$(getconf kill_wifi false)
-
-  # May need this later
-#  percent="$(dumpsys battery | grep level | cut -d' ' -f4)"
-
-  emit config info "Config Loaded"
-}
 
 
 # Action stuff
 
 enable_pwr_save() {
-  if [ "$version" != "2" ]; then
-    lock="1"
-    echo -n "Enabling PowerSentinel"
-    emit daemon info "Enabling PowerSentinel..."
-    log_msg 1 "Enabling PowerSentinel"
-  fi
-
   action_apps_apply
   action_gms_apply
   action_proc_apply
@@ -359,22 +283,10 @@ enable_pwr_save() {
   action_doze_apply
   action_cores_apply
 
-  if [ "$version" != "2" ]; then
-    echo " - [done]"
-    emit daemon info "status: Enabled"
-    log_msg 1 "Enabled PowerSentinel"
-  fi
-
   update_status
 }
 
 disable_pwr_save() {
-  if [ "$version" != "2" ]; then
-    echo -n "Disabling PowerSentinel"
-    emit daemon info "Disabling PowerSentinel..."
-    log_msg 1 "Disabling PowerSentinel"
-  fi
-
   action_cores_undo
   action_doze_undo
   action_wifi_undo
@@ -382,13 +294,6 @@ disable_pwr_save() {
   action_gms_undo
   action_proc_undo
   action_low_ram_undo
-
-  if [ "$version" != "2" ]; then
-    lock="0"
-    echo " - [done]"
-    emit daemon info "status: Disabled"
-    log_msg 1 "Disabled PowerSentinel"
-  fi
 
   update_status
 }
@@ -617,120 +522,13 @@ while true; do
 done
 }
 
-init_v1() {
-  read_config
-  while true; do
-    # Check for command
-      cmd="$(cat $ctl_file)"
-      echo > "$ctl_file"
-      case $cmd in
-        reload)
-          log_msg 1 "Reload command received"
-          if [ "$lock" = "0" ]; then
-            read_config
-          else
-            disable_pwr_save
-            read_config
-            enable_pwr_save
-          fi
-          log_msg 1 "Config reloaded"
-          ;;
-        stop)
-          log_msg 1 "Stop command received"
-          if [ "$lock" = "1" ]; then
-            if [ "$trigger" != "manual" ]; then
-              if [ "$tr_changed" = "true" ]; then
-                trigger="$old_trigger"
-                tr_changed="false"
-              else
-                old_trigger="$trigger"
-                trigger="manual"
-                tr_changed="true"
-              fi
-            fi
-            disable_pwr_save
-          fi
-          log_msg 1 "Stopped PowerSentinel"
-          ;;
-        start)
-          log_msg 1 "Start command received"
-          if [ "$lock" = "0" ]; then
-            if [ "$trigger" != "manual" ]; then
-              if [ "$tr_changed" = "true" ]; then
-                trigger="$old_trigger"
-                tr_changed="false"
-              else
-                old_trigger="$trigger"
-                trigger="manual"
-                tr_changed="true"
-              fi
-            fi
-            enable_pwr_save
-          fi
-          log_msg 1 "Started PowerSentinel"
-          ;;
-        pause)
-          log_msg 1 "Pause command received"
-          until [ "$resume" = "resume" ]; do
-            sleep "$delay"
-            resume="$(cat $ctl_file)"
-          done
-          log_msg 1 "Resume command received"
-          ;;
-        safe)
-          config_set_global safemode true
-          log_msg 1 "Entering Safe Mode"
-          disable_pwr_save
-          # enhance safemode here
-          # unsuspend all apps here
-          # in the event every app
-          # got suspended
-          #
-          # i think this will work.
-          # not tested due to lazyness
-          for pkg in $(pm list packages | cut -d: -f2-); do
-            pm unsuspend "$pkg"
-          done
-          emit safemode critical "Safe Mode is Active"
-          until [ "$ready" = "resume" ]; do
-            ready="$(cat $ctl_file)"
-          done
-          config_set_global safemode false
-          log_msg 1 "Resume command received. Safe Mode Exited. Restarting Daemon."
-          exec "$0"
-          ;;
-        *)
-          :
-          ;;
-      esac
+# init_v1() removed - v1 support has been removed entirely.
 
-    # Check for trigger
-    if [ "$trigger" = "boot" ]; then
-      if [ "$lock" != "1" ]; then
-        enable_pwr_save
-      fi
-    elif [ "$trigger" = "auto" ]; then
-      if [ "$(settings get global low_power)" = "1" ] && [ "$lock" = "0" ]; then
-        enable_pwr_save
-      fi
-      if [ "$(settings get global low_power)" = "0" ] && [ "$lock" = "1" ]; then
-        if [ "$keep_on_charge" = "false" ] || [ "$(getstate charging)" = "false" ]; then
-            disable_pwr_save
-        fi
-      fi
-    else
-      : # Do nothing, its Manual here
-    fi
-
-    # Wait
-    sleep "$delay"
-  done
-
-}
 
 # START
 
-# setup config (v1 is default... for now...)
+# setup config - every install migrates to v2 on first boot, see the
+# migrate() trigger below
 
 [ ! -d /data/local/tmp/PowerSentinel/ ] && mkdir /data/local/tmp/PowerSentinel/
 
@@ -816,8 +614,14 @@ fi
 version="$(grep '^version=' "$conf" 2>/dev/null | tail -1 | cut -d= -f2)"
 version="${version:-1}"
 
-# check for a user wanting to switch to v2
-if [ "$(grep ".*={" "$conf" | head -n 1)" == "" ] && [ "$version" = "2" ]; then
+# check for a config without event blocks yet - covers both the
+# bootstrap-created "version=2 but no blocks" transitional state AND a
+# genuine, never-migrated v1 config (version=1 or no version= line at
+# all). Previously this only fired for the former, requiring anyone
+# actually still on v1 to manually add "version=2" to their file before
+# ever getting auto-migrated - now any block-less config gets carried
+# forward automatically, with no user action needed.
+if [ "$(grep ".*={" "$conf" | head -n 1)" == "" ]; then
   # migrate() reads the user's current settings via getconf() to carry
   # them into the new block structure - but config_load_global() now
   # reads PowerSentinel.json, which doesn't exist yet at this point (this
@@ -904,17 +708,17 @@ find_rfkill_command
 # RFKILL_CMD already being set.
 capabilities_detect
 
-# check version and init
-if [ "$version" = 2 ]; then
-  log_msg 1 "Starting PowerSentinel"
-  init_v2
-else
-  log_msg 1 "Starting PowerSentinel in compatibility mode"
-  log_msg 1 "You should consider migrating to v2 of the config"
-  log_msg 1 "You can migrate by putting version=2 in your config"
-
-  lock="0" # fix all the checks v1
-  tr_changed="false" # v1 trigger changed
-
-  init_v1
+# By this point, every install has been migrated to v2 (see the
+# widened migrate() trigger above) - v1 no longer has a code path at
+# all. This check is a safety net, not a real branch: if version isn't
+# "2" here, something upstream (migrate() or migrate_conf_to_json)
+# failed unexpectedly, and refusing to run rather than silently
+# misbehaving under an assumption that no longer holds is the safer
+# failure mode.
+if [ "$version" != "2" ]; then
+  log_msg 1 "FATAL: could not migrate config to v2 (version=$version) - refusing to start"
+  exit 1
 fi
+
+log_msg 1 "Starting PowerSentinel"
+init_v2

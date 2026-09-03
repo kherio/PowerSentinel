@@ -94,7 +94,21 @@ action_gms_undo() {
 
 action_proc_apply() {
   [ "$handle_proc" = "true" ] || return
-  while [ "$lock" = "1" ]; do
+  # BUG FIX: this used to loop "while [ "$lock" = "1" ]" - but nothing
+  # in the v2 code path ever set $lock to anything (it was only ever
+  # set inside enable_pwr_save's now-removed v1-only branches), so this
+  # background monitor has silently never actually looped for any v2
+  # user - it ran its body once, checked an always-empty $lock, and
+  # exited immediately. Also, since this whole block backgrounds itself
+  # (the trailing &), it forks a subshell with its own copy of any
+  # bash variable - even a correctly-set $active_events in the parent
+  # daemon process would never be visible here as it changes. The
+  # state file (PowerSentinel-state.sh) is an actual file on disk, so
+  # it's the one thing a backgrounded subshell can reliably observe
+  # changing in the parent process: keep monitoring while this
+  # specific event is still listed as active there.
+  local proc_event="$event"
+  while "$JQ" -e --arg e "$proc_event" 'any(.[]?; . == $e)' "$state_file" >/dev/null 2>&1; do
     while IFS= read -r proc nice; do
       pid="$(pgrep "$proc")"
       [ ! "$nice" ] && nice="10"
