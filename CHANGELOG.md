@@ -1,3 +1,6 @@
+### v3.23.1
+  - Removed the redundant "Modo avanzado" checkbox in Config - since the "?" button already lets you switch modes via the explanation screen, having a separate toggle was two ways to do the same thing. The single remaining button now shows your current mode as its own label and opens that same screen when tapped.
+
 ### v3.23.0
   - **Per-app policy in 4 levels**, replacing the binary allowlist/denylist-only model: 0 (never touch), 1 (gentle only, capped at "nice"), 2 (default, follow the event as configured), 3 (always aggressive, forces suspend). Global rather than per-event, built on top of the real CPU detection added in v3.20.0 - a level can now be an informed decision rather than a guess. Manage it now via `PowerSentinelconf app-policy set/get/rm/list`; a WebUI section is planned for a later polish pass.
 
