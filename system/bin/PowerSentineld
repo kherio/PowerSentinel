@@ -8,6 +8,7 @@ conf="/data/local/tmp/PowerSentinel/PowerSentinel.conf"
 . "$(dirname "$0")/PowerSentinel-journal.sh"
 . "$(dirname "$0")/PowerSentinel-alertbridge.sh"
 . "$(dirname "$0")/PowerSentinel-energylog.sh"
+. "$(dirname "$0")/PowerSentinel-appwatch.sh"
 . "$(dirname "$0")/PowerSentinel-state.sh"
 . "$(dirname "$0")/PowerSentinel-events.sh"
 declare -a active_events
@@ -373,6 +374,11 @@ while true; do
   # battery level or temperature actually moved) - see
   # PowerSentinel-energylog.sh for the full rationale.
   energylog_sample
+
+  # Observational background-CPU watch: internally throttled to once
+  # every $APPWATCH_INTERVAL_S, and only does anything while the screen
+  # is off - see PowerSentinel-appwatch.sh.
+  appwatch_check
 
   # Check for command
   cmd="$(cat $ctl_file)"
