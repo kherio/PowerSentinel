@@ -8,6 +8,7 @@ const DATA_DIR = '/data/local/tmp/PowerSentinel';
 const CONF_FILE = `${DATA_DIR}/PowerSentinel.json`;
 const STATUS_FILE = `${DATA_DIR}/PowerSentinel.status`;
 const DEFAULT_LOG_FILE = `${DATA_DIR}/PowerSentinel.log`;
+const JOURNAL_FILE = `${DATA_DIR}/PowerSentinel.journal`;
 
 // Reads log_file the same way the daemon itself does now (jq against
 // the JSON config) rather than grepping the old .conf text - that grep
@@ -49,6 +50,13 @@ export async function exportLog() {
   const dest = `/sdcard/Download/PowerSentinel-log-${Date.now()}.txt`;
   await run(`logf=$(${RESOLVE_LOG_PATH}); cp "$logf" '${dest}'`);
   return dest;
+}
+
+// Journal is JSON Lines (one JSON object per line: ts/event/severity/
+// message) written by PowerSentinel-journal.sh - returned as raw text,
+// same convention as readLog(); the caller parses each line.
+export async function readJournal() {
+  return run(`cat '${JOURNAL_FILE}' 2>/dev/null || echo ''`);
 }
 
 // ---------- Apps (allowlist/denylist picker) ----------

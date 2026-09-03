@@ -143,25 +143,50 @@
 
     <!-- ================= LOG ================= -->
     <section class="view" id="view-log">
-      <div class="toolbar">
-        <select class="filter" id="l-level-filter">
-          <option value="ALL" data-i18n="log.allLevels">Todos los niveles</option>
-          <option value="INFO">INFO</option>
-          <option value="VERBOSE">VERBOSE</option>
-          <option value="DEBUG">DEBUG</option>
-        </select>
-        <label class="switch">
-          <input type="checkbox" id="l-autoscroll" checked> <span data-i18n="log.autoscroll">Auto-scroll</span>
-        </label>
-        <div class="spacer"></div>
-        <button class="btn ghost" id="l-refresh-btn"></button>
-        <button class="btn primary" id="l-save-btn"></button>
+      <div class="subtabs">
+        <button id="l-tab-log" class="active" data-i18n="log.tabLog">Log</button>
+        <button id="l-tab-journal" data-i18n="log.tabJournal">Historial</button>
       </div>
-      <div id="l-log-count" style="font-size:12px;color:var(--muted);margin-bottom:8px;"></div>
 
-      <div class="fill-area" id="l-pull-area">
-        <div class="pull-indicator" id="l-pull-indicator"></div>
-        <div class="log-wrap" id="l-log-wrap"></div>
+      <div id="l-view-log">
+        <div class="toolbar">
+          <select class="filter" id="l-level-filter">
+            <option value="ALL" data-i18n="log.allLevels">Todos los niveles</option>
+            <option value="INFO">INFO</option>
+            <option value="VERBOSE">VERBOSE</option>
+            <option value="DEBUG">DEBUG</option>
+          </select>
+          <label class="switch">
+            <input type="checkbox" id="l-autoscroll" checked> <span data-i18n="log.autoscroll">Auto-scroll</span>
+          </label>
+          <div class="spacer"></div>
+          <button class="btn ghost" id="l-refresh-btn"></button>
+          <button class="btn primary" id="l-save-btn"></button>
+        </div>
+        <div id="l-log-count" style="font-size:12px;color:var(--muted);margin-bottom:8px;"></div>
+
+        <div class="fill-area" id="l-pull-area">
+          <div class="pull-indicator" id="l-pull-indicator"></div>
+          <div class="log-wrap" id="l-log-wrap"></div>
+        </div>
+      </div>
+
+      <div id="l-view-journal" style="display:none;">
+        <div class="toolbar">
+          <select class="filter" id="j-severity-filter">
+            <option value="ALL" data-i18n="log.allSeverities">Todas</option>
+            <option value="critical" data-i18n="log.filterCritical">Solo críticas</option>
+            <option value="info" data-i18n="log.filterInfo">Solo informativas</option>
+          </select>
+          <div class="spacer"></div>
+          <button class="btn ghost" id="j-refresh-btn"></button>
+        </div>
+        <div id="j-journal-count" style="font-size:12px;color:var(--muted);margin-bottom:8px;"></div>
+
+        <div class="fill-area" id="j-pull-area">
+          <div class="pull-indicator" id="j-pull-indicator"></div>
+          <div class="log-wrap" id="j-journal-wrap"></div>
+        </div>
       </div>
     </section>
 

@@ -836,6 +836,20 @@ label.switch input { accent-color: var(--accent); }
 .log-line.lvl-VERBOSE { color: var(--muted); }
 .log-line.lvl-DEBUG { color: var(--warn); }
 .log-line.hidden { display: none; }
+.log-line.journal-critical { color: var(--danger); font-weight: 600; }
+.log-line.journal-info { color: var(--text); }
+.journal-time { color: var(--muted); margin-right: 6px; }
+.journal-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-right: 6px;
+}
+.journal-badge.critical { background: var(--danger); color: #fff; }
+.journal-badge.info { background: var(--surface-2); color: var(--muted); }
 .log-empty { color: var(--muted); font-size: 13px; padding: 8px 2px; }
 
 /* Toasts */

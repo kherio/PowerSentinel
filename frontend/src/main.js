@@ -4,7 +4,7 @@ import { ICONS } from './icons.js';
 import { initViewportFix } from './helpers.js';
 import { initEstado, activateEstado, deactivateEstado, refreshEstado } from './views/estado.js';
 import { initConfig, activateConfig, deactivateConfig, confirmLeaveConfig } from './views/config.js';
-import { initLog, activateLog, deactivateLog, refreshLog } from './views/log.js';
+import { initLog, activateLog, deactivateLog, refreshLog, refreshJournal } from './views/log.js';
 import { initPerfiles, activatePerfiles, deactivatePerfiles } from './views/perfiles.js';
 import { initAcerca, activateAcerca, deactivateAcerca } from './views/acerca.js';
 
@@ -153,6 +153,7 @@ initAcerca();
 
 initPullToRefresh('e-pull-area', 'e-pull-indicator', refreshEstado);
 initPullToRefresh('l-pull-area', 'l-pull-indicator', refreshLog);
+initPullToRefresh('j-pull-area', 'j-pull-indicator', refreshJournal);
 
 // Estado starts active on load; the rest only start their polling once
 // the user actually swipes/taps to them (see commitToIndex/LIFECYCLE).
