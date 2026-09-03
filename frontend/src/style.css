@@ -811,6 +811,33 @@ details.raw pre {
   overflow: auto;
 }
 
+/* Fila propia para el selector de modo, separada del toolbar de
+   acciones (Guardar/Recargar/Restaurar) - conceptualmente son cosas
+   distintas: "en qué modo estoy" frente a "qué puedo hacer ahora
+   mismo con mi configuración". Ocupa el ancho completo para que se
+   note que es un control de estado, no un botón de acción más. */
+.mode-bar { margin-bottom: 10px; }
+.mode-bar-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.mode-bar-btn::after {
+  content: '›';
+  color: var(--muted);
+  font-weight: 400;
+  font-size: 16px;
+}
+
 .toolbar {
   display: flex;
   gap: 8px;
