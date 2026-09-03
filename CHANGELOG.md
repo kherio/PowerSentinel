@@ -1,3 +1,6 @@
+### v3.22.0
+  - **Redesigned Basic mode's Config screen.** The three aggressiveness levels are now cards with an icon and a one-line description of what each actually means, instead of plain unexplained buttons. A new live status line shows whether adaptive savings are genuinely doing something right now ("Ahorrando ahora mismo" / "Sin ahorro activo ahora mismo"), not just whether the setting is turned on.
+
 ### v3.21.0
   - **Proper Basic/Advanced mode choice screen.** Instead of a bare toggle, a new screen explains both modes clearly (what Basic gives you vs what Advanced requires) and appears automatically the first time you visit Config. A "?" icon next to the toggle reopens the same explanation anytime.
 
