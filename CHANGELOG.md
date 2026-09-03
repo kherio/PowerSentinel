@@ -1,3 +1,8 @@
+### v3.16.0
+  - **v1 compatibility mode removed entirely.** Anyone still on a legacy v1 config (or any config missing event blocks, for any reason) now auto-migrates to v2 automatically on the very next daemon start - no manual edit needed anymore, unlike before. Since every install is now guaranteed to reach v2, the ~180 lines of v1-only code (a completely separate, unmaintained code path that received none of the last ~15 versions of improvements) have been removed.
+  - **Fixed a real, long-standing bug** found while doing this: the background process-priority monitor (`handle_proc`) relied on a variable that was never actually set in v2, so it silently never looped for any v2 user - it's been non-functional independent of this release's changes. Now correctly checks the persisted state file instead.
+  - No user-facing configuration changes - if you were somehow still on v1, your settings carry over automatically and unattended.
+
 ### v3.15.0
   - **Front 5: State Manager.** A new `PowerSentinel-state.sh` persists which events are currently active across daemon restarts and reboots. Previously, a crash (relaunched by the watchdog) or an unclean reboot left the daemon with no memory of what it had previously applied - cores could stay offline, apps stay suspended, or WiFi stay blocked indefinitely with no awareness to undo any of it. Now the daemon reconciles back to a clean baseline on every startup before evaluating current conditions.
   - **New "Historial" tab in the WebUI** (next to Log): shows the full structured Event Journal introduced in v3.14.0 - not just the small fraction of messages that ever reach a real Android notification - with a severity filter and newest-first ordering.
