@@ -230,24 +230,6 @@ main {
   padding: 14px;
 }
 
-/* Small round icon button next to the "Modo avanzado" toggle, reopens
-   the mode-explanation modal on demand. */
-.icon-btn {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  border: 1px solid var(--border);
-  background: var(--surface-2);
-  color: var(--muted);
-  font-size: 13px;
-  font-weight: 700;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-}
-.icon-btn:active { background: var(--border); }
-
 .modal-overlay {
   position: fixed;
   inset: 0;

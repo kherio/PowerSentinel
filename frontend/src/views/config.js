@@ -103,7 +103,10 @@ function currentAggressionLevel() {
 
 function applyMode() {
   const advanced = isAdvancedMode();
-  document.getElementById('c-advanced-toggle').checked = advanced;
+  const modeBtn = document.getElementById('c-mode-info-btn');
+  modeBtn.textContent = advanced ? t('config.modeButtonAdvanced') : t('config.modeButtonBasic');
+  modeBtn.title = t('config.modeInfoTitle');
+  modeBtn.setAttribute('aria-label', t('config.modeInfoTitle'));
   document.getElementById('c-view-basic').style.display = advanced ? 'none' : 'block';
   document.getElementById('c-view-advanced').style.display = advanced ? 'flex' : 'none';
   // Guardar/recargar/restaurar son conceptos del modo avanzado (el
@@ -650,18 +653,8 @@ export function initConfig() {
   document.getElementById('c-reload-btn').addEventListener('click', () => loadFile(true));
   document.getElementById('c-restore-btn').addEventListener('click', restoreRecommended);
 
-  document.getElementById('c-advanced-toggle').addEventListener('change', (e) => {
-    try {
-      localStorage.setItem(ADVANCED_MODE_KEY, e.target.checked ? 'true' : 'false');
-      localStorage.setItem(MODE_CHOSEN_KEY, 'true');
-    } catch (err) {}
-    applyMode();
-  });
   document.getElementById('cb-adaptive-toggle').addEventListener('change', (e) => setAdaptiveEnabled(e.target.checked));
 
-  document.getElementById('c-mode-info-btn').textContent = '?';
-  document.getElementById('c-mode-info-btn').title = t('config.modeInfoTitle');
-  document.getElementById('c-mode-info-btn').setAttribute('aria-label', t('config.modeInfoTitle'));
   document.getElementById('c-mode-info-btn').addEventListener('click', openModeModal);
   document.getElementById('mode-choice-basic-btn').addEventListener('click', () => chooseMode(false));
   document.getElementById('mode-choice-advanced-btn').addEventListener('click', () => chooseMode(true));
