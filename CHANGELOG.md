@@ -1,3 +1,6 @@
+### v3.17.0
+  - **Critical app protection.** The device's default dialer, SMS, and emergency apps - plus anything already exempted from Android's own battery optimization - are now automatically protected from `handle_apps`' kill/nice/suspend, regardless of your allowlist/denylist configuration. Losing the ability to make a call or receive a text is a different category of risk than "an app I like lags a bit". Detected via official, documented Android commands (`cmd role get-role-holders`, `dumpsys deviceidle`) - not configurable, since this is specifically about safety, not general preference.
+
 ### v3.16.2
   - **Security fix**: `PowerSentinel.json` (and `.state`/`.journal`) were world-writable (`666`) on some devices - readable and writable by any app, not just root. Found by a user while helping diagnose an unrelated issue. Every write path now sets `600` permissions, and existing installs get corrected automatically on their next daemon start.
 
