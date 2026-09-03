@@ -25,9 +25,14 @@
 #   PowerSentinelconf events                       list configured events
 #   PowerSentinelconf add-event NAME               add an empty event block
 #   PowerSentinelconf rm-event NAME                remove an event block
+#   PowerSentinelconf app-policy list                      list per-app policy levels
+#   PowerSentinelconf app-policy get PACKAGE               show a package's level (0-3, default 2)
+#   PowerSentinelconf app-policy set PACKAGE LEVEL         set a package's level (0=never, 1=gentle-only, 2=follow event, 3=always aggressive)
+#   PowerSentinelconf app-policy rm PACKAGE                reset a package to the default (2)
 
 CONF_DIR="/data/local/tmp/PowerSentinel"
 JSON_CONF="$CONF_DIR/PowerSentinel.json"
+APP_POLICY_FILE="$CONF_DIR/PowerSentinel.apppolicy"
 JQ="$(dirname "$0")/jq"
 
 PREDEFINED_EVENTS="boot charging screen_off low_power night thermal adaptive_tier1 adaptive_tier2 adaptive_tier3 manual"
@@ -115,6 +120,65 @@ rm_event() {
   local name="$1"
   backup_conf
   apply_jq --arg e "$name" 'del(.events[$e])' && echo "Evento '$name' eliminado (si existía)."
+}
+
+# ---------- per-app policy (4 niveles) ----------
+# Un pequeño fichero JSON aparte de PowerSentinel.json, exactamente el
+# mismo que lee/escribe PowerSentinel-apppolicy.sh en el demonio -
+# package -> nivel (0-3). No usa apply_jq (que opera sobre $JSON_CONF)
+# porque esto vive en su propio fichero.
+
+ensure_app_policy() {
+  mkdir -p "$CONF_DIR"
+  [ -s "$APP_POLICY_FILE" ] || echo '{}' > "$APP_POLICY_FILE"
+}
+
+app_policy_set() {
+  local app="$1" level="$2" tmp
+  case "$level" in
+    0|1|2|3) ;;
+    *) echo "Nivel inválido (debe ser 0, 1, 2 o 3): $level" >&2; return 1 ;;
+  esac
+  ensure_app_policy
+  tmp="$(mktemp "$CONF_DIR/.PowerSentinel.apppolicy.XXXXXX")" || return 1
+  if "$JQ" --arg a "$app" --argjson l "$level" '.[$a] = $l' "$APP_POLICY_FILE" > "$tmp" 2>/dev/null \
+      && [ -s "$tmp" ] && "$JQ" -e . "$tmp" >/dev/null 2>&1; then
+    chmod 600 "$tmp" 2>/dev/null
+    mv "$tmp" "$APP_POLICY_FILE"
+    echo "$app -> nivel $level"
+  else
+    rm -f "$tmp"
+    echo "Error al escribir la política de la app." >&2
+    return 1
+  fi
+}
+
+app_policy_get() {
+  local app="$1" level
+  ensure_app_policy
+  level="$("$JQ" -r --arg a "$app" '.[$a]? // 2' "$APP_POLICY_FILE" 2>/dev/null)"
+  echo "${level:-2}"
+}
+
+app_policy_rm() {
+  local app="$1" tmp
+  ensure_app_policy
+  tmp="$(mktemp "$CONF_DIR/.PowerSentinel.apppolicy.XXXXXX")" || return 1
+  if "$JQ" --arg a "$app" 'del(.[$a])' "$APP_POLICY_FILE" > "$tmp" 2>/dev/null \
+      && [ -s "$tmp" ] && "$JQ" -e . "$tmp" >/dev/null 2>&1; then
+    chmod 600 "$tmp" 2>/dev/null
+    mv "$tmp" "$APP_POLICY_FILE"
+    echo "$app vuelve al nivel por defecto (2)."
+  else
+    rm -f "$tmp"
+    return 1
+  fi
+}
+
+app_policy_list() {
+  ensure_app_policy
+  echo "0=nunca tocar  1=solo suave  2=seguir el evento (defecto)  3=siempre agresivo"
+  "$JQ" -r 'to_entries[] | "\(.key)\t\(.value)"' "$APP_POLICY_FILE" 2>/dev/null
 }
 
 # ---------- interactive prompts ----------
@@ -299,8 +363,18 @@ case "$1" in
   rm-event)
     rm_event "$2"
     ;;
+  app-policy)
+    shift
+    case "$1" in
+      set) app_policy_set "$2" "$3" ;;
+      get) app_policy_get "$2" ;;
+      rm) app_policy_rm "$2" ;;
+      list|'') app_policy_list ;;
+      *) echo "Uso: PowerSentinelconf app-policy [set PAQUETE NIVEL|get PAQUETE|rm PAQUETE|list]" >&2; exit 1 ;;
+    esac
+    ;;
   -h|--help)
-    sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,31p' "$0" | sed 's/^# \{0,1\}//'
     ;;
   *)
     echo "Comando desconocido: $1" >&2

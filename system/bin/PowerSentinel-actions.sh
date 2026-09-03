@@ -26,18 +26,27 @@ action_apps_apply() {
   # (PowerSentinel-detect.sh) layers on top: the device's own default
   # dialer/SMS/emergency apps, and anything already exempted from
   # Android's own battery optimization, are protected regardless of
-  # allowlist/denylist configuration.
+  # allowlist/denylist configuration. apppolicy_effective_action
+  # (PowerSentinel-apppolicy.sh) layers on top of THAT: a per-app,
+  # global 4-level policy (never / gentle-only / follow-event / always-
+  # aggressive) that can override what THIS event's own handle_apps
+  # asks for, on a per-app basis - level 2 (the default for any app
+  # never explicitly classified) is a pure passthrough, so nothing
+  # changes for anyone who hasn't set any app policy at all.
+  local effective
   while IFS= read -r app; do
     [ -n "$app" ] || continue
     if grep -Fxq -- "$app" "$allowlist" || is_critical_app "$app"; then
       continue
     fi
-    if [ "$handle_apps" = "nice" ]; then
+    effective="$(apppolicy_effective_action "$app" "$handle_apps")"
+    [ "$effective" = "false" ] && continue
+    if [ "$effective" = "nice" ]; then
       for i in $(pgrep "$app"); do
         log_msg 3 "Renicing $i"
         renice -n 19 "$i" &>/dev/null &
       done
-    elif [ "$handle_apps" = "kill" ]; then
+    elif [ "$effective" = "kill" ]; then
       log_msg 3 "Stopping $app"
       am force-stop "$app" &>/dev/null &
     else
@@ -52,12 +61,15 @@ action_apps_apply() {
 
 action_apps_undo() {
   [ "$handle_apps" = "false" ] && return
+  local effective
   while IFS= read -r app; do
     [ -n "$app" ] || continue
     if grep -Fxq -- "$app" "$allowlist" || is_critical_app "$app"; then
       continue
     fi
-    if [ "$handle_apps" = "nice" ]; then
+    effective="$(apppolicy_effective_action "$app" "$handle_apps")"
+    [ "$effective" = "false" ] && continue
+    if [ "$effective" = "nice" ]; then
       for i in $(pgrep "$app"); do
         log_msg 3 "Resetting the nice level for $app"
         renice -n 0 "$i" &>/dev/null &
