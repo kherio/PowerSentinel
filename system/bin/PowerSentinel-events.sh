@@ -21,6 +21,32 @@
 # "sistema de políticas centralizado") - rather than build it twice,
 # this IS that piece, pulled forward.
 
+# CRITICAL FIX: this function was accidentally deleted in commit
+# 44f90a9 ("Front 2 complete + Front 3") - a range-based text removal
+# meant to only delete enable_pwr_save()/disable_pwr_save()'s old
+# inline bodies also swept up this function, which sat between them
+# and handle_event() under its own "# Event stuff for V2" header,
+# without that range boundary ever being checked. Restored verbatim
+# from before that commit (git show 44f90a9^:system/bin/PowerSentineld).
+#
+# Impact while this was missing (present in every release from v3.13.0
+# through v3.16.0): handle_event()'s enable path (flag=1) calls this
+# function and branches on its exit code. A call to an undefined
+# function returns 127 (bash's "command not found") - which is "!= 0",
+# so the code unconditionally took the "already active, refuse to
+# re-enable" branch and returned early, for every single event, every
+# time. No event could ever actually apply its settings - the daemon
+# has not functionally worked at all for anyone on these versions.
+is_event_locked() {
+  event="$1"
+  for i in ${!active_events[@]}; do
+    if [ "${active_events[$i]}" = "$event" ]; then
+      return 1
+    fi
+  done
+  return 0
+}
+
 handle_event() {
   event="$1"
   flag="$2"
