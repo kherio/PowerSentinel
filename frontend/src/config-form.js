@@ -202,7 +202,26 @@ function parseConfig(text) {
 }
 
 function serializeConfig(model) {
-  var global = {};
+  // BUG FIX: this used to put "version" at the top level, as a sibling
+  // of "global"/"events" - but the daemon (both
+  // migrate_conf_to_json()'s idempotency check AND config_load_global's
+  // normal, everyday read of every global setting) reads it from
+  // *inside* "global" (.global.version), via the exact same
+  // `.global | to_entries[]` walk used for every other global field.
+  // Confirmed end to end: any save from this WebUI immediately runs
+  // `PowerSentinelctl reload`, restarting the daemon and re-running
+  // migrate_conf_to_json() - which, finding .global.version missing,
+  // did not recognize the file as already migrated. If the old,
+  // frozen PowerSentinel.conf still existed on disk, this silently
+  // rebuilt the JSON from that stale snapshot, discarding whatever was
+  // just saved (exactly the reported symptom: add an event, save,
+  // reopen the app, and it's gone). If .conf was already empty/absent,
+  // the save survived on disk, but $version still resolved to the
+  // default "1" via the same missing-key fallback used everywhere else
+  // - triggering the v3.16.0 "FATAL: could not migrate to v2" exit
+  // (v1 support was removed entirely that version, so there's no
+  // longer a fallback behavior for version=1) on every single reload.
+  var global = { version: '2' };
   Object.keys(model).forEach(function (k) {
     if (k === 'blocks' || k === 'version') return;
     if (model[k] === undefined) return;
@@ -230,7 +249,7 @@ function serializeConfig(model) {
     events[b.name] = fields;
   });
 
-  return JSON.stringify({ version: 2, global: global, events: events }, null, 2) + '\n';
+  return JSON.stringify({ global: global, events: events }, null, 2) + '\n';
 }
 
 // ---------- Rendering helpers ----------
