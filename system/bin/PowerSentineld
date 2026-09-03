@@ -7,6 +7,7 @@ conf="/data/local/tmp/PowerSentinel/PowerSentinel.conf"
 . "$(dirname "$0")/PowerSentinel-actions.sh"
 . "$(dirname "$0")/PowerSentinel-journal.sh"
 . "$(dirname "$0")/PowerSentinel-alertbridge.sh"
+. "$(dirname "$0")/PowerSentinel-energylog.sh"
 . "$(dirname "$0")/PowerSentinel-state.sh"
 . "$(dirname "$0")/PowerSentinel-events.sh"
 declare -a active_events
@@ -256,6 +257,7 @@ update_status() {
   # file, and stale battery data there would be worse than one extra
   # dumpsys call on a state change.
   detect_refresh
+  energylog_sample
   if [ -n "$DETECT_BATTERY_LEVEL" ]; then
     echo "Battery: level=${DETECT_BATTERY_LEVEL} temp=${DETECT_BATTERY_TEMP_RAW} voltage=${DETECT_BATTERY_VOLTAGE} charging=${DETECT_BATTERY_CHARGING}" >> "$status_file"
   fi
@@ -366,6 +368,11 @@ while true; do
   # see PowerSentinel-detect.sh for why this replaced four independent
   # dumpsys calls.
   detect_refresh
+
+  # Change-triggered energy log: a no-op most cycles (writes only when
+  # battery level or temperature actually moved) - see
+  # PowerSentinel-energylog.sh for the full rationale.
+  energylog_sample
 
   # Check for command
   cmd="$(cat $ctl_file)"
