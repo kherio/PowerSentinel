@@ -36,6 +36,7 @@ handle_event() {
     else
       # lock the event
       active_events+=( "$event" )
+      state_save
     fi
   fi
 
@@ -127,6 +128,7 @@ handle_event() {
         unset "active_events[$i]"
       fi
     done
+    state_save
     log_msg 1 "Actions for $event undone"
   else
     log_msg 1 "Performing actions for $event event"

@@ -7,6 +7,7 @@ conf="/data/local/tmp/PowerSentinel/PowerSentinel.conf"
 . "$(dirname "$0")/PowerSentinel-actions.sh"
 . "$(dirname "$0")/PowerSentinel-journal.sh"
 . "$(dirname "$0")/PowerSentinel-alertbridge.sh"
+. "$(dirname "$0")/PowerSentinel-state.sh"
 . "$(dirname "$0")/PowerSentinel-events.sh"
 declare -a active_events
 declare -a cpus
@@ -400,6 +401,12 @@ disable_pwr_save() {
 init_v2() {
 
 adaptive_mode="$(getconf adaptive_mode false)"
+
+# Undo whatever the previous run left active before doing anything
+# else - see PowerSentinel-state.sh for the full rationale (a crash or
+# unclean reboot must not leave the daemon believing it's starting from
+# a clean baseline when the system itself might not be).
+state_reconcile
 
 handle_event boot 1
 
