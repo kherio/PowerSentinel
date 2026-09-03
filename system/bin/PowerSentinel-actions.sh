@@ -13,6 +13,34 @@
 # fixed along the way (see action_cores_apply below) - otherwise no
 # logic changes, only where the code lives and how it's split.
 
+: "${low_ram_orig_file:=/data/local/tmp/PowerSentinel/PowerSentinel.lowram_orig}"
+: "${apps_ownership_file:=/data/local/tmp/PowerSentinel/PowerSentinel.appstate}"
+
+# Current nice value of a live PID, via /proc/[pid]/stat (field 19) -
+# same stable kernel interface, and the same "strip through the last
+# comm-closing paren before counting fields" handling, already used by
+# PowerSentinel-appwatch.sh for utime/stime.
+_app_current_nice() {
+  local stat_line
+  stat_line="$(cat "/proc/$1/stat" 2>/dev/null)"
+  stat_line="${stat_line##*) }"
+  echo "$stat_line" | awk '{print $17}'
+}
+
+# Best-effort check for whether $1 is ALREADY suspended, independent of
+# anything PowerSentinel has done. ApplicationInfo.FLAG_SUSPENDED /
+# PackageManager.isPackageSuspended() are real, documented framework
+# concepts; dumpsys package's per-user-state "suspended=" field is a
+# long-standing convention for surfacing that state, but this exact
+# text format cannot be verified against a real device from this
+# environment. Fails safe either way: if this stops matching on some
+# device/version, it simply always reports "not suspended", meaning
+# apply/undo behave exactly as they did before this fix for that one
+# signal - never a new, worse failure mode than not checking at all.
+_app_is_suspended() {
+  dumpsys package "$1" 2>/dev/null | grep -q "suspended=true"
+}
+
 # ---------- Apps ----------
 
 action_apps_apply() {
@@ -33,7 +61,31 @@ action_apps_apply() {
   # asks for, on a per-app basis - level 2 (the default for any app
   # never explicitly classified) is a pure passthrough, so nothing
   # changes for anyone who hasn't set any app policy at all.
-  local effective
+  #
+  # BUG FIX (found by an external report, then confirmed real): this
+  # used to blindly renice-to-19 or pm-suspend every matching app on
+  # apply, and blindly renice-to-0 or pm-unsuspend every matching app
+  # on undo, with no record of whether PowerSentinel itself was the one
+  # who changed that app's state, or what it was before. A suspend on
+  # an app ALREADY suspended by something else, or a nice level that
+  # wasn't originally 0, would get silently and permanently
+  # "corrected" back to PowerSentinel's own defaults once the event
+  # ended - modifying app state PowerSentinel never actually created.
+  # Now records, per app, exactly what action was taken (and the real
+  # original nice value) in $apps_ownership_file, loaded and saved once
+  # per call rather than once per app to avoid a jq subprocess per
+  # installed package.
+  local effective app pkg act nice
+  declare -A _owned_action=() _owned_nice=()
+  if [ -s "$apps_ownership_file" ]; then
+    while IFS=$'\t' read -r pkg act nice; do
+      [ -n "$pkg" ] || continue
+      _owned_action[$pkg]="$act"
+      [ -n "$nice" ] && _owned_nice[$pkg]="$nice"
+    done < <("$JQ" -r 'to_entries[] | "\(.key)\t\(.value.action)\t\(.value.nice_orig // "")"' "$apps_ownership_file" 2>/dev/null)
+  fi
+  local changed=0
+
   while IFS= read -r app; do
     [ -n "$app" ] || continue
     if grep -Fxq -- "$app" "$allowlist" || is_critical_app "$app"; then
@@ -43,6 +95,11 @@ action_apps_apply() {
     [ "$effective" = "false" ] && continue
     if [ "$effective" = "nice" ]; then
       for i in $(pgrep "$app"); do
+        if [ -z "${_owned_nice[$app]:-}" ]; then
+          _owned_nice[$app]="$(_app_current_nice "$i")"
+          _owned_action[$app]="nice"
+          changed=1
+        fi
         log_msg 3 "Renicing $i"
         renice -n 19 "$i" &>/dev/null &
       done
@@ -50,18 +107,49 @@ action_apps_apply() {
       log_msg 3 "Stopping $app"
       am force-stop "$app" &>/dev/null &
     else
-      log_msg 3 "Suspending $app"
-      am force-stop "$app" &>/dev/null &
-      if capability_has pm_suspend; then
-        pm suspend "$app" &>/dev/null &
+      if _app_is_suspended "$app"; then
+        log_msg 3 "$app is already suspended independently of PowerSentinel - leaving it as-is"
+      else
+        _owned_action[$app]="suspend"
+        changed=1
+        log_msg 3 "Suspending $app"
+        am force-stop "$app" &>/dev/null &
+        if capability_has pm_suspend; then
+          pm suspend "$app" &>/dev/null &
+        fi
       fi
     fi
   done < <(pm list packages -3 | cut -d: -f2-; [ -s "$denylist" ] && cat "$denylist")
+
+  if [ "$changed" = "1" ]; then
+    local dir tmp
+    dir="$(dirname "$apps_ownership_file")"
+    mkdir -p "$dir" 2>/dev/null
+    tmp="$(mktemp "$dir/.PowerSentinel.appstate.XXXXXX")" || return
+    echo '{}' > "$tmp"
+    for pkg in "${!_owned_action[@]}"; do
+      "$JQ" --arg p "$pkg" --arg a "${_owned_action[$pkg]}" --arg n "${_owned_nice[$pkg]:-}" \
+        '.[$p] = ({action: $a} + (if $n != "" then {nice_orig: $n} else {} end))' \
+        "$tmp" > "$tmp.step" 2>/dev/null && mv "$tmp.step" "$tmp"
+    done
+    chmod 600 "$tmp" 2>/dev/null
+    mv "$tmp" "$apps_ownership_file"
+  fi
 }
 
 action_apps_undo() {
   [ "$handle_apps" = "false" ] && return
-  local effective
+  local effective app pkg act nice
+  declare -A _owned_action=() _owned_nice=()
+  if [ -s "$apps_ownership_file" ]; then
+    while IFS=$'\t' read -r pkg act nice; do
+      [ -n "$pkg" ] || continue
+      _owned_action[$pkg]="$act"
+      [ -n "$nice" ] && _owned_nice[$pkg]="$nice"
+    done < <("$JQ" -r 'to_entries[] | "\(.key)\t\(.value.action)\t\(.value.nice_orig // "")"' "$apps_ownership_file" 2>/dev/null)
+  fi
+  local changed=0
+
   while IFS= read -r app; do
     [ -n "$app" ] || continue
     if grep -Fxq -- "$app" "$allowlist" || is_critical_app "$app"; then
@@ -69,16 +157,46 @@ action_apps_undo() {
     fi
     effective="$(apppolicy_effective_action "$app" "$handle_apps")"
     [ "$effective" = "false" ] && continue
-    if [ "$effective" = "nice" ]; then
-      for i in $(pgrep "$app"); do
-        log_msg 3 "Resetting the nice level for $app"
-        renice -n 0 "$i" &>/dev/null &
-      done
-    else
-      log_msg 3 "Unsuspending $app"
-      pm unsuspend "$app" &>/dev/null &
-    fi
+
+    # Only reverse whatever PowerSentinel itself actually recorded
+    # doing to THIS app - never what the current policy would compute,
+    # which is exactly the bug: an app that was never touched (or was
+    # already in that state before PowerSentinel acted) is left alone.
+    case "${_owned_action[$app]:-}" in
+      nice)
+        for i in $(pgrep "$app"); do
+          log_msg 3 "Restoring the original nice level for $app"
+          renice -n "${_owned_nice[$app]:-0}" "$i" &>/dev/null &
+        done
+        unset "_owned_action[$app]" "_owned_nice[$app]"
+        changed=1
+        ;;
+      suspend)
+        log_msg 3 "Unsuspending $app"
+        pm unsuspend "$app" &>/dev/null &
+        unset "_owned_action[$app]"
+        changed=1
+        ;;
+      *)
+        : # never touched, or was already in that state - nothing to undo
+        ;;
+    esac
   done < <(pm list packages -3 | cut -d: -f2-; [ -s "$denylist" ] && cat "$denylist")
+
+  if [ "$changed" = "1" ]; then
+    local dir tmp
+    dir="$(dirname "$apps_ownership_file")"
+    mkdir -p "$dir" 2>/dev/null
+    tmp="$(mktemp "$dir/.PowerSentinel.appstate.XXXXXX")" || return
+    echo '{}' > "$tmp"
+    for pkg in "${!_owned_action[@]}"; do
+      "$JQ" --arg p "$pkg" --arg a "${_owned_action[$pkg]}" --arg n "${_owned_nice[$pkg]:-}" \
+        '.[$p] = ({action: $a} + (if $n != "" then {nice_orig: $n} else {} end))' \
+        "$tmp" > "$tmp.step" 2>/dev/null && mv "$tmp.step" "$tmp"
+    done
+    chmod 600 "$tmp" 2>/dev/null
+    mv "$tmp" "$apps_ownership_file"
+  fi
 }
 
 # ---------- Google Mobile Services ----------
@@ -149,14 +267,39 @@ action_proc_undo() {
 
 action_low_ram_apply() {
   [ "$low_ram" = "true" ] || return
+  # BUG FIX (found by an external report, then confirmed by reading
+  # this function before the fix): this used to unconditionally set
+  # low_ram to true and, on undo, unconditionally set it back to
+  # false - with no record of what it actually was before PowerSentinel
+  # touched it. A device that genuinely ships with
+  # ro.config.low_ram=true by default (a real, intentional system
+  # setting on some low-memory devices, affecting a lot of Android's
+  # memory management) would have that setting silently and
+  # persistently overwritten to false once the event ended. Recorded
+  # only the FIRST time this transitions from untracked to tracked -
+  # if the file already exists, PowerSentinel itself already changed
+  # this earlier (e.g. a different still-active event applied it
+  # first) and the current live value is already PowerSentinel's own
+  # "true", not the real original.
+  if [ ! -f "$low_ram_orig_file" ]; then
+    mkdir -p "$(dirname "$low_ram_orig_file")" 2>/dev/null
+    getprop ro.config.low_ram > "$low_ram_orig_file" 2>/dev/null
+    chmod 600 "$low_ram_orig_file" 2>/dev/null
+  fi
   log_msg 3 "Setting the low_ram flag"
   resetprop -n ro.config.low_ram true
 }
 
 action_low_ram_undo() {
   [ "$low_ram" = "true" ] || return
-  log_msg 3 "Setting low_ram to false"
-  resetprop -n ro.config.low_ram false
+  local orig="false"
+  if [ -f "$low_ram_orig_file" ]; then
+    orig="$(cat "$low_ram_orig_file" 2>/dev/null)"
+    rm -f "$low_ram_orig_file"
+  fi
+  [ -n "$orig" ] || orig="false"
+  log_msg 3 "Restoring low_ram to its original value ($orig)"
+  resetprop -n ro.config.low_ram "$orig"
 }
 
 # ---------- WiFi ----------
