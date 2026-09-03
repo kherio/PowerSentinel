@@ -168,3 +168,77 @@ find_rfkill_command() {
     log_msg 2 "No rfkill command found. Will rely on svc for WiFi control."
   fi
 }
+
+# One-time detection of apps that should never be touched by
+# handle_apps' kill/nice/suspend, regardless of allowlist/denylist
+# configuration - "protección de apps críticas" from the proposed
+# architecture. Two sources, both queried via official, documented
+# Android commands rather than anything fragile/undocumented:
+#
+#   1. The device's own default dialer/SMS/emergency apps (via
+#      `cmd role get-role-holders`, the same official mechanism
+#      Android Settings itself uses to show "default apps"). Losing
+#      the ability to make a call or receive a text is a genuinely
+#      different category of harm than "an app the user likes lags a
+#      bit" - these three roles are documented as exclusive (at most
+#      one holder), so normally 0 or 1 line each.
+#   2. Every app already exempted from Android's own battery
+#      optimization (`dumpsys deviceidle`'s "Whitelist system apps"/
+#      "Whitelist user apps" sections - system apps Android itself
+#      always exempts, plus whatever the user personally chose to
+#      exempt via Settings or another app). This respects an existing,
+#      already-curated signal rather than PowerSentinel silently
+#      overriding it.
+#
+# Deliberately defensive: this cannot be verified against a real
+# device from this environment, and dumpsys/cmd output can vary across
+# Android versions/OEMs. Every candidate line is validated against a
+# plain-package-name shape before being trusted; anything else
+# (a status message, a different section's content, an unexpected
+# format) is silently skipped rather than risked. Failing to detect a
+# critical app only means missing out on this extra protection layer,
+# never a regression - handle_apps' existing allowlist/denylist
+# behavior is completely unaffected either way.
+declare -ga DETECT_CRITICAL_APPS=()
+
+detect_critical_apps() {
+  DETECT_CRITICAL_APPS=()
+  local pkg role
+
+  for role in DIALER SMS EMERGENCY; do
+    while IFS= read -r pkg; do
+      case "$pkg" in
+        ''|*[!a-zA-Z0-9._]*) continue ;;
+      esac
+      DETECT_CRITICAL_APPS+=("$pkg")
+    done < <(cmd role get-role-holders "android.app.role.$role" 2>/dev/null | tr -d '\r')
+  done
+
+  while IFS= read -r pkg; do
+    case "$pkg" in
+      ''|*[!a-zA-Z0-9._]*) continue ;;
+    esac
+    DETECT_CRITICAL_APPS+=("$pkg")
+  done < <(dumpsys deviceidle 2>/dev/null | tr -d '\r' | awk '
+    /^Whitelist (system|user) apps:/ { collecting=1; next }
+    /^Whitelist / { collecting=0 }
+    collecting {
+      line=$0
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", line)
+      if (line != "") print line
+    }
+  ')
+
+  log_msg 2 "Critical/protected apps: ${DETECT_CRITICAL_APPS[*]:-(none detected)}"
+}
+
+# Whether $1 (a package name) is in the protected list above - the
+# single check action_apps_apply/undo need, alongside the existing
+# allowlist check.
+is_critical_app() {
+  local app="$1" c
+  for c in "${DETECT_CRITICAL_APPS[@]}"; do
+    [ "$c" = "$app" ] && return 0
+  done
+  return 1
+}

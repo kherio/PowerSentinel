@@ -22,10 +22,14 @@ action_apps_apply() {
   fi
   # SECURITY: see docs/security-audit.md - hardened while-read (not an
   # unquoted for-loop) and grep -Fxq (fixed string, whole line, not -E)
-  # against the allowlist, exactly as already audited.
+  # against the allowlist, exactly as already audited. is_critical_app
+  # (PowerSentinel-detect.sh) layers on top: the device's own default
+  # dialer/SMS/emergency apps, and anything already exempted from
+  # Android's own battery optimization, are protected regardless of
+  # allowlist/denylist configuration.
   while IFS= read -r app; do
     [ -n "$app" ] || continue
-    if grep -Fxq -- "$app" "$allowlist"; then
+    if grep -Fxq -- "$app" "$allowlist" || is_critical_app "$app"; then
       continue
     fi
     if [ "$handle_apps" = "nice" ]; then
@@ -50,7 +54,7 @@ action_apps_undo() {
   [ "$handle_apps" = "false" ] && return
   while IFS= read -r app; do
     [ -n "$app" ] || continue
-    if grep -Fxq -- "$app" "$allowlist"; then
+    if grep -Fxq -- "$app" "$allowlist" || is_critical_app "$app"; then
       continue
     fi
     if [ "$handle_apps" = "nice" ]; then

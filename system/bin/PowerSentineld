@@ -744,6 +744,12 @@ auto_map_cores
 # Find the rfkill command once and for all
 find_rfkill_command
 
+# Critical app protection: detect the device's default dialer/SMS/
+# emergency apps and anything already exempted from battery
+# optimization, so action_apps_apply/undo can protect them regardless
+# of allowlist/denylist configuration.
+detect_critical_apps
+
 # Capability Manager: probe once what this device/ROM can actually do,
 # so actions.sh can skip (with a clear log message) instead of blindly
 # attempting something unsupported every single cycle. Runs after the
