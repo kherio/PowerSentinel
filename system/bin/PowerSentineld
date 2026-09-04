@@ -18,6 +18,27 @@ declare -a active_events
 # handle_event() in events.sh) so the WebUI can show "activo desde
 # HH:MM" instead of just "activo".
 declare -gA active_event_start_ts=()
+
+# BUG FIX (found by an external code review, not independently
+# reproduced but cheap and safe enough to fix as defense-in-depth
+# regardless): the watchdog in service.sh only ever checked `pgrep -f
+# PowerSentineld` before deciding whether to launch another instance -
+# no lock, no PID file, nothing atomic about that decision. A daemon
+# that toggles CPU governors, core online state, WiFi, and system
+# properties genuinely shouldn't risk two instances existing at once,
+# even if the exact race window couldn't be pinned down concretely.
+#
+# Writing the PID here, as early as possible in the process's life
+# (before migration, capability probing, or anything else that takes
+# real time), means the watchdog's own check (see service.sh) has an
+# authoritative, promptly-updated record of who's actually running -
+# and since `PowerSentinelctl reload`'s `exec "$0"` replaces the
+# process image in place without changing the PID, this file stays
+# correct straight through a reload with no extra bookkeeping needed.
+: "${pid_file:=/data/local/tmp/PowerSentinel/PowerSentineld.pid}"
+mkdir -p "$(dirname "$pid_file")" 2>/dev/null
+echo "$$" > "$pid_file" 2>/dev/null
+chmod 600 "$pid_file" 2>/dev/null
 declare -a cpus
 declare -a cpu_freqs
 declare -a hp_cpus
