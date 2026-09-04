@@ -4,8 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PowerSentinel</title>
-  <script type="module" crossorigin src="./assets/index-DvvSjFQC.js"></script>
-  <link rel="stylesheet" crossorigin href="./assets/index-DS9H8rId.css">
+  <script type="module" crossorigin src="./assets/index-BZ0CYF1Q.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-CXaf6s_3.css">
 </head>
 <body class="app-shell">
   <header class="app-header">
@@ -25,6 +25,31 @@
 
       <div class="scroll-area" id="e-pull-area">
         <div class="pull-indicator" id="e-pull-indicator"></div>
+
+        <div class="card dashboard-card" style="margin-bottom:14px;">
+          <div class="dashboard-header">
+            <span class="dashboard-title">PowerSentinel</span>
+            <span class="dashboard-protection-badge" id="e-protection-badge"></span>
+          </div>
+          <div class="dashboard-summary" id="e-dashboard-summary"></div>
+          <div class="dashboard-mode" id="e-dashboard-mode"></div>
+          <div class="dashboard-slider-wrap" id="e-dashboard-slider-wrap" style="display:none;">
+            <div class="dashboard-slider-track">
+              <span data-i18n="dashboard.sliderNormal">Normal</span>
+              <span data-i18n="dashboard.sliderSaving">Ahorro</span>
+              <span data-i18n="dashboard.sliderExtreme">Extremo</span>
+            </div>
+            <div class="dashboard-slider-bar">
+              <div class="dashboard-slider-dot" id="e-dashboard-slider-dot"></div>
+            </div>
+          </div>
+          <button class="dashboard-detail-toggle" id="e-dashboard-detail-toggle" type="button" style="display:none;">
+            <span data-i18n="dashboard.details">Detalles</span><span class="aggression-detail-caret">›</span>
+          </button>
+          <div class="dashboard-detail-body" id="e-dashboard-detail-body" style="display:none;"></div>
+        </div>
+
+        <div id="e-active-now-wrap"></div>
 
         <div class="battery-card" id="e-battery-card" style="display:none;">
           <div class="battery-level-wrap">

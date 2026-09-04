@@ -90,6 +90,158 @@ function estimateRemainingHours(currentLevel) {
   return ratePerHour > 0 ? currentLevel / ratePerHour : null;
 }
 
+// ---------- Dashboard ("centro de control energético") ----------
+// Nombre amistoso, icono y explicación de "por qué" por evento -
+// generados a partir de lo que el propio evento representa, no un
+// texto libre inventado por evento personalizado (esos caen al
+// genérico "según tu configuración"). Los mecanismos que se muestran
+// (CPU/Doze/Apps/GMS/WiFi) vienen de active_mechanisms_snapshot() en
+// el demonio - datos reales resueltos, nunca inventados aquí.
+const EVENT_META = {
+  boot: { icon: '🔌', nameKey: 'dashboard.eventBoot', whyKey: 'dashboard.whyBoot' },
+  charging: { icon: '🔋', nameKey: 'dashboard.eventCharging', whyKey: 'dashboard.whyCharging' },
+  screen_off: { icon: '📴', nameKey: 'dashboard.eventScreenOff', whyKey: 'dashboard.whyScreenOff' },
+  low_power: { icon: '🪫', nameKey: 'dashboard.eventLowPower', whyKey: 'dashboard.whyLowPower' },
+  night: { icon: '🌙', nameKey: 'dashboard.eventNight', whyKey: 'dashboard.whyNight' },
+  thermal: { icon: '🌡️', nameKey: 'dashboard.eventThermal', whyKey: 'dashboard.whyThermal' },
+  manual: { icon: '✋', nameKey: 'dashboard.eventManual', whyKey: 'dashboard.whyManual' },
+  adaptive_tier1: { icon: '🌤️', nameKey: 'dashboard.eventTier1', whyKey: 'dashboard.whyAdaptive' },
+  adaptive_tier2: { icon: '⛅', nameKey: 'dashboard.eventTier2', whyKey: 'dashboard.whyAdaptive' },
+  adaptive_tier3: { icon: '⛈️', nameKey: 'dashboard.eventTier3', whyKey: 'dashboard.whyAdaptive' }
+};
+
+function eventDisplayName(name) {
+  const meta = EVENT_META[name];
+  return meta ? t(meta.nameKey) : name;
+}
+function eventIcon(name) {
+  const meta = EVENT_META[name];
+  return meta ? meta.icon : '⚙️';
+}
+function eventWhy(name) {
+  const meta = EVENT_META[name];
+  return meta ? t(meta.whyKey) : t('dashboard.whyCustom');
+}
+function formatSigned(n) {
+  if (typeof n !== 'number') return '—';
+  return (n >= 0 ? '+' : '') + n;
+}
+function formatSinceTime(ts) {
+  if (!ts) return '';
+  return new Date(ts * 1000).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+}
+
+// Solo para elegir el NOMBRE del modo (Normal/Ahorro suave/Ahorro
+// moderado/Extremo) - la posición del punto en el slider usa
+// directamente el score real (0-100), esto solo bucketiza contra los
+// umbrales REALMENTE configurados (que difieren entre los perfiles
+// Bajo/Medio/Alto), nunca un valor fijo adivinado.
+function pressureScoreTier(score, thresholds) {
+  const [t1, t2, t3] = thresholds || [20, 45, 70];
+  if (score >= t3) return 3;
+  if (score >= t2) return 2;
+  if (score >= t1) return 1;
+  return 0;
+}
+
+function renderDashboard(sys) {
+  const active = !!(sys.activeEvents && sys.activeEvents.length);
+  const badge = document.getElementById('e-protection-badge');
+  badge.textContent = active ? t('dashboard.protectionActive') : t('dashboard.protectionInactive');
+  badge.className = 'dashboard-protection-badge' + (active ? ' active' : ' inactive');
+
+  const summary = document.getElementById('e-dashboard-summary');
+  if (sys.battery) {
+    const screenState = active && sys.activeEvents.indexOf('screen_off') !== -1
+      ? t('dashboard.screenOff') : t('dashboard.screenOn');
+    summary.textContent = t('dashboard.summaryLine', { level: sys.battery.level, temp: sys.battery.temp, screen: screenState });
+  } else {
+    summary.textContent = '';
+  }
+
+  const modeEl = document.getElementById('e-dashboard-mode');
+  const sliderWrap = document.getElementById('e-dashboard-slider-wrap');
+  const toggle = document.getElementById('e-dashboard-detail-toggle');
+  const detailBody = document.getElementById('e-dashboard-detail-body');
+
+  if (typeof sys.pressureScore === 'number') {
+    const tier = pressureScoreTier(sys.pressureScore, sys.pressureThresholds);
+    const modeNames = [t('dashboard.modeNormal'), t('dashboard.modeLight'), t('dashboard.modeModerate'), t('dashboard.modeExtreme')];
+    modeEl.textContent = t('dashboard.currentMode', { mode: modeNames[tier] });
+
+    sliderWrap.style.display = 'block';
+    document.getElementById('e-dashboard-slider-dot').style.left = `${Math.min(100, Math.max(0, sys.pressureScore))}%`;
+
+    toggle.style.display = 'flex';
+    if (!toggle.dataset.bound) {
+      toggle.dataset.bound = '1';
+      toggle.addEventListener('click', () => {
+        const expand = detailBody.style.display === 'none';
+        detailBody.style.display = expand ? 'block' : 'none';
+        toggle.classList.toggle('expanded', expand);
+      });
+    }
+    if (sys.pressureBreakdown) {
+      const b = sys.pressureBreakdown;
+      const items = [
+        { label: t('dashboard.pressureLabel'), value: `${sys.pressureScore}/100` },
+        { label: t('dashboard.tempLabel'), value: formatSigned(b.temperature) },
+        { label: t('dashboard.batteryLabel'), value: formatSigned(b.battery) },
+        { label: t('dashboard.screenLabel'), value: formatSigned(b.screen_off) },
+        { label: t('dashboard.nightLabel'), value: formatSigned(b.night) },
+        { label: t('dashboard.loadLabel'), value: formatSigned(b.cpu_load) },
+        { label: t('dashboard.chargingLabel'), value: formatSigned(b.charging) }
+      ];
+      detailBody.innerHTML = items.map((i) =>
+        `<div class="mechanism-row"><span class="mechanism-cat">${escapeHtml(i.label)}</span><span class="mechanism-treatment">${escapeHtml(i.value)}</span></div>`
+      ).join('');
+    }
+  } else {
+    sliderWrap.style.display = 'none';
+    toggle.style.display = 'none';
+    detailBody.style.display = 'none';
+    modeEl.textContent = active
+      ? t('dashboard.currentMode', { mode: sys.activeEvents.map(eventDisplayName).join(', ') })
+      : t('dashboard.modeIdle');
+  }
+}
+
+// "¿Qué está haciendo ahora?" - una tarjeta por evento activo, cada
+// una con sus propios mecanismos resueltos (ActiveMechanisms, ya
+// individualizados por evento en el demonio) y desde cuándo
+// (ActiveEventStartTimes) - nunca una mezcla combinada de "lo que
+// pasa en general", sino el detalle real de cada evento por separado.
+function mechanismRows(mech) {
+  const on = (v) => v && v !== 'false';
+  return [
+    { label: t('dashboard.mechCpu'), value: on(mech.handle_cores) ? '✓' : '—' },
+    { label: t('dashboard.mechDoze'), value: on(mech.doze) ? '✓' : '—' },
+    { label: t('dashboard.mechApps'), value: on(mech.handle_apps) ? mech.handle_apps : t('dashboard.mechNoChange') },
+    { label: t('dashboard.mechGms'), value: on(mech.handle_gms) ? mech.handle_gms : t('dashboard.mechNoChange') },
+    { label: t('dashboard.mechWifi'), value: mech.kill_wifi === 'true' ? '✓' : t('dashboard.mechNoChange') }
+  ];
+}
+
+function renderActiveNow(sys) {
+  const wrap = document.getElementById('e-active-now-wrap');
+  const mechanisms = sys.activeMechanisms || [];
+  if (!mechanisms.length) { wrap.innerHTML = ''; return; }
+
+  wrap.innerHTML = mechanisms.map((mech) => {
+    const startTs = sys.activeEventStartTimes && sys.activeEventStartTimes[mech.event];
+    const since = startTs ? t('dashboard.activeSince', { time: formatSinceTime(startTs) }) : '';
+    const rows = mechanismRows(mech).map((r) =>
+      `<div class="mechanism-row"><span class="mechanism-cat">${escapeHtml(r.label)}</span><span class="mechanism-treatment">${escapeHtml(r.value)}</span></div>`
+    ).join('');
+    return `<div class="card active-now-card" style="margin-bottom:14px;">
+      <div class="active-now-header"><span class="active-now-icon">${eventIcon(mech.event)}</span><span class="active-now-title">${escapeHtml(eventDisplayName(mech.event))}</span></div>
+      ${since ? `<div class="active-now-since">${escapeHtml(since)}</div>` : ''}
+      <div class="active-now-mechanisms">${rows}</div>
+      <p class="hint active-now-why">${escapeHtml(eventWhy(mech.event))}</p>
+    </div>`;
+  }).join('');
+}
+
 function renderBattery(batt) {
   const card = document.getElementById('e-battery-card');
   if (!batt) { card.style.display = 'none'; return; }
@@ -149,6 +301,16 @@ function render(text) {
       sys.battery = { level: parseInt(m[1], 10), temp: parseInt(m[2], 10), voltage: parseInt(m[3], 10), charging: m[4] === 'true' };
     } else if ((m = line.match(/^activeevents:\s*(.*)$/i))) {
       sys.activeEvents = m[1].trim() ? m[1].trim().split(/\s+/) : [];
+    } else if ((m = line.match(/^pressurescore:\s*(\d+)/i))) {
+      sys.pressureScore = parseInt(m[1], 10);
+    } else if ((m = line.match(/^pressurebreakdown:\s*(\{.*\})/i))) {
+      try { sys.pressureBreakdown = JSON.parse(m[1]); } catch (e) { /* ignore */ }
+    } else if ((m = line.match(/^pressurethresholds:\s*(\d+)\s+(\d+)\s+(\d+)/i))) {
+      sys.pressureThresholds = [parseInt(m[1], 10), parseInt(m[2], 10), parseInt(m[3], 10)];
+    } else if ((m = line.match(/^activeeventstarttimes:\s*(\{.*\})/i))) {
+      try { sys.activeEventStartTimes = JSON.parse(m[1]); } catch (e) { /* ignore */ }
+    } else if ((m = line.match(/^activemechanisms:\s*(\[.*\])/i))) {
+      try { sys.activeMechanisms = JSON.parse(m[1]); } catch (e) { /* ignore */ }
     } else if (line.toLowerCase().indexOf('error') === 0) {
       sys.error = line;
     } else {
@@ -160,6 +322,8 @@ function render(text) {
   const heroSub = document.getElementById('e-hero-sub');
 
   renderBattery(sys.battery);
+  renderDashboard(sys);
+  renderActiveNow(sys);
 
   const aeRow = document.getElementById('e-active-events');
   aeRow.innerHTML = (sys.activeEvents && sys.activeEvents.length)

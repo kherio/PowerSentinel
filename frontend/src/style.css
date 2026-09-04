@@ -485,6 +485,117 @@ main {
   font-family: var(--mono);
 }
 
+.dashboard-card { padding: 16px; }
+.dashboard-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.dashboard-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+}
+.dashboard-protection-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 999px;
+}
+.dashboard-protection-badge.active {
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+.dashboard-protection-badge.inactive {
+  background: var(--surface-2);
+  color: var(--muted);
+}
+.dashboard-summary {
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+.dashboard-mode {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 10px;
+}
+.dashboard-slider-wrap { margin-bottom: 12px; }
+.dashboard-slider-track {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+.dashboard-slider-bar {
+  position: relative;
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--accent-dim), var(--warn));
+}
+.dashboard-slider-dot {
+  position: absolute;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--text);
+  border: 2px solid var(--surface);
+  transform: translate(-50%, -50%);
+  transition: left 0.3s ease;
+}
+.dashboard-detail-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+}
+.dashboard-detail-toggle .aggression-detail-caret {
+  transition: transform 0.15s ease;
+}
+.dashboard-detail-toggle.expanded .aggression-detail-caret {
+  transform: rotate(90deg);
+}
+.dashboard-detail-body { margin-top: 10px; }
+
+.active-now-card { padding: 14px; }
+.active-now-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.active-now-icon { font-size: 18px; }
+.active-now-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+.active-now-since {
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+.active-now-mechanisms {
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  padding: 4px 0;
+  margin-bottom: 8px;
+}
+.active-now-why {
+  margin: 0;
+}
+
 
 .battery-summary {
   font-size: 20px;

@@ -301,6 +301,7 @@ update_status() {
   if [ "$(config_get adaptive_mode false)" = "true" ]; then
     echo "PressureScore: $(compute_pressure_score)" >> "$status_file"
     echo "PressureBreakdown: $(pressure_breakdown)" >> "$status_file"
+    echo "PressureThresholds: $(getconf adaptive_tier1_threshold 20) $(getconf adaptive_tier2_threshold 45) $(getconf adaptive_tier3_threshold 70)" >> "$status_file"
   fi
   if [ "${#active_event_start_ts[@]}" -gt 0 ]; then
     local _ts_json
