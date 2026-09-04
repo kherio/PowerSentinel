@@ -1,3 +1,9 @@
+### v3.33.0
+  - **CRITICAL FIX: detección de núcleos "high power" rota en SoCs simétricos** (el diseño más común). `auto_map_cores()` usaba `uniq -u`, que solo detecta valores que aparecen exactamente una vez - con 4 núcleos a una frecuencia y 4 a otra, ninguna era "única", dejando la lista de núcleos de alto rendimiento completamente vacía. Esto hacía que `disable_cores=auto` no desactivara nada, y `handle_cores=auto` forzara el modo ahorro en **todos** los núcleos, incluidos los de rendimiento.
+  - **Watchdog más robusto**: sustituido el simple `pgrep` por un fichero PID con comprobación de vida real e identidad del proceso, para no arriesgar una segunda instancia del demonio.
+  - **CRITICAL FIX x2: GMS y WiFi ahora solo restauran lo que PowerSentinel cambió realmente** - mismo patrón ya corregido antes en apps y `low_ram`. Si apagas el WiFi tú mismo, PowerSentinel ya no lo reactivará al terminar un evento. Reforzada también la idempotencia de `low_ram` ante llamadas repetidas.
+  - Hallazgos de una revisión de código externa, verificados uno a uno con reproducciones reales antes de corregir nada.
+
 ### v3.32.0
   - **Navegación reestructurada**: Inicio / Perfiles / Automatización / Apps / Análisis / Ajustes. Apps pasa a ser su propia pestaña de nivel superior (antes vivía dentro de Config → Avanzado). "Log" pasa a llamarse "Análisis", con su subpestaña técnica renombrada a "Actividad". "Acerca de" pasa a llamarse "Ajustes".
   - **Ajustes avanzados**: nueva tarjeta en Ajustes que señaliza claramente las 4 categorías técnicas (Motor, CPU, Apps, Sistema) con un acceso directo a Automatización en modo Avanzado - nada se ha eliminado, simplemente ya no aparece nada más abrir la app.
