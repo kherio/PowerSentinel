@@ -1,3 +1,9 @@
+### v3.29.0
+  - **Estado se convierte en un centro de control energético.** Nueva tarjeta principal: "Protección energética: ACTIVA/inactiva", resumen de batería/temperatura/pantalla, y el modo actual en lenguaje llano. En modo adaptativo, un indicador visual Normal → Ahorro → Extremo posicionado por la presión real, con "Detalles" (colapsado por defecto) mostrando el desglose real: presión total, y cuánto aporta cada factor (temperatura, batería, pantalla apagada, noche, carga de CPU).
+  - **"¿Qué está haciendo ahora?"**: una tarjeta por cada evento activo, con icono, nombre en lenguaje llano, "Activo desde HH:MM", los mecanismos realmente aplicados (CPU/Doze/Apps/GMS/WiFi) y una frase explicando por qué se activó.
+  - **Objetivo vs Mecanismo** en el modo Básico: los niveles ahora se presentan como 🚀 Máximo rendimiento / ⚖️ Equilibrado / 🔋 Máxima autonomía en vez de Baja/Media/Alta, con "Cómo se consigue" como una lista técnica colapsable (Apps → limitar procesos, Doze → profundo...) en vez de mostrarse siempre.
+  - Trabajo de fondo en el demonio: desglose real de la presión energética, hora de inicio de cada evento activo, y foto de los mecanismos resueltos por evento - todo expuesto por primera vez fuera del propio proceso del demonio.
+
 ### v3.28.0
   - **Per-app policy screen** (Config → Avanzado → Apps): browse every installed app and set its 4-level policy directly (never touch / gentle only / follow event / always aggressive), instead of only reachable through `PowerSentinelconf` on a terminal.
   - **Usage-frequency context** on the same screen, via a new `PowerSentinel-usagerank` script - queries Android's own App Standby Buckets (`am get-standby-bucket`) one app at a time using its small, documented single-package form, rather than the fragile raw `dumpsys usagestats` text dump. Purely informational, never wired into any automatic decision.
