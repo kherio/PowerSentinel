@@ -1,3 +1,12 @@
+### v3.27.0
+  - **CRITICAL FIX: saved config was silently wiped, or crashed the daemon, on every reload.** `serializeConfig()` wrote `"version"` at the top level of the JSON, but the daemon (both the migration idempotency check and the normal config read) expects it *inside* `global`. Every save from the WebUI immediately triggers a daemon reload, which - finding the version key missing - either rebuilt the config from a stale, frozen `.conf` snapshot (discarding whatever was just saved) or crashed with "FATAL: could not migrate to v2". This affected every save made through the WebUI since the JSON config format was introduced (v3.10.0).
+  - Basic mode: selecting an aggressiveness level now shows a detailed, tier-by-tier breakdown of what it actually does, generated directly from the same data used to apply the setting.
+  - Config (Advanced): the allow/deny apps picker now appears right under "Gestión de apps" in each event, instead of at the very bottom of the card.
+  - Hardware detection: a new "Hardware detectado" section in Acerca de shows the real device manufacturer/model and which mechanisms it actually supports. The existing Samsung/OnePlus risk warnings now only show when they're actually relevant to the detected device, instead of to everyone regardless of hardware.
+  - On-demand CPU consumption ranking (Estado tab) - explicitly triggered, sorted by %, with zero ongoing cost when not in use.
+  - Acerca de: removed the fork/DethByte64 attribution, added the project's Telegram channel link.
+  - Expanded the README with a Philosophy section and a full Daemon architecture explanation, and brought the Features list up to date with everything built since the JSON config rewrite.
+
 ### v3.26.0
   - **3 critical fixes, all reported by a user and verified with real reproductions before being trusted.**
   - Apps: `action_apps_undo()` had no per-app record of what PowerSentinel actually changed - an app already suspended by something else before PowerSentinel touched it could get force-unsuspended once the event ended, and `nice` always hard-reset to 0 regardless of a process's real original value. Fixed with per-app ownership tracking (`PowerSentinel.appstate`) - only what PowerSentinel itself actually changed gets restored, and the real original `nice` value is preserved.
