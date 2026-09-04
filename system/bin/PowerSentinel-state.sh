@@ -30,31 +30,42 @@
 
 : "${state_file:=/data/local/tmp/PowerSentinel/PowerSentinel.state}"
 
-# Persists the current $active_events array as a JSON array of event
-# names. Called by the Event Manager every time an event locks or
-# unlocks - cheap (jq on a handful of short strings), and correctness
-# here matters more than shaving one process spawn.
+# Persists the current $active_events array, together with when each
+# one started ($active_event_start_ts, events.sh), as a JSON object
+# {"event_name": start_unix_ts, ...} - the extra timestamp is what lets
+# the WebUI show "activo desde HH:MM" rather than just "activo".
+# Called by the Event Manager every time an event locks or unlocks -
+# cheap (jq on a handful of short strings), and correctness here
+# matters more than shaving one process spawn.
 state_save() {
-  local dir tmp
+  local dir tmp name
   dir="$(dirname "$state_file")"
   mkdir -p "$dir" 2>/dev/null
   tmp="$(mktemp "$dir/.PowerSentinel.state.XXXXXX")" || return 1
   if [ "${#active_events[@]}" -eq 0 ]; then
-    echo '[]' > "$tmp"
+    echo '{}' > "$tmp"
   else
-    "$JQ" -cn --args '$ARGS.positional' "${active_events[@]}" > "$tmp" 2>/dev/null
+    {
+      for name in "${active_events[@]}"; do
+        "$JQ" -cn --arg n "$name" --argjson ts "${active_event_start_ts[$name]:-0}" '{($n): $ts}' 2>/dev/null
+      done
+    } | "$JQ" -cs 'add' > "$tmp" 2>/dev/null
   fi
   chmod 600 "$tmp" 2>/dev/null
   mv "$tmp" "$state_file"
 }
 
 # Reads the persisted list of events that were active before this
-# daemon start - one per line, empty output if there's no state file or
-# it's unreadable/corrupt (fails safe: nothing to reconcile, rather than
-# erroring the whole startup).
+# daemon start - one NAME per line (reconcile only needs to know what
+# to undo, not when it started), empty output if there's no state file
+# or it's unreadable/corrupt (fails safe: nothing to reconcile, rather
+# than erroring the whole startup). Tolerates both the current object
+# format and the old plain-array format from before start times were
+# tracked, so a state file written by a previous daemon version isn't
+# just silently ignored on the first upgrade.
 state_load() {
   [ -r "$state_file" ] || return 0
-  "$JQ" -r '.[]?' "$state_file" 2>/dev/null
+  "$JQ" -r 'if type == "object" then keys[] else .[]? end' "$state_file" 2>/dev/null
 }
 
 # Startup-only: force-undoes every event the persisted state says was

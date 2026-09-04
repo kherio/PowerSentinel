@@ -13,6 +13,11 @@ conf="/data/local/tmp/PowerSentinel/PowerSentinel.conf"
 . "$(dirname "$0")/PowerSentinel-state.sh"
 . "$(dirname "$0")/PowerSentinel-events.sh"
 declare -a active_events
+# When each currently-active event started (unix seconds), keyed by
+# event name - populated alongside active_events itself (see
+# handle_event() in events.sh) so the WebUI can show "activo desde
+# HH:MM" instead of just "activo".
+declare -gA active_event_start_ts=()
 declare -a cpus
 declare -a cpu_freqs
 declare -a hp_cpus
@@ -286,6 +291,27 @@ update_status() {
   echo "Manufacturer: $(getprop ro.product.manufacturer 2>/dev/null)" >> "$status_file"
   echo "Model: $(getprop ro.product.model 2>/dev/null)" >> "$status_file"
   echo "Capabilities: $(capabilities_summary)" >> "$status_file"
+
+  # "¿Qué está haciendo ahora?" / dashboard roadmap items: the real
+  # pressure score AND its breakdown by contributing factor (only
+  # meaningful while the adaptive engine is actually the thing driving
+  # decisions), and when each currently-active event started - both
+  # needed to explain, in plain language, what's active and why,
+  # instead of a technical tier number with no context.
+  if [ "$(config_get adaptive_mode false)" = "true" ]; then
+    echo "PressureScore: $(compute_pressure_score)" >> "$status_file"
+    echo "PressureBreakdown: $(pressure_breakdown)" >> "$status_file"
+  fi
+  if [ "${#active_event_start_ts[@]}" -gt 0 ]; then
+    local _ts_json
+    _ts_json="$({
+      for _ts_name in "${!active_event_start_ts[@]}"; do
+        "$JQ" -cn --arg n "$_ts_name" --argjson ts "${active_event_start_ts[$_ts_name]}" '{($n): $ts}' 2>/dev/null
+      done
+    } | "$JQ" -cs 'add' 2>/dev/null)"
+    echo "ActiveEventStartTimes: ${_ts_json:-\{\}}" >> "$status_file"
+  fi
+  echo "ActiveMechanisms: $(active_mechanisms_snapshot)" >> "$status_file"
 }
 
 # read_config() (V1) removed - see below, v1 support has been

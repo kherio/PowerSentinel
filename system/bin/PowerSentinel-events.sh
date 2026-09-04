@@ -80,55 +80,107 @@ is_event_locked() {
 # currently-active event's own configuration gets correctly re-applied
 # after another event ends, rather than the ending event's undo being
 # left as the final word by default regardless of what's still active.
+# Resolves ONE event's own field values into the same global variables
+# handle_event() itself resolves them into (handle_apps, handle_cores,
+# doze, ...) - shared by reassert_active_events() (which then applies
+# them) and active_mechanisms_snapshot() (which only reports them),
+# so this logic exists in exactly one place rather than three. Still
+# deliberately NOT shared with handle_event() itself - see the comment
+# on reassert_active_events() below for why that one stays separate.
+_resolve_event_fields() {
+  local ev="$1" val
+  handle_cores=false
+  disable_cores=false
+  handle_apps=false
+  allowlist=null
+  denylist=null
+  handle_proc=false
+  proc_file=null
+  handle_gms=false
+  low_ram=false
+  doze=false
+  kill_wifi=false
+
+  val="$(config_get_event_raw "$ev" handle_cores false)"
+  [ "$val" != "false" ] && handle_cores="$val"
+  val="$(config_get_event_raw "$ev" disable_cores false)"
+  [ "$val" != "false" ] && disable_cores="$val"
+  val="$(config_get_event_raw "$ev" handle_apps false)"
+  [ "$val" != "false" ] && handle_apps="$val"
+  val="$(config_get_event_raw "$ev" allowlist "")"
+  [ -n "$val" ] && [ -f "$val" ] && allowlist="$val"
+  val="$(config_get_event_raw "$ev" denylist "")"
+  [ -n "$val" ] && [ -f "$val" ] && denylist="$val"
+  val="$(config_get_event_raw "$ev" handle_proc false)"
+  [ "$val" != "false" ] && handle_proc="$val"
+  val="$(config_get_event_raw "$ev" proc_file "")"
+  [ -n "$val" ] && [ -f "$val" ] && proc_file="$val"
+  val="$(config_get_event_raw "$ev" handle_gms false)"
+  [ "$val" != "false" ] && handle_gms="$val"
+  val="$(config_get_event_raw "$ev" low_ram false)"
+  [ "$val" = "true" ] && low_ram="true"
+  val="$(config_get_event_raw "$ev" doze false)"
+  [ "$val" != "false" ] && doze="$val"
+  val="$(config_get_event_raw "$ev" kill_wifi false)"
+  [ "$val" = "true" ] && kill_wifi="true"
+
+  if [ "$handle_apps" != "false" ] && [ "$allowlist" = "null" ] && [ "$denylist" = "null" ]; then
+    handle_apps=false
+  fi
+  if [ "$handle_proc" != "false" ] && [ "$proc_file" = "null" ]; then
+    handle_proc="false"
+  fi
+}
+
 reassert_active_events() {
-  local ev val
+  local ev
   for ev in "${active_events[@]}"; do
     [ -n "$ev" ] || continue
-
-    handle_cores=false
-    disable_cores=false
-    handle_apps=false
-    allowlist=null
-    denylist=null
-    handle_proc=false
-    proc_file=null
-    handle_gms=false
-    low_ram=false
-    doze=false
-    kill_wifi=false
-
-    val="$(config_get_event_raw "$ev" handle_cores false)"
-    [ "$val" != "false" ] && handle_cores="$val"
-    val="$(config_get_event_raw "$ev" disable_cores false)"
-    [ "$val" != "false" ] && disable_cores="$val"
-    val="$(config_get_event_raw "$ev" handle_apps false)"
-    [ "$val" != "false" ] && handle_apps="$val"
-    val="$(config_get_event_raw "$ev" allowlist "")"
-    [ -n "$val" ] && [ -f "$val" ] && allowlist="$val"
-    val="$(config_get_event_raw "$ev" denylist "")"
-    [ -n "$val" ] && [ -f "$val" ] && denylist="$val"
-    val="$(config_get_event_raw "$ev" handle_proc false)"
-    [ "$val" != "false" ] && handle_proc="$val"
-    val="$(config_get_event_raw "$ev" proc_file "")"
-    [ -n "$val" ] && [ -f "$val" ] && proc_file="$val"
-    val="$(config_get_event_raw "$ev" handle_gms false)"
-    [ "$val" != "false" ] && handle_gms="$val"
-    val="$(config_get_event_raw "$ev" low_ram false)"
-    [ "$val" = "true" ] && low_ram="true"
-    val="$(config_get_event_raw "$ev" doze false)"
-    [ "$val" != "false" ] && doze="$val"
-    val="$(config_get_event_raw "$ev" kill_wifi false)"
-    [ "$val" = "true" ] && kill_wifi="true"
-
-    if [ "$handle_apps" != "false" ] && [ "$allowlist" = "null" ] && [ "$denylist" = "null" ]; then
-      handle_apps=false
-    fi
-    if [ "$handle_proc" != "false" ] && [ "$proc_file" = "null" ]; then
-      handle_proc="false"
-    fi
-
+    _resolve_event_fields "$ev"
     enable_pwr_save
   done
+}
+
+# "¿Qué está haciendo ahora?" from the roadmap: a JSON snapshot of
+# every currently-active event's OWN resolved fields (not the combined
+# global state after reassert - each event's own configuration,
+# individually), for the WebUI to show plainly what's applied and why,
+# per active event, instead of one opaque tier number.
+active_mechanisms_snapshot() {
+  local ev items=()
+  # This can run from inside update_status(), itself called from
+  # enable_pwr_save()/disable_pwr_save() mid-flow while the CALLING
+  # event's own resolved fields (handle_apps, doze, ...) are still the
+  # live global state its own caller may still expect after returning.
+  # Save and restore them around this read-only snapshot so calling it
+  # here never leaks a DIFFERENT event's resolution into that flow.
+  local _save_handle_cores="$handle_cores" _save_disable_cores="$disable_cores"
+  local _save_handle_apps="$handle_apps" _save_allowlist="$allowlist" _save_denylist="$denylist"
+  local _save_handle_proc="$handle_proc" _save_proc_file="$proc_file"
+  local _save_handle_gms="$handle_gms" _save_low_ram="$low_ram"
+  local _save_doze="$doze" _save_kill_wifi="$kill_wifi"
+
+  for ev in "${active_events[@]}"; do
+    [ -n "$ev" ] || continue
+    _resolve_event_fields "$ev"
+    items+=("$("$JQ" -cn \
+      --arg ev "$ev" --arg apps "$handle_apps" --arg cores "$handle_cores" \
+      --arg doze "$doze" --arg gms "$handle_gms" --arg wifi "$kill_wifi" --arg lowram "$low_ram" \
+      '{event: $ev, handle_apps: $apps, handle_cores: $cores, doze: $doze, handle_gms: $gms, kill_wifi: $wifi, low_ram: $lowram}' \
+      2>/dev/null)")
+  done
+
+  handle_cores="$_save_handle_cores"; disable_cores="$_save_disable_cores"
+  handle_apps="$_save_handle_apps"; allowlist="$_save_allowlist"; denylist="$_save_denylist"
+  handle_proc="$_save_handle_proc"; proc_file="$_save_proc_file"
+  handle_gms="$_save_handle_gms"; low_ram="$_save_low_ram"
+  doze="$_save_doze"; kill_wifi="$_save_kill_wifi"
+
+  if [ "${#items[@]}" -eq 0 ]; then
+    echo '[]'
+  else
+    printf '%s\n' "${items[@]}" | "$JQ" -cs '.' 2>/dev/null
+  fi
 }
 
 handle_event() {
@@ -146,6 +198,7 @@ handle_event() {
     else
       # lock the event
       active_events+=( "$event" )
+      active_event_start_ts["$event"]="$(date +%s)"
       state_save
     fi
   fi
@@ -238,6 +291,7 @@ handle_event() {
         unset "active_events[$i]"
       fi
     done
+    unset "active_event_start_ts[$event]"
     state_save
     reassert_active_events
     log_msg 1 "Actions for $event undone"

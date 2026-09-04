@@ -148,3 +148,51 @@ pressure_tier_for_score() {
   else echo 0
   fi
 }
+
+# Same formula as compute_pressure_score() above, but returns each
+# term separately instead of only the clamped sum - "presión: 42/100,
+# temperatura +10, batería +12, ..." from the roadmap. Deliberately a
+# separate function rather than refactoring compute_pressure_score()
+# to also return this: that function is the one the real tier decision
+# is based on every cycle, and duplicating ~25 lines of already-
+# correct, already-tested arithmetic here is a safer trade than
+# restructuring it just to expose a breakdown for display. The
+# individual terms can sum to something outside 0-100 before clamping
+# (e.g. very hot AND very low battery, or fully charged AND idle) -
+# that's fine for an explanatory breakdown, and the actual clamped
+# score is reported separately, from the real function, alongside it.
+pressure_breakdown() {
+  local level temp_c charging_flag
+  local screen_on load_int night_now over
+  local batt_term=0 temp_term=0 charge_term=0 screen_term=0 night_term=0 load_term=0
+
+  level="$DETECT_BATTERY_LEVEL"
+  temp_c="$(detect_battery_temp_c)"
+  charging_flag="$DETECT_BATTERY_CHARGING"
+  screen_on="$(is_device screen)"
+  get_night_times
+  night_now="$(is_night_now)"
+
+  batt_term=$(( (100 - level) * 40 / 100 ))
+  if [ "$temp_c" -gt 30 ]; then
+    over=$(( temp_c - 30 ))
+    [ "$over" -gt 10 ] && over=10
+    temp_term=$(( over * 3 ))
+  fi
+  [ "$charging_flag" = "true" ] && charge_term=-40
+  [ "$screen_on" = "false" ] && screen_term=15
+  [ "$night_now" = "true" ] && night_term=10
+
+  load_int="${DETECT_LOAD1%%.*}"
+  case "$load_int" in ''|*[!0-9]*) load_int=0 ;; esac
+  if [ "$load_int" -ge 2 ]; then
+    load_term=-20
+  elif [ "$load_int" -ge 1 ]; then
+    load_term=-10
+  fi
+
+  "$JQ" -cn --argjson batt "$batt_term" --argjson temp "$temp_term" --argjson charge "$charge_term" \
+    --argjson screen "$screen_term" --argjson night "$night_term" --argjson load "$load_term" \
+    '{battery: $batt, temperature: $temp, charging: $charge, screen_off: $screen, night: $night, cpu_load: $load}' \
+    2>/dev/null
+}
