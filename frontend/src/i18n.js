@@ -41,11 +41,12 @@ const DICT = {
   es: {
     'app.name': 'PowerSentinel',
 
-    'nav.estado': 'Estado',
-    'nav.config': 'Config',
-    'nav.log': 'Log',
+    'nav.estado': 'Inicio',
+    'nav.config': 'Automatización',
+    'nav.apps': 'Apps',
+    'nav.log': 'Análisis',
     'nav.perfiles': 'Perfiles',
-    'nav.acerca': 'Acerca de',
+    'nav.acerca': 'Ajustes',
 
     'common.loading': 'Cargando…',
     'common.update': 'Actualizar',
@@ -232,7 +233,6 @@ const DICT = {
     'config.basicCustomHint': 'Tienes ajustes personalizados desde el Modo avanzado. Elige un nivel para volver a uno de los predefinidos.',
     'config.basicAdvancedHint': '¿Necesitas más control? Activa el "Modo avanzado" arriba para configurar cada evento manualmente (apps, núcleos, WiFi, Doze...).',
     'config.tabText': 'Texto sin formato',
-    'config.tabApps': 'Apps',
     'apppolicy.title': 'Políticas por app',
     'apppolicy.hint': 'Anula, para una app concreta, lo que pida cualquier evento: nunca tocarla, tratarla siempre con suavidad, seguir el evento activo (por defecto), o tratarla siempre con la máxima severidad.',
     'apppolicy.searchPlaceholder': 'Buscar app…',
@@ -317,7 +317,7 @@ const DICT = {
     'toggle.disabled': 'Desactivado',
 
     'log.allLevels': 'Todos los niveles',
-    'log.tabLog': 'Log',
+    'log.tabLog': 'Actividad',
     'log.tabJournal': 'Historial',
     'log.tabEnergy': 'Energía',
     'energy.title': 'Batería y temperatura en el tiempo',
@@ -499,11 +499,12 @@ const DICT = {
   en: {
     'app.name': 'PowerSentinel',
 
-    'nav.estado': 'Status',
-    'nav.config': 'Config',
-    'nav.log': 'Log',
+    'nav.estado': 'Home',
+    'nav.config': 'Automation',
+    'nav.apps': 'Apps',
+    'nav.log': 'Analysis',
     'nav.perfiles': 'Profiles',
-    'nav.acerca': 'About',
+    'nav.acerca': 'Settings',
 
     'common.loading': 'Loading…',
     'common.update': 'Refresh',
@@ -690,7 +691,6 @@ const DICT = {
     'config.basicCustomHint': 'You have custom settings from Advanced mode. Pick a level to go back to one of the presets.',
     'config.basicAdvancedHint': 'Need more control? Turn on "Advanced mode" above to configure each event manually (apps, cores, WiFi, Doze...).',
     'config.tabText': 'Raw text',
-    'config.tabApps': 'Apps',
     'apppolicy.title': 'Per-app policy',
     'apppolicy.hint': "Overrides, for one specific app, whatever any event asks for: never touch it, always treat it gently, follow the active event (default), or always treat it with maximum severity.",
     'apppolicy.searchPlaceholder': 'Search app…',
@@ -775,7 +775,7 @@ const DICT = {
     'toggle.disabled': 'Disabled',
 
     'log.allLevels': 'All levels',
-    'log.tabLog': 'Log',
+    'log.tabLog': 'Activity',
     'log.tabJournal': 'History',
     'log.tabEnergy': 'Energy',
     'energy.title': 'Battery and temperature over time',

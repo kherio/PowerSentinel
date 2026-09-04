@@ -860,16 +860,12 @@ function switchSubTab(view) {
       return;
     }
     renderVersionView();
-  } else if (view === 'apps') {
-    renderAppPolicyScreen();
   }
   activeView = view;
   document.getElementById('c-view-form').style.display = view === 'form' ? 'block' : 'none';
   document.getElementById('c-view-text').style.display = view === 'text' ? 'flex' : 'none';
-  document.getElementById('c-view-apps').style.display = view === 'apps' ? 'block' : 'none';
   document.getElementById('c-tab-form').classList.toggle('active', view === 'form');
   document.getElementById('c-tab-text').classList.toggle('active', view === 'text');
-  document.getElementById('c-tab-apps').classList.toggle('active', view === 'apps');
 }
 
 function currentText() {
@@ -983,20 +979,12 @@ export function initConfig() {
   document.getElementById('c-tab-form').addEventListener('click', () => switchSubTab('form'));
   document.getElementById('c-event-search').addEventListener('input', filterEventCards);
   document.getElementById('c-tab-text').addEventListener('click', () => switchSubTab('text'));
-  document.getElementById('c-tab-apps').addEventListener('click', () => switchSubTab('apps'));
   document.getElementById('c-save-btn').addEventListener('click', saveFile);
   document.getElementById('c-reload-btn').addEventListener('click', () => loadFile(true));
   document.getElementById('c-restore-btn').addEventListener('click', restoreRecommended);
 
   document.getElementById('cb-adaptive-toggle').addEventListener('change', (e) => setAdaptiveEnabled(e.target.checked));
   document.getElementById('cb-safemode-btn').addEventListener('click', toggleSafeMode);
-
-  document.getElementById('ap-usage-btn').textContent = t('apppolicy.usageButton');
-  document.getElementById('ap-usage-btn').addEventListener('click', loadUsageBuckets);
-  document.getElementById('ap-policy-search').addEventListener('input', (e) => {
-    appPolicyState.filter = e.target.value;
-    drawAppPolicyList();
-  });
 
   document.getElementById('c-mode-info-btn').addEventListener('click', openModeModal);
   document.getElementById('mode-choice-basic-btn').addEventListener('click', () => chooseMode(false));
@@ -1065,3 +1053,27 @@ export function confirmLeaveConfig() {
   if (!loaded || !isDirty) return true;
   return window.confirm(t('config.leaveConfirm'));
 }
+
+// ---------- Apps (now its own top-level tab, not a Config subtab) ----------
+// The screen itself (renderAppPolicyScreen, drawAppPolicyList, etc.)
+// stays defined above in this same file - only its entry points move
+// here, since it no longer shares a lifecycle with Config's own
+// Basic/Advanced editing.
+let appsViewInited = false;
+
+export function initAppsView() {
+  if (appsViewInited) return;
+  appsViewInited = true;
+  document.getElementById('ap-usage-btn').textContent = t('apppolicy.usageButton');
+  document.getElementById('ap-usage-btn').addEventListener('click', loadUsageBuckets);
+  document.getElementById('ap-policy-search').addEventListener('input', (e) => {
+    appPolicyState.filter = e.target.value;
+    drawAppPolicyList();
+  });
+}
+
+export function activateAppsView() {
+  renderAppPolicyScreen();
+}
+
+export function deactivateAppsView() {}

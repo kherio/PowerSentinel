@@ -3,20 +3,26 @@ import { LOCALE, applyStaticI18n, t } from './i18n.js';
 import { ICONS } from './icons.js';
 import { initViewportFix } from './helpers.js';
 import { initEstado, activateEstado, deactivateEstado, refreshEstado } from './views/estado.js';
-import { initConfig, activateConfig, deactivateConfig, confirmLeaveConfig } from './views/config.js';
+import { initConfig, activateConfig, deactivateConfig, confirmLeaveConfig, initAppsView, activateAppsView, deactivateAppsView } from './views/config.js';
 import { initLog, activateLog, deactivateLog, refreshLog, refreshJournal } from './views/log.js';
 import { initPerfiles, activatePerfiles, deactivatePerfiles } from './views/perfiles.js';
 import { initAcerca, activateAcerca, deactivateAcerca } from './views/acerca.js';
 
-const VIEWS = ['estado', 'conf', 'log', 'perfiles', 'acerca'];
+// Orden de navegación: Inicio / Perfiles / Automatización / Apps /
+// Análisis / Ajustes - las claves internas ('estado', 'conf', 'log',
+// 'acerca') se mantienen sin cambios a propósito para no arrastrar
+// renombrados a cada referencia del código ya probado; solo cambian
+// las etiquetas visibles (i18n) y el orden de aparición.
+const VIEWS = ['estado', 'perfiles', 'conf', 'apps', 'log', 'acerca'];
 const LIFECYCLE = {
   estado: { activate: activateEstado, deactivate: deactivateEstado },
   conf: { activate: activateConfig, deactivate: deactivateConfig },
+  apps: { activate: activateAppsView, deactivate: deactivateAppsView },
   log: { activate: activateLog, deactivate: deactivateLog },
   perfiles: { activate: activatePerfiles, deactivate: deactivatePerfiles },
   acerca: { activate: activateAcerca, deactivate: deactivateAcerca }
 };
-const NAV_ICONS = { estado: ICONS.gauge, conf: ICONS.settings, log: ICONS.list, perfiles: ICONS.layers, acerca: ICONS.info };
+const NAV_ICONS = { estado: ICONS.gauge, conf: ICONS.settings, apps: ICONS.apps, log: ICONS.list, perfiles: ICONS.layers, acerca: ICONS.info };
 
 let currentIndex = 0;
 
@@ -147,6 +153,7 @@ initSwipeNav();
 
 initEstado();
 initConfig();
+initAppsView();
 initLog();
 initPerfiles();
 initAcerca();

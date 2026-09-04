@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PowerSentinel</title>
-  <script type="module" crossorigin src="./assets/index-2L_uQbf9.js"></script>
+  <script type="module" crossorigin src="./assets/index-Bm4iT5DB.js"></script>
   <link rel="stylesheet" crossorigin href="./assets/index-De76AqvW.css">
 </head>
 <body class="app-shell">
@@ -191,7 +191,6 @@
         <div class="subtabs">
           <button id="c-tab-form" class="active" data-i18n="config.tabForm">Formulario</button>
           <button id="c-tab-text" data-i18n="config.tabText">Texto sin formato</button>
-          <button id="c-tab-apps" data-i18n="config.tabApps">Apps</button>
         </div>
 
         <div id="c-view-form" class="scroll-area">
@@ -227,23 +226,27 @@
             <textarea id="c-editor" spellcheck="false" wrap="soft"></textarea>
           </div>
         </div>
+      </div>
 
-        <div id="c-view-apps" class="scroll-area" style="display:none;">
-          <div class="card" style="margin-bottom:14px;">
-            <div class="section-title" style="margin-top:0;" data-i18n="apppolicy.title">Políticas por app</div>
-            <p class="hint" data-i18n="apppolicy.hint">Anula, para una app concreta, lo que pida cualquier evento: nunca tocarla, tratarla siempre con suavidad, seguir el evento activo (por defecto), o tratarla siempre con la máxima severidad.</p>
-            <input class="filter" id="ap-policy-search" type="text" data-i18n-placeholder="apppolicy.searchPlaceholder" placeholder="Buscar app…" style="margin-top:8px;width:100%;">
-            <button class="btn ghost" id="ap-usage-btn" style="width:100%;margin-top:8px;"></button>
-          </div>
-          <div id="ap-policy-list"></div>
+    </section>
+
+    <!-- ================= APPS ================= -->
+    <section class="view" id="view-apps">
+      <div class="scroll-area">
+        <div class="card" style="margin-bottom:14px;">
+          <div class="section-title" style="margin-top:0;" data-i18n="apppolicy.title">Políticas por app</div>
+          <p class="hint" data-i18n="apppolicy.hint">Anula, para una app concreta, lo que pida cualquier evento: nunca tocarla, tratarla siempre con suavidad, seguir el evento activo (por defecto), o tratarla siempre con la máxima severidad.</p>
+          <input class="filter" id="ap-policy-search" type="text" data-i18n-placeholder="apppolicy.searchPlaceholder" placeholder="Buscar app…" style="margin-top:8px;width:100%;">
+          <button class="btn ghost" id="ap-usage-btn" style="width:100%;margin-top:8px;"></button>
         </div>
+        <div id="ap-policy-list"></div>
       </div>
     </section>
 
     <!-- ================= LOG ================= -->
     <section class="view" id="view-log">
       <div class="subtabs">
-        <button id="l-tab-log" class="active" data-i18n="log.tabLog">Log</button>
+        <button id="l-tab-log" class="active" data-i18n="log.tabLog">Actividad</button>
         <button id="l-tab-journal" data-i18n="log.tabJournal">Historial</button>
         <button id="l-tab-energy" data-i18n="log.tabEnergy">Energía</button>
       </div>
@@ -384,23 +387,27 @@
   <nav class="bottom-nav">
     <button id="tab-btn-estado" class="active" data-view="estado">
       <span class="bn-icon" id="bn-icon-estado"></span>
-      <span class="bn-label" data-i18n="nav.estado">Estado</span>
-    </button>
-    <button id="tab-btn-conf" data-view="conf">
-      <span class="bn-icon" id="bn-icon-conf"></span>
-      <span class="bn-label" data-i18n="nav.config">Config</span>
-    </button>
-    <button id="tab-btn-log" data-view="log">
-      <span class="bn-icon" id="bn-icon-log"></span>
-      <span class="bn-label" data-i18n="nav.log">Log</span>
+      <span class="bn-label" data-i18n="nav.estado">Inicio</span>
     </button>
     <button id="tab-btn-perfiles" data-view="perfiles">
       <span class="bn-icon" id="bn-icon-perfiles"></span>
       <span class="bn-label" data-i18n="nav.perfiles">Perfiles</span>
     </button>
+    <button id="tab-btn-conf" data-view="conf">
+      <span class="bn-icon" id="bn-icon-conf"></span>
+      <span class="bn-label" data-i18n="nav.config">Automatización</span>
+    </button>
+    <button id="tab-btn-apps" data-view="apps">
+      <span class="bn-icon" id="bn-icon-apps"></span>
+      <span class="bn-label" data-i18n="nav.apps">Apps</span>
+    </button>
+    <button id="tab-btn-log" data-view="log">
+      <span class="bn-icon" id="bn-icon-log"></span>
+      <span class="bn-label" data-i18n="nav.log">Análisis</span>
+    </button>
     <button id="tab-btn-acerca" data-view="acerca">
       <span class="bn-icon" id="bn-icon-acerca"></span>
-      <span class="bn-label" data-i18n="nav.acerca">Acerca de</span>
+      <span class="bn-label" data-i18n="nav.acerca">Ajustes</span>
     </button>
   </nav>
 
