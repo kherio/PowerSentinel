@@ -212,15 +212,18 @@ function renderDashboard(sys) {
 // individualizados por evento en el demonio) y desde cuándo
 // (ActiveEventStartTimes) - nunca una mezcla combinada de "lo que
 // pasa en general", sino el detalle real de cada evento por separado.
+// Solo se muestran los mecanismos que están genuinamente activos - un
+// "—" al lado de WiFi/GMS/CPU en cada evento no aporta nada y da la
+// sensación de que algo está roto cuando no lo está.
 function mechanismRows(mech) {
   const on = (v) => v && v !== 'false';
-  return [
-    { label: t('dashboard.mechCpu'), value: on(mech.handle_cores) ? '✓' : '—' },
-    { label: t('dashboard.mechDoze'), value: on(mech.doze) ? '✓' : '—' },
-    { label: t('dashboard.mechApps'), value: on(mech.handle_apps) ? mech.handle_apps : t('dashboard.mechNoChange') },
-    { label: t('dashboard.mechGms'), value: on(mech.handle_gms) ? mech.handle_gms : t('dashboard.mechNoChange') },
-    { label: t('dashboard.mechWifi'), value: mech.kill_wifi === 'true' ? '✓' : t('dashboard.mechNoChange') }
-  ];
+  const rows = [];
+  if (on(mech.handle_cores)) rows.push({ label: t('dashboard.mechCpu'), value: '✓' });
+  if (on(mech.doze)) rows.push({ label: t('dashboard.mechDoze'), value: '✓' });
+  if (on(mech.handle_apps)) rows.push({ label: t('dashboard.mechApps'), value: mech.handle_apps });
+  if (on(mech.handle_gms)) rows.push({ label: t('dashboard.mechGms'), value: mech.handle_gms });
+  if (mech.kill_wifi === 'true') rows.push({ label: t('dashboard.mechWifi'), value: '✓' });
+  return rows;
 }
 
 function renderActiveNow(sys) {
@@ -261,6 +264,31 @@ async function renderRecentActivity() {
   } catch (e) {
     el.innerHTML = `<p class="hint">${escapeHtml(t('estado.recentActivityEmpty'))}</p>`;
   }
+}
+
+// "Salud del sistema": de las 7 capacidades que el demonio detecta,
+// solo estas 4 tienen una advertencia real en el código cuando faltan
+// (cores_online, cores_governor, wifi, y doze aunque sin emit propio) -
+// las otras 3 (gms_installed, pm_suspend) son características del
+// dispositivo, no fallos, así que no se muestran aquí como si algo
+// estuviera roto cuando simplemente no aplica.
+function renderSystemHealth(caps) {
+  const el = document.getElementById('e-system-health');
+  if (!caps) { el.innerHTML = ''; return; }
+  const items = [
+    { label: t('estado.healthCpuGov'), ok: !!caps.cores_governor },
+    { label: t('estado.healthCoreOffline'), ok: !!caps.cores_online },
+    { label: t('estado.healthDoze'), ok: !!caps.doze_force },
+    { label: t('estado.healthWifi'), ok: !!(caps.rfkill_wifi || caps.svc_wifi) }
+  ];
+  const allOk = items.every((i) => i.ok);
+  const headline = allOk
+    ? `<div class="system-health-headline ok">✓ ${escapeHtml(t('estado.healthAllOk'))}</div>`
+    : `<div class="system-health-headline warn">⚠ ${escapeHtml(t('estado.healthSomeLimited'))}</div>`;
+  const rows = items.map((i) =>
+    `<div class="system-health-row"><span class="system-health-label">${escapeHtml(i.label)}</span><span class="system-health-value ${i.ok ? 'ok' : 'warn'}">${i.ok ? '✓' : t('estado.healthUnavailable')}</span></div>`
+  ).join('');
+  el.innerHTML = headline + `<div class="system-health-list">${rows}</div>`;
 }
 
 function initTechDetailsToggle() {
@@ -342,6 +370,12 @@ function render(text) {
       try { sys.activeEventStartTimes = JSON.parse(m[1]); } catch (e) { /* ignore */ }
     } else if ((m = line.match(/^activemechanisms:\s*(\[.*\])/i))) {
       try { sys.activeMechanisms = JSON.parse(m[1]); } catch (e) { /* ignore */ }
+    } else if ((m = line.match(/^capabilities:\s*(.*)$/i))) {
+      sys.capabilities = {};
+      m[1].trim().split(/\s+/).forEach((pair) => {
+        const kv = pair.split('=');
+        if (kv.length === 2) sys.capabilities[kv[0]] = kv[1] === 'true';
+      });
     } else if (line.toLowerCase().indexOf('error') === 0) {
       sys.error = line;
     } else {
@@ -353,6 +387,7 @@ function render(text) {
   const heroSub = document.getElementById('e-hero-sub');
 
   renderBattery(sys.battery);
+  renderSystemHealth(sys.capabilities);
   renderDashboard(sys);
   renderActiveNow(sys);
 

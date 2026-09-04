@@ -555,11 +555,6 @@ main {
   justify-content: space-between;
   margin-bottom: 8px;
 }
-.dashboard-title {
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--text);
-}
 .dashboard-protection-badge {
   font-size: 11px;
   font-weight: 600;
@@ -678,6 +673,23 @@ main {
   padding: 12px;
   margin-bottom: 14px;
 }
+
+.system-health-headline {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.system-health-headline.ok { color: var(--accent); }
+.system-health-headline.warn { color: var(--warn); }
+.system-health-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 0;
+  font-size: 13px;
+}
+.system-health-label { color: var(--muted); }
+.system-health-value.ok { color: var(--accent); font-weight: 600; }
+.system-health-value.warn { color: var(--warn); font-weight: 600; }
 
 
 .battery-summary {
