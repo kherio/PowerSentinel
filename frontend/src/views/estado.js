@@ -1,7 +1,8 @@
 import { ICONS } from '../icons.js';
-import { readStatus, readCpuRanking } from '../api.js';
+import { readStatus, readCpuRanking, readJournal } from '../api.js';
 import { toast, escapeHtml } from '../helpers.js';
 import { t } from '../i18n.js';
+import { parseJournalLines, renderTimelineEntry } from './log.js';
 
 const GAUGE_C = 2 * Math.PI * 52;
 const HISTORY_MAX = 30; // ~90s at 3s polling
@@ -240,6 +241,36 @@ function renderActiveNow(sys) {
       <p class="hint active-now-why">${escapeHtml(eventWhy(mech.event))}</p>
     </div>`;
   }).join('');
+}
+
+// Jerarquía visual del roadmap (Estado principal → Qué está pasando →
+// Por qué → Actividad reciente → Detalles técnicos): reutiliza
+// exactamente el mismo renderizado de línea de tiempo ya construido en
+// log.js (parseJournalLines/renderTimelineEntry), mostrando solo las
+// últimas entradas en vez de duplicar esa lógica aquí.
+async function renderRecentActivity() {
+  const el = document.getElementById('e-recent-activity');
+  try {
+    const text = await readJournal();
+    const entries = parseJournalLines(text).slice(-3).reverse();
+    if (!entries.length) {
+      el.innerHTML = `<p class="hint">${escapeHtml(t('estado.recentActivityEmpty'))}</p>`;
+      return;
+    }
+    el.innerHTML = entries.map(renderTimelineEntry).join('');
+  } catch (e) {
+    el.innerHTML = `<p class="hint">${escapeHtml(t('estado.recentActivityEmpty'))}</p>`;
+  }
+}
+
+function initTechDetailsToggle() {
+  const toggle = document.getElementById('e-tech-details-toggle');
+  const body = document.getElementById('e-tech-details-body');
+  toggle.addEventListener('click', () => {
+    const expand = body.style.display === 'none';
+    body.style.display = expand ? 'block' : 'none';
+    toggle.classList.toggle('expanded', expand);
+  });
 }
 
 function renderBattery(batt) {
@@ -493,9 +524,14 @@ async function loadStatus(silent) {
 
 export function initEstado() {
   document.getElementById('e-refresh-btn').innerHTML = ICONS.reload + ' ' + t('common.update');
-  document.getElementById('e-refresh-btn').addEventListener('click', () => loadStatus(false));
+  document.getElementById('e-refresh-btn').addEventListener('click', refreshEstado);
   document.getElementById('e-cpurank-btn').textContent = t('estado.cpuRankButton');
   document.getElementById('e-cpurank-btn').addEventListener('click', loadCpuRanking);
+  document.getElementById('e-recent-activity-more').textContent = t('estado.recentActivityMore');
+  document.getElementById('e-recent-activity-more').addEventListener('click', () => {
+    document.dispatchEvent(new CustomEvent('powersentinel:navigate', { detail: { view: 'log' } }));
+  });
+  initTechDetailsToggle();
 }
 
 // Deliberately only ever called from the button click above - never
@@ -529,8 +565,15 @@ async function loadCpuRanking() {
 }
 
 // Called when the Estado tab becomes visible - (re)starts the 3s poll.
+// renderRecentActivity() is deliberately called here directly, once,
+// rather than from loadStatus()/render() (which the 3s poll also
+// calls) - re-reading and re-parsing the journal every 3 seconds just
+// to show a static "last 3 events" preview that rarely changes that
+// fast would be exactly the kind of unnecessary continuous cost this
+// project avoids elsewhere (see loadCpuRanking's own comment above).
 export function activateEstado() {
   loadStatus(true);
+  renderRecentActivity();
   if (!pollTimer) pollTimer = setInterval(() => loadStatus(true), 3000);
 }
 
@@ -542,5 +585,6 @@ export function deactivateEstado() {
 
 // Used by main.js's pull-to-refresh gesture.
 export function refreshEstado() {
+  renderRecentActivity();
   return loadStatus(false);
 }

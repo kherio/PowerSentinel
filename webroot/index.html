@@ -4,8 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PowerSentinel</title>
-  <script type="module" crossorigin src="./assets/index-BS4vswMZ.js"></script>
-  <link rel="stylesheet" crossorigin href="./assets/index-tKmj6NjJ.css">
+  <script type="module" crossorigin src="./assets/index-BiK2T81i.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-DQ6KyT2U.css">
 </head>
 <body class="app-shell">
   <header class="app-header">
@@ -50,6 +50,18 @@
         </div>
 
         <div id="e-active-now-wrap"></div>
+
+        <div class="card" style="margin-bottom:14px;">
+          <div class="section-title" style="margin-top:0;" data-i18n="estado.recentActivityTitle">Actividad reciente</div>
+          <div id="e-recent-activity"></div>
+          <button class="link-btn" id="e-recent-activity-more" data-i18n="estado.recentActivityMore">Ver todo en Análisis ›</button>
+        </div>
+
+        <button class="dashboard-detail-toggle tech-details-toggle" id="e-tech-details-toggle" type="button">
+          <span data-i18n="estado.techDetails">Detalles técnicos</span><span class="aggression-detail-caret">›</span>
+        </button>
+
+        <div id="e-tech-details-body" style="display:none;">
 
         <div class="battery-card" id="e-battery-card" style="display:none;">
           <div class="battery-level-wrap">
@@ -123,6 +135,8 @@
           <summary data-i18n="estado.viewRaw">Ver salida sin procesar</summary>
           <pre id="e-raw-status">—</pre>
         </details>
+
+        </div>
       </div>
     </section>
 

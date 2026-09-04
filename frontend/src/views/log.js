@@ -73,7 +73,7 @@ async function doExportLog() {
 // skipped rather than breaking the whole render, since the journal
 // could in principle be read mid-write.
 
-function parseJournalLines(text) {
+export function parseJournalLines(text) {
   return text.split('\n').filter((l) => l.trim().length).map((line) => {
     try {
       const obj = JSON.parse(line);
@@ -108,7 +108,7 @@ function timelineMechanismPhrases(detail) {
   return phrases;
 }
 
-function renderTimelineEntry(entry) {
+export function renderTimelineEntry(entry) {
   const time = formatJournalTime(entry.ts);
   if (entry.severity === 'warning' || entry.severity === 'critical') {
     return `<div class="timeline-entry timeline-warning">` +
