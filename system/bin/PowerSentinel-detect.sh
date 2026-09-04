@@ -115,12 +115,34 @@ auto_map_cores() {
     cpus+=( "$cpu" )
     cpu_freqs+=( "$(cat $cpu_base_path/$cpu/cpufreq/cpuinfo_max_freq)" )
   done
-  for high_freq in $(echo "${cpu_freqs[@]}" | tr ' ' '\n' | uniq -u); do
-    for index in "${!cpu_freqs[@]}"; do
-      if [ "${cpu_freqs[$index]}" = "$high_freq" ]; then
-        hp_cpus+=( "${cpus[$index]}" )
-      fi
-    done
+  # BUG FIX (found by an external code review, then reproduced before
+  # being trusted): `uniq -u` only ever shows lines that appear EXACTLY
+  # ONCE in the whole input - not "the highest value", and it also
+  # requires adjacent-duplicate input to work at all, which this
+  # wasn't sorted for either. On the most common real layout - a
+  # symmetric big.LITTLE SoC, e.g. 4 cores at 1.8GHz and 4 at 2.8GHz -
+  # EVERY frequency appears more than once, so `uniq -u` produces NO
+  # output at all: $high_freq's loop never runs, hp_cpus stays
+  # completely empty, and every single core then falls through to the
+  # "low power" classification below (since $match can never become
+  # "true" against an empty hp_cpus). Concretely: disable_cores=auto
+  # would disable nothing, and handle_cores=auto would force the
+  # powersave governor onto EVERY core, including the performance
+  # cluster - the opposite of the intended selective behavior, and a
+  # real, noticeable slowdown on affected devices, which reproduced
+  # with the reviewer's own example (echo "1800000 1800000 1800000
+  # 1800000 2800000 2800000 2800000 2800000" | tr ' ' '\n' | uniq -u
+  # produces zero output).
+  #
+  # Fixed to directly find the real maximum frequency and classify
+  # every core AT that frequency as high-power, regardless of how many
+  # cores share it or how many other frequency tiers exist below it -
+  # this is what "high power cores" was always meant to mean.
+  high_freq="$(printf '%s\n' "${cpu_freqs[@]}" | sort -rn | head -1)"
+  for index in "${!cpu_freqs[@]}"; do
+    if [ "${cpu_freqs[$index]}" = "$high_freq" ]; then
+      hp_cpus+=( "${cpus[$index]}" )
+    fi
   done
   for i in ${!hp_cpus[@]}; do
     tmp_var+="${hp_cpus[$i]} "
