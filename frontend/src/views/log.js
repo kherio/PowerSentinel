@@ -112,7 +112,7 @@ export function renderTimelineEntry(entry) {
   const time = formatJournalTime(entry.ts);
   if (entry.severity === 'warning' || entry.severity === 'critical') {
     return `<div class="timeline-entry timeline-warning">` +
-      `<div class="timeline-main"><span class="timeline-time">${time}</span>⚠️ ${escapeHtml(entry.message)}</div>` +
+      `<div class="timeline-main"><span class="timeline-dot dot-warn"></span><span class="timeline-time">${time}</span>⚠️ ${escapeHtml(entry.message)}</div>` +
       `</div>`;
   }
   const startedMatch = /^(.+) started$/.exec(entry.message);
@@ -121,14 +121,14 @@ export function renderTimelineEntry(entry) {
     const name = eventDisplayName(entry.event);
     const phrases = timelineMechanismPhrases(entry.detail);
     return `<div class="timeline-entry">` +
-      `<div class="timeline-main"><span class="timeline-time">${time}</span>${eventIcon(entry.event)} ${escapeHtml(t('journal.entered', { mode: name }))}</div>` +
+      `<div class="timeline-main"><span class="timeline-dot dot-start"></span><span class="timeline-time">${time}</span>${eventIcon(entry.event)} ${escapeHtml(t('journal.entered', { mode: name }))}</div>` +
       phrases.map((p) => `<div class="timeline-sub"><span class="timeline-time"></span>${escapeHtml(p)}</div>`).join('') +
       `</div>`;
   }
   if (endedMatch) {
     const name = eventDisplayName(entry.event);
     return `<div class="timeline-entry">` +
-      `<div class="timeline-main"><span class="timeline-time">${time}</span>${eventIcon(entry.event)} ${escapeHtml(t('journal.exited', { mode: name }))}</div>` +
+      `<div class="timeline-main"><span class="timeline-dot dot-end"></span><span class="timeline-time">${time}</span>${eventIcon(entry.event)} ${escapeHtml(t('journal.exited', { mode: name }))}</div>` +
       `<div class="timeline-sub"><span class="timeline-time"></span>${escapeHtml(t('journal.restored'))}</div>` +
       `</div>`;
   }

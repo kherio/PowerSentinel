@@ -28,8 +28,23 @@
           <div class="dashboard-header">
             <span class="dashboard-protection-badge" id="e-protection-badge"></span>
           </div>
-          <div class="dashboard-summary" id="e-dashboard-summary"></div>
-          <div class="dashboard-mode" id="e-dashboard-mode"></div>
+          <div class="dashboard-mode-name" id="e-dashboard-mode-name"></div>
+
+          <div class="hero-gauge-wrap">
+            <svg class="gauge" viewBox="0 0 120 120">
+              <circle class="gauge-track" cx="60" cy="60" r="52"></circle>
+              <circle class="gauge-fill" id="e-gauge-fill" cx="60" cy="60" r="52" stroke-dasharray="326.73" stroke-dashoffset="326.73"></circle>
+            </svg>
+            <div class="gauge-center">
+              <div class="gauge-percent" id="e-gauge-percent">–</div>
+            </div>
+          </div>
+          <div class="dashboard-intervention-level" id="e-intervention-level" style="display:none;"></div>
+
+          <div class="dashboard-why" id="e-dashboard-why"></div>
+
+          <div class="dashboard-quickstats" id="e-dashboard-quickstats"></div>
+
           <div class="dashboard-slider-wrap" id="e-dashboard-slider-wrap" style="display:none;">
             <div class="dashboard-slider-track">
               <span data-i18n="dashboard.sliderNormal">Normal</span>
@@ -48,6 +63,21 @@
 
         <div id="e-active-now-wrap"></div>
 
+        <div class="battery-card" id="e-battery-card" style="display:none;">
+          <div class="battery-top-row">
+            <div class="battery-level-wrap">
+              <div class="battery-shell"><div class="battery-fill" id="e-battery-fill"></div></div>
+              <div class="battery-pct" id="e-battery-pct">–</div>
+            </div>
+            <div class="battery-details">
+              <div class="battery-status" id="e-battery-status" data-i18n="estado.batteryLoading">Cargando batería…</div>
+              <div class="battery-sub" id="e-battery-sub"></div>
+            </div>
+          </div>
+          <svg class="battery-sparkline" id="e-battery-sparkline" viewBox="0 0 300 40" preserveAspectRatio="none"></svg>
+          <div class="battery-sparkline-caption" id="e-battery-sparkline-caption"></div>
+        </div>
+
         <div class="card" style="margin-bottom:14px;">
           <div class="section-title" style="margin-top:0;" data-i18n="estado.recentActivityTitle">Actividad reciente</div>
           <div id="e-recent-activity"></div>
@@ -59,40 +89,15 @@
           <div id="e-system-health"></div>
         </div>
 
+        <div class="cpu-summary-row" id="e-cpu-summary-row" style="display:none;">
+          <span id="e-cpu-summary-text"></span>
+        </div>
+
         <button class="dashboard-detail-toggle tech-details-toggle" id="e-tech-details-toggle" type="button">
           <span data-i18n="estado.techDetails">Detalles técnicos</span><span class="aggression-detail-caret">›</span>
         </button>
 
         <div id="e-tech-details-body" style="display:none;">
-
-        <div class="battery-card" id="e-battery-card" style="display:none;">
-          <div class="battery-level-wrap">
-            <div class="battery-shell"><div class="battery-fill" id="e-battery-fill"></div></div>
-            <div class="battery-pct" id="e-battery-pct">–</div>
-          </div>
-          <div class="battery-details">
-            <div class="battery-status" id="e-battery-status" data-i18n="estado.batteryLoading">Cargando batería…</div>
-            <div class="battery-sub" id="e-battery-sub"></div>
-          </div>
-        </div>
-
-        <div class="hero-card">
-          <div class="gauge-wrap">
-            <svg class="gauge" viewBox="0 0 120 120">
-              <circle class="gauge-track" cx="60" cy="60" r="52"></circle>
-              <circle class="gauge-fill" id="e-gauge-fill" cx="60" cy="60" r="52" stroke-dasharray="326.73" stroke-dashoffset="326.73"></circle>
-            </svg>
-            <div class="gauge-center">
-              <div class="gauge-percent" id="e-gauge-percent">–</div>
-              <div class="gauge-label" data-i18n="estado.savingLabel">en ahorro</div>
-            </div>
-          </div>
-          <div class="hero-text">
-            <div class="hero-title" id="e-hero-title" data-i18n="estado.loadingStatus">Cargando estado…</div>
-            <div class="hero-sub" id="e-hero-sub"></div>
-            <div class="active-events-row" id="e-active-events"></div>
-          </div>
-        </div>
 
         <div class="section-title" style="margin-top:0;" data-i18n="estado.coresTitle">Núcleos de CPU</div>
         <div id="e-core-counts" style="font-size:12px;color:var(--muted);margin-bottom:8px;"></div>

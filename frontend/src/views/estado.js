@@ -73,11 +73,12 @@ function coreMeta() {
   };
 }
 
-// Rough remaining-time estimate from the battery-level samples collected
-// in this browsing session (persisted in localStorage, so it survives a
-// page reload too) - not a substitute for Android's own estimate, just a
-// simple drop-per-hour projection from whatever window of data we have.
-function estimateRemainingHours(currentLevel) {
+// Tasa de descarga actual (%/h), a partir de las muestras de batería
+// de esta sesión del navegador (persistidas en localStorage, hasta
+// BATT_WINDOW_MS de ventana) - la MISMA fuente que ya usa
+// estimateRemainingHours(), ahora expuesta por separado para poder
+// mostrarla también como su propio dato ("Ritmo de consumo").
+function computeBattDrainRate() {
   const cutoff = Date.now() - BATT_WINDOW_MS;
   const recent = battHistory.filter((p) => p.t >= cutoff);
   if (recent.length < 2) return null;
@@ -87,8 +88,12 @@ function estimateRemainingHours(currentLevel) {
   if (hoursElapsed < 0.05) return null; // need at least ~3 minutes of real span
   const levelDrop = first.level - last.level;
   if (levelDrop <= 0) return null; // flat or charging over that window
-  const ratePerHour = levelDrop / hoursElapsed;
-  return ratePerHour > 0 ? currentLevel / ratePerHour : null;
+  return levelDrop / hoursElapsed;
+}
+
+function estimateRemainingHours(currentLevel) {
+  const ratePerHour = computeBattDrainRate();
+  return ratePerHour ? currentLevel / ratePerHour : null;
 }
 
 // ---------- Dashboard ("centro de control energético") ----------
@@ -145,22 +150,51 @@ function pressureScoreTier(score, thresholds) {
   return 0;
 }
 
+// Frase de "por qué" en lenguaje humano: en modo adaptativo, elige los
+// 1-2 factores que MÁS empujan la puntuación de presión hacia arriba
+// (nunca los que la reducen) y los explica con datos reales
+// (porcentaje de batería, minutos con la pantalla apagada calculados
+// desde ActiveEventStartTimes) - nunca una lista genérica de todos los
+// factores. En modo clásico, sin desglose numérico disponible, usa el
+// "por qué" ya existente del primer evento activo.
+function buildWhyText(sys) {
+  const active = !!(sys.activeEvents && sys.activeEvents.length);
+  if (!active) return '';
+  if (!sys.pressureBreakdown) {
+    return eventWhy(sys.activeEvents[0]);
+  }
+  const b = sys.pressureBreakdown;
+  const candidates = [];
+  if (typeof b.battery === 'number' && b.battery > 0 && sys.battery) {
+    candidates.push({ value: b.battery, text: t('dashboard.whyBatteryLow', { level: sys.battery.level }) });
+  }
+  if (typeof b.screen_off === 'number' && b.screen_off > 0) {
+    const startTs = sys.activeEventStartTimes && sys.activeEventStartTimes.screen_off;
+    const mins = startTs ? Math.max(0, Math.round(Date.now() / 1000 - startTs) / 60) : null;
+    candidates.push({ value: b.screen_off, text: mins !== null ? t('dashboard.whyScreenOffDuration', { mins: Math.round(mins) }) : t('dashboard.whyScreenOffGeneric') });
+  }
+  if (typeof b.temperature === 'number' && b.temperature > 0 && sys.battery) {
+    candidates.push({ value: b.temperature, text: t('dashboard.whyTempHigh', { temp: (sys.battery.temp / 10).toFixed(1) }) });
+  }
+  if (typeof b.night === 'number' && b.night > 0) {
+    candidates.push({ value: b.night, text: t('dashboard.whyNightTime') });
+  }
+  if (typeof b.cpu_load === 'number' && b.cpu_load > 0) {
+    candidates.push({ value: b.cpu_load, text: t('dashboard.whyHighLoad') });
+  }
+  if (!candidates.length) return t('dashboard.whyNormal');
+  candidates.sort((x, y) => y.value - x.value);
+  return candidates.slice(0, 2).map((c) => c.text).join(' ');
+}
+
 function renderDashboard(sys) {
   const active = !!(sys.activeEvents && sys.activeEvents.length);
   const badge = document.getElementById('e-protection-badge');
   badge.textContent = active ? t('dashboard.protectionActive') : t('dashboard.protectionInactive');
   badge.className = 'dashboard-protection-badge' + (active ? ' active' : ' inactive');
 
-  const summary = document.getElementById('e-dashboard-summary');
-  if (sys.battery) {
-    const screenState = active && sys.activeEvents.indexOf('screen_off') !== -1
-      ? t('dashboard.screenOff') : t('dashboard.screenOn');
-    summary.textContent = t('dashboard.summaryLine', { level: sys.battery.level, temp: sys.battery.temp, screen: screenState });
-  } else {
-    summary.textContent = '';
-  }
-
-  const modeEl = document.getElementById('e-dashboard-mode');
+  const modeNameEl = document.getElementById('e-dashboard-mode-name');
+  const interventionEl = document.getElementById('e-intervention-level');
   const sliderWrap = document.getElementById('e-dashboard-slider-wrap');
   const toggle = document.getElementById('e-dashboard-detail-toggle');
   const detailBody = document.getElementById('e-dashboard-detail-body');
@@ -168,7 +202,10 @@ function renderDashboard(sys) {
   if (typeof sys.pressureScore === 'number') {
     const tier = pressureScoreTier(sys.pressureScore, sys.pressureThresholds);
     const modeNames = [t('dashboard.modeNormal'), t('dashboard.modeLight'), t('dashboard.modeModerate'), t('dashboard.modeExtreme')];
-    modeEl.textContent = t('dashboard.currentMode', { mode: modeNames[tier] });
+    modeNameEl.textContent = modeNames[tier];
+    interventionEl.style.display = 'block';
+    interventionEl.textContent = t('dashboard.interventionLevel', { score: sys.pressureScore });
+    setGauge(sys.pressureScore);
 
     sliderWrap.style.display = 'block';
     document.getElementById('e-dashboard-slider-dot').style.left = `${Math.min(100, Math.max(0, sys.pressureScore))}%`;
@@ -201,10 +238,33 @@ function renderDashboard(sys) {
     sliderWrap.style.display = 'none';
     toggle.style.display = 'none';
     detailBody.style.display = 'none';
-    modeEl.textContent = active
-      ? t('dashboard.currentMode', { mode: sys.activeEvents.map(eventDisplayName).join(', ') })
+    interventionEl.style.display = 'none';
+    modeNameEl.textContent = active
+      ? sys.activeEvents.map(eventDisplayName).join(', ')
       : t('dashboard.modeIdle');
+    // El gauge en modo clásico usa la proporción de mecanismos de
+    // ahorro activos (núcleos/wifi/doze) - se fija más abajo en
+    // render(), una vez se conocen los núcleos, ya que aquí todavía no
+    // están disponibles.
   }
+
+  document.getElementById('e-dashboard-why').textContent = buildWhyText(sys);
+
+  // Estadísticas rápidas: batería, temperatura y ritmo de consumo real
+  // (computeBattDrainRate, la MISMA fuente que ya alimenta "horas
+  // restantes" en la tarjeta de batería) - nunca una cifra de ahorro
+  // inventada.
+  const quickEl = document.getElementById('e-dashboard-quickstats');
+  const quickParts = [];
+  if (sys.battery) {
+    quickParts.push(`🔋 ${sys.battery.level}%`);
+    quickParts.push(`🌡️ ${(sys.battery.temp / 10).toFixed(1)}°C`);
+    if (!sys.battery.charging) {
+      const rate = computeBattDrainRate();
+      if (rate !== null) quickParts.push(`⚡ ${rate.toFixed(1)}%/h`);
+    }
+  }
+  quickEl.textContent = quickParts.join('     ');
 }
 
 // "¿Qué está haciendo ahora?" - una tarjeta por evento activo, cada
@@ -331,6 +391,40 @@ function renderBattery(batt) {
     }
   }
   document.getElementById('e-battery-sub').textContent = bits.join(' · ');
+
+  renderBatterySparkline();
+}
+
+// Mini gráfico de las últimas horas de batería, con el MISMO
+// battHistory ya recogido para estimateRemainingHours()/
+// computeBattDrainRate() - no una fuente de datos nueva.
+function renderBatterySparkline() {
+  const svg = document.getElementById('e-battery-sparkline');
+  const caption = document.getElementById('e-battery-sparkline-caption');
+  if (battHistory.length < 2) { svg.innerHTML = ''; caption.textContent = ''; return; }
+
+  const w = 300, h = 40, pad = 3;
+  const levels = battHistory.map((p) => p.level);
+  const minL = Math.min(...levels), maxL = Math.max(...levels);
+  const range = Math.max(1, maxL - minL);
+  const first = battHistory[0], last = battHistory[battHistory.length - 1];
+  const span = last.t - first.t || 1;
+
+  const pts = battHistory.map((p) => {
+    const x = pad + ((p.t - first.t) / span) * (w - pad * 2);
+    const y = pad + (1 - (p.level - minL) / range) * (h - pad * 2);
+    return [x, y];
+  });
+  const line = 'M' + pts.map((p) => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' L');
+  const fillPath = line + ` L${(w - pad).toFixed(1)},${h} L${pad},${h} Z`;
+  svg.innerHTML =
+    `<path class="battery-sparkline-fill" d="${fillPath}"></path>` +
+    `<path class="battery-sparkline-line" d="${line}"></path>`;
+
+  const hoursSpan = span / 3600000;
+  const delta = last.level - first.level;
+  const deltaText = (delta <= 0 ? '' : '+') + delta;
+  caption.textContent = t('estado.battSparklineCaption', { delta: deltaText, hours: hoursSpan.toFixed(1) });
 }
 
 function render(text) {
@@ -383,24 +477,16 @@ function render(text) {
     }
   });
 
-  const heroTitle = document.getElementById('e-hero-title');
-  const heroSub = document.getElementById('e-hero-sub');
-
   renderBattery(sys.battery);
   renderSystemHealth(sys.capabilities);
   renderDashboard(sys);
   renderActiveNow(sys);
 
-  const aeRow = document.getElementById('e-active-events');
-  aeRow.innerHTML = (sys.activeEvents && sys.activeEvents.length)
-    ? sys.activeEvents.map((e) => `<span class="ae-chip">${escapeHtml(e)}</span>`).join('')
-    : '';
-
   if (sys.error) {
     setGauge(0);
     document.getElementById('e-gauge-percent').innerHTML = ICONS.warn;
-    heroTitle.textContent = t('estado.serviceUnavailable');
-    heroSub.textContent = sys.error + ' — ' + t('estado.daemonNotRunningHint');
+    document.getElementById('e-dashboard-mode-name').textContent = t('estado.serviceUnavailable');
+    document.getElementById('e-dashboard-why').textContent = sys.error + ' — ' + t('estado.daemonNotRunningHint');
   }
 
   const coreGrid = document.getElementById('e-core-grid');
@@ -457,6 +543,7 @@ function render(text) {
   const freqMetrics = document.getElementById('e-freq-metrics');
   const freqChartCard = document.getElementById('e-freq-chart-card');
   const coresWithFreq = cores.filter((c) => c.curFreq && c.maxFreq);
+  let avgPct = null;
 
   if (!sys.error && (coresWithFreq.length || sys.load1 !== undefined)) {
     freqSectionTitle.style.display = '';
@@ -464,7 +551,6 @@ function render(text) {
     freqChartCard.style.display = '';
 
     const cards = [];
-    let avgPct = null;
     if (coresWithFreq.length) {
       avgPct = Math.round(coresWithFreq.reduce((s, c) => s + (c.curFreq / c.maxFreq) * 100, 0) / coresWithFreq.length);
       cards.push(`<div class="metric-card"><div class="mc-label"><span style="width:12px;height:12px;display:inline-flex">${ICONS.bolt}</span> ${t('estado.avgFreq')}</div>` +
@@ -493,6 +579,27 @@ function render(text) {
     freqChartCard.style.display = 'none';
   }
 
+  // Resumen de una línea, visible fuera de Detalles técnicos - el
+  // mapa de núcleos en sí (interesante para quien quiera entrar al
+  // detalle) sigue viviendo solo dentro de Detalles técnicos.
+  const cpuSummaryRow = document.getElementById('e-cpu-summary-row');
+  if (!sys.error && cores.length) {
+    const activeNow = cores.filter((c) => c.state === 'online').length;
+    cpuSummaryRow.style.display = 'block';
+    document.getElementById('e-cpu-summary-text').textContent = avgPct !== null
+      ? t('estado.cpuSummaryWithFreq', { pct: avgPct, active: activeNow, total: cores.length })
+      : t('estado.cpuSummary', { active: activeNow, total: cores.length });
+    if (!cpuSummaryRow.dataset.bound) {
+      cpuSummaryRow.dataset.bound = '1';
+      cpuSummaryRow.addEventListener('click', () => {
+        const toggle = document.getElementById('e-tech-details-toggle');
+        if (document.getElementById('e-tech-details-body').style.display === 'none') toggle.click();
+      });
+    }
+  } else {
+    cpuSummaryRow.style.display = 'none';
+  }
+
   const sysGrid = document.getElementById('e-sys-grid');
   const sysCards = [];
   if (sys.wifi) {
@@ -510,27 +617,17 @@ function render(text) {
   sysGrid.innerHTML = sysCards.length ? sysCards.join('') :
     `<div class="stat-card"><div class="label">${t('estado.systemTitle')}</div><div class="value" style="color:var(--muted)">${t('estado.noData')}</div></div>`;
 
-  if (!sys.error) {
+  if (!sys.error && typeof sys.pressureScore !== 'number') {
+    // Este gauge de "proporción de mecanismos de ahorro activos" es
+    // específico del modo clásico - en modo adaptativo, renderDashboard()
+    // ya fijó el gauge con la puntuación de presión real más arriba, y
+    // sobrescribirla aquí sería mostrar el número equivocado.
     const offlineC = cores.filter((c) => c.state === 'offline').length;
     const psC = cores.filter((c) => c.state === 'powersave').length;
     const totalUnits = cores.length + (sys.wifi ? 1 : 0) + (sys.doze ? 1 : 0);
     const savingUnits = (offlineC + psC) + (sys.wifi === 'disabled' ? 1 : 0) + (sys.doze && sys.doze !== 'inactive' ? 1 : 0);
     const percent = totalUnits ? Math.round((savingUnits / totalUnits) * 100) : 0;
     setGauge(percent);
-
-    if (totalUnits === 0) {
-      heroTitle.textContent = t('estado.noDataYet');
-      heroSub.textContent = t('estado.waitingFirstReading');
-    } else if (percent >= 60) {
-      heroTitle.textContent = t('estado.savingActiveTitle');
-      heroSub.textContent = t('estado.savingActiveSub');
-    } else if (percent >= 25) {
-      heroTitle.textContent = t('estado.savingPartialTitle');
-      heroSub.textContent = t('estado.savingPartialSub');
-    } else {
-      heroTitle.textContent = t('estado.savingNoneTitle');
-      heroSub.textContent = t('estado.savingNoneSub');
-    }
   }
 
   const extraBox = document.getElementById('e-unmatched-box');

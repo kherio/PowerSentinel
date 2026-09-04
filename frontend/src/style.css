@@ -569,16 +569,38 @@ main {
   background: var(--surface-2);
   color: var(--muted);
 }
-.dashboard-summary {
+.dashboard-mode-name {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+  text-align: center;
+  margin-top: 4px;
+  letter-spacing: -0.2px;
+}
+.dashboard-intervention-level {
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+  margin-top: -4px;
+  margin-bottom: 4px;
+}
+.dashboard-why {
   font-size: 13px;
   color: var(--muted);
-  margin-bottom: 10px;
+  text-align: center;
+  line-height: 1.5;
+  padding: 0 8px;
+  margin-bottom: 12px;
+  min-height: 1px;
 }
-.dashboard-mode {
-  font-size: 14px;
+.dashboard-quickstats {
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text);
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
 .dashboard-slider-wrap { margin-bottom: 12px; }
 .dashboard-slider-track {
@@ -1059,22 +1081,11 @@ main {
 }
 
 /* --- Estado hero: overall savings gauge --- */
-.hero-card {
-  background: linear-gradient(165deg, var(--surface) 0%, var(--surface-2) 100%);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 20px;
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  margin-bottom: 18px;
-}
-
-.gauge-wrap {
+.hero-gauge-wrap {
   position: relative;
-  width: 104px;
-  height: 104px;
-  flex: none;
+  width: 140px;
+  height: 140px;
+  margin: 4px auto 8px;
 }
 
 .gauge { width: 100%; height: 100%; transform: rotate(-90deg); }
@@ -1095,18 +1106,7 @@ main {
   align-items: center;
   justify-content: center;
 }
-.gauge-percent { font-size: 22px; font-weight: 700; line-height: 1; letter-spacing: -0.3px; }
-.gauge-label { font-size: 10px; color: var(--muted); margin-top: 3px; }
-
-.hero-text { min-width: 0; }
-.hero-title { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
-.hero-sub { font-size: 12.5px; color: var(--muted); line-height: 1.5; }
-
-.active-events-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-.active-events-row .ae-chip {
-  font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 999px;
-  background: var(--accent-dim); color: var(--accent);
-}
+.gauge-percent { font-size: 30px; font-weight: 700; line-height: 1; letter-spacing: -0.3px; }
 
 /* --- Battery card: level, charging state, temperature, estimated
    remaining time. Shown only once the daemon reports Battery: in the
@@ -1114,14 +1114,14 @@ main {
    just no card until the daemon side updates too). --- */
 .battery-card {
   display: flex;
-  align-items: center;
-  gap: 16px;
+  flex-direction: column;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 16px;
   margin-bottom: 14px;
 }
+.battery-top-row { display: flex; align-items: center; gap: 16px; }
 .battery-level-wrap { flex: none; display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .battery-shell {
   width: 44px; height: 22px; border: 2px solid var(--border); border-radius: 5px;
@@ -1138,6 +1138,27 @@ main {
 .battery-details { min-width: 0; flex: 1; }
 .battery-status { font-size: 15px; font-weight: 600; }
 .battery-sub { font-size: 12.5px; color: var(--muted); margin-top: 2px; line-height: 1.5; }
+
+.battery-sparkline {
+  width: 100%;
+  height: 40px;
+  margin-top: 10px;
+  display: block;
+}
+.battery-sparkline-line { fill: none; stroke: var(--accent); stroke-width: 2; }
+.battery-sparkline-fill { fill: var(--accent-dim); opacity: 0.5; }
+.battery-sparkline-caption {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.cpu-summary-row {
+  padding: 10px 4px;
+  font-size: 13px;
+  color: var(--muted);
+  cursor: pointer;
+}
 
 /* --- Pull-to-refresh: a small spinner-ish indicator that grows as the
    user drags down past the top of an already-scrolled-to-top list, then
@@ -1422,6 +1443,16 @@ label.switch input { accent-color: var(--accent); }
   font-family: var(--mono);
   font-size: 11px;
 }
+.timeline-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  margin-right: 6px;
+}
+.timeline-dot.dot-start { background: var(--accent); }
+.timeline-dot.dot-end { background: var(--muted); }
+.timeline-dot.dot-warn { background: var(--warn); }
 .timeline-warning .timeline-main {
   color: var(--warn);
 }
