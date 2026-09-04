@@ -14,6 +14,66 @@
 # logic changes, only where the code lives and how it's split.
 
 : "${low_ram_orig_file:=/data/local/tmp/PowerSentinel/PowerSentinel.lowram_orig}"
+: "${proc_orig_file:=/data/local/tmp/PowerSentinel/PowerSentinel.procorig}"
+
+# CRITICAL FIX (found by an external code review, then confirmed with
+# a real reproduction before being trusted): the single-slot ownership
+# files (gms_state_file, wifi_state_file, low_ram_orig_file) are
+# global, not indexed by event. Two active events wanting the exact
+# SAME action on the same target self-heal correctly via
+# reassert_active_events() re-establishing ownership after an undo -
+# verified this explicitly and it holds. But two active events wanting
+# DIFFERENT actions on the same target (e.g. one event's
+# handle_gms=nice, another's handle_gms=kill, both active at once) do
+# NOT self-heal: whichever event's apply happened to run first "owns"
+# the single record slot, so when the SECOND event later runs its own
+# apply, it correctly recognizes the target is already in a different
+# state than before ITS OWN change and skips re-recording (since a
+# record already exists) - meaning its own real transition is never
+# tracked at all. Confirmed via a real reproduction: GMS ends up
+# permanently disabled forever after both events end, since neither
+# undo call ever has an accurate record of what to restore.
+#
+# Fixed with a different approach than per-event-indexed state (which
+# would need a real redesign of every one of these files): before
+# actually restoring anything, check whether any OTHER currently-
+# active event (excluding the one currently ending, which is still in
+# $active_events at this point in handle_event()'s own flow) still
+# wants to touch this same field at all, REGARDLESS of which specific
+# value it wants. If so, don't restore - leave the recorded state
+# exactly as it is and return; reassert_active_events() (which runs
+# immediately after undo, as part of the same handle_event() flow)
+# will correctly re-apply whatever that other event's own
+# configuration actually needs, including re-establishing correct
+# ownership tracking for its own real transition. Only when confirmed
+# that NO other active event needs this field at all does undo
+# actually restore the true original.
+_another_active_event_wants() {
+  local field="$1" ev val
+  for ev in "${active_events[@]}"; do
+    [ -n "$ev" ] && [ "$ev" != "$event" ] || continue
+    val="$(config_get_event_raw "$ev" "$field" false)"
+    [ "$val" = "false" ] || return 0
+  done
+  return 1
+}
+
+# Per-app variant of the same check: is there another currently-active
+# event whose OWN handle_apps, once filtered through this specific
+# app's own 4-level policy, still resolves to a real action for THIS
+# app? Only ever called for apps actually being reversed (see
+# action_apps_undo below), not every installed app.
+_another_active_event_wants_app() {
+  local app="$1" ev val eff
+  for ev in "${active_events[@]}"; do
+    [ -n "$ev" ] && [ "$ev" != "$event" ] || continue
+    val="$(config_get_event_raw "$ev" handle_apps false)"
+    [ "$val" = "false" ] && continue
+    eff="$(apppolicy_effective_action "$app" "$val")"
+    [ "$eff" = "false" ] || return 0
+  done
+  return 1
+}
 : "${apps_ownership_file:=/data/local/tmp/PowerSentinel/PowerSentinel.appstate}"
 
 # Current nice value of a live PID, via /proc/[pid]/stat (field 19) -
@@ -164,6 +224,7 @@ action_apps_undo() {
     # already in that state before PowerSentinel acted) is left alone.
     case "${_owned_action[$app]:-}" in
       nice)
+        _another_active_event_wants_app "$app" && continue
         for i in $(pgrep "$app"); do
           log_msg 3 "Restoring the original nice level for $app"
           renice -n "${_owned_nice[$app]:-0}" "$i" &>/dev/null &
@@ -172,6 +233,7 @@ action_apps_undo() {
         changed=1
         ;;
       suspend)
+        _another_active_event_wants_app "$app" && continue
         log_msg 3 "Unsuspending $app"
         pm unsuspend "$app" &>/dev/null &
         unset "_owned_action[$app]"
@@ -211,31 +273,50 @@ _gms_is_disabled() {
   pm list packages -d 2>/dev/null | grep -q "com.google.android.gms$"
 }
 
+_gms_ensure_state_dir() {
+  mkdir -p "$(dirname "$gms_state_file")" 2>/dev/null
+}
+
 action_gms_apply() {
   capability_has gms_installed || return
-  # BUG FIX (found during an external code review's broader idempotency
-  # concern, then confirmed by reading this function): this had exactly
-  # the same "restore only what you actually changed" gap already fixed
-  # for apps and low_ram - undo unconditionally re-enabled GMS and reset
-  # its nice to 0, with no record of whether GMS was already disabled
-  # (for entirely unrelated reasons) before PowerSentinel ever touched
-  # it, or what its real original nice value was.
+  # BUG FIX (found by an external code review, then confirmed with a
+  # real reproduction before being trusted): the earlier version of
+  # this fix recorded ownership only ONCE ("if the state file doesn't
+  # exist yet") - correct when every active event wants the SAME
+  # action, but incoherent when different active events want DIFFERENT
+  # actions on GMS (one event's handle_gms=nice, another's
+  # handle_gms=kill, both active at once). Confirmed: the second
+  # event's own real transition was never recorded at all (a record
+  # already existed, from the first event's own different action), so
+  # when both events eventually ended, neither undo call had an
+  # accurate record of what to restore - GMS ended up permanently
+  # disabled.
+  #
+  # Fixed by always updating the recorded ACTION on every apply
+  # (reflecting whichever event most recently caused GMS's current
+  # state), while capturing the TRUE original value (nice level, or
+  # disabled state) only the first time this transitions from
+  # untracked to tracked - the two are tracked separately so one can
+  # change without touching the other.
   if [ "$handle_gms" = "nice" ]; then
-    local pid
+    local pid orig_nice
     pid="$(pgrep com.google.android.gms)"
-    if [ -n "$pid" ] && [ ! -f "$gms_state_file" ]; then
-      mkdir -p "$(dirname "$gms_state_file")" 2>/dev/null
-      echo "nice:$(_app_current_nice "$pid")" > "$gms_state_file"
-      chmod 600 "$gms_state_file" 2>/dev/null
-    fi
+    orig_nice="$("$JQ" -r '.orig_nice // empty' "$gms_state_file" 2>/dev/null)"
+    [ -n "$orig_nice" ] || orig_nice="$(_app_current_nice "$pid")"
+    _gms_ensure_state_dir
+    "$JQ" -cn --arg action "nice" --arg orig "$orig_nice" '{action: $action, orig_nice: $orig}' > "$gms_state_file" 2>/dev/null
+    chmod 600 "$gms_state_file" 2>/dev/null
     log_msg 3 "Renicing GMS"
     renice -n 19 "$pid"
   elif [ "$handle_gms" = "kill" ]; then
-    if ! _gms_is_disabled && [ ! -f "$gms_state_file" ]; then
-      mkdir -p "$(dirname "$gms_state_file")" 2>/dev/null
-      echo "kill" > "$gms_state_file"
-      chmod 600 "$gms_state_file" 2>/dev/null
+    local was_disabled
+    was_disabled="$("$JQ" -r '.orig_disabled // empty' "$gms_state_file" 2>/dev/null)"
+    if [ -z "$was_disabled" ]; then
+      if _gms_is_disabled; then was_disabled="true"; else was_disabled="false"; fi
     fi
+    _gms_ensure_state_dir
+    "$JQ" -cn --arg action "kill" --arg orig "$was_disabled" '{action: $action, orig_disabled: $orig}' > "$gms_state_file" 2>/dev/null
+    chmod 600 "$gms_state_file" 2>/dev/null
     log_msg 3 "Disabling GMS"
     pm disable com.google.android.gms
     am force-stop com.google.android.gms
@@ -248,19 +329,27 @@ action_gms_undo() {
   # matching apply ever having run) finds nothing recorded and does
   # nothing further, rather than guessing.
   [ -f "$gms_state_file" ] || return
-  local recorded
-  recorded="$(cat "$gms_state_file" 2>/dev/null)"
-  rm -f "$gms_state_file"
-  case "$recorded" in
-    nice:*)
-      local orig="${recorded#nice:}"
+  _another_active_event_wants handle_gms && return
+  local action orig
+  action="$("$JQ" -r '.action // empty' "$gms_state_file" 2>/dev/null)"
+  case "$action" in
+    nice)
+      orig="$("$JQ" -r '.orig_nice // empty' "$gms_state_file" 2>/dev/null)"
+      rm -f "$gms_state_file"
       [ -n "$orig" ] || orig="0"
       log_msg 3 "Restoring the original nice level for GMS"
       renice -n "$orig" "$(pgrep com.google.android.gms)"
       ;;
     kill)
-      log_msg 3 "Enabling GMS"
-      pm enable com.google.android.gms
+      orig="$("$JQ" -r '.orig_disabled // empty' "$gms_state_file" 2>/dev/null)"
+      rm -f "$gms_state_file"
+      if [ "$orig" != "true" ]; then
+        log_msg 3 "Enabling GMS"
+        pm enable com.google.android.gms
+      fi
+      ;;
+    *)
+      rm -f "$gms_state_file"
       ;;
   esac
 }
@@ -284,13 +373,46 @@ action_proc_apply() {
   # specific event is still listed as active there.
   local proc_event="$event"
   while "$JQ" -e --arg e "$proc_event" 'any(.[]?; . == $e)' "$state_file" >/dev/null 2>&1; do
-    while IFS= read -r proc nice; do
-      pid="$(pgrep "$proc")"
+    # BUG FIX (found while fixing the ownership issue below, unrelated
+    # to it): `IFS= read -r proc nice` - setting IFS to EMPTY disables
+    # field splitting entirely, so the WHOLE line ("myprocess 10") went
+    # into $proc and $nice was always empty, silently falling through
+    # to the hardcoded default of 10 below regardless of what nice
+    # value the user actually configured per process in $proc_file.
+    # This has likely never worked as documented since it was written.
+    while read -r proc nice; do
       [ ! "$nice" ] && nice="10"
-      if [ "$(cat /proc/$pid/stat | cut -d' ' -f19)" != "$nice" ]; then
-        log_msg 3 "Renicing $proc to $nice"
-        renice -n "$nice" "$pid"
-      fi
+      # BUG FIX (external code review): this used to do
+      # `pid="$(pgrep "$proc")"` as a single assignment - for a process
+      # with more than one running instance, pgrep returns MULTIPLE
+      # PIDs (one per line), so $pid became a multi-line string and
+      # `/proc/$pid/stat` was never a valid path at all for any process
+      # with more than one PID; the whole check silently did nothing.
+      # Now loops over every matching PID individually, the same
+      # pattern already used for apps.
+      for pid in $(pgrep "$proc"); do
+        [ -n "$pid" ] || continue
+        if [ "$(cat /proc/$pid/stat 2>/dev/null | cut -d' ' -f19)" != "$nice" ]; then
+          # BUG FIX (same review): also capture the real original nice
+          # for this PROCESS NAME (not this PID specifically - a
+          # process that restarts mid-monitoring gets a new PID, but
+          # it's still the same logical process, and shouldn't be
+          # treated as having a "new" original just because its PID
+          # changed) the first time it's ever touched, so undo can
+          # restore it instead of hardcoding 0.
+          if ! "$JQ" -e --arg p "$proc" 'has($p)' "$proc_orig_file" >/dev/null 2>&1; then
+            mkdir -p "$(dirname "$proc_orig_file")" 2>/dev/null
+            [ -s "$proc_orig_file" ] || echo '{}' > "$proc_orig_file"
+            local cur_nice tmp
+            cur_nice="$(cat /proc/$pid/stat 2>/dev/null | cut -d' ' -f19)"
+            tmp="$(mktemp "$(dirname "$proc_orig_file")/.procorig.XXXXXX")"
+            "$JQ" --arg p "$proc" --arg n "$cur_nice" '.[$p] = $n' "$proc_orig_file" > "$tmp" 2>/dev/null \
+              && chmod 600 "$tmp" 2>/dev/null && mv "$tmp" "$proc_orig_file" || rm -f "$tmp"
+          fi
+          log_msg 3 "Renicing $proc ($pid) to $nice"
+          renice -n "$nice" "$pid"
+        fi
+      done
     done < "$proc_file"
     sleep "$delay"
   done &
@@ -298,9 +420,17 @@ action_proc_apply() {
 
 action_proc_undo() {
   [ "$handle_proc" = "true" ] || return
-  while IFS= read -r proc nice; do
-    log_msg 3 "Resetting the nice level for $proc"
-    renice -n 0 "$(pgrep "$proc")"
+  while read -r proc nice; do
+    local orig
+    orig="$("$JQ" -r --arg p "$proc" '.[$p] // empty' "$proc_orig_file" 2>/dev/null)"
+    [ -n "$orig" ] || orig="0"
+    for pid in $(pgrep "$proc"); do
+      [ -n "$pid" ] || continue
+      log_msg 3 "Restoring the original nice level for $proc ($pid)"
+      renice -n "$orig" "$pid"
+    done
+    "$JQ" --arg p "$proc" 'del(.[$p])' "$proc_orig_file" > "$proc_orig_file.tmp" 2>/dev/null \
+      && mv "$proc_orig_file.tmp" "$proc_orig_file"
   done < "$proc_file"
 }
 
@@ -341,6 +471,7 @@ action_low_ram_undo() {
   # with no matching apply ever having run) finds nothing recorded and
   # does nothing further, rather than guessing.
   [ -f "$low_ram_orig_file" ] || return
+  _another_active_event_wants low_ram && return
   local orig
   orig="$(cat "$low_ram_orig_file" 2>/dev/null)"
   rm -f "$low_ram_orig_file"
@@ -413,6 +544,7 @@ action_wifi_undo() {
   # only re-enables if PowerSentinel itself is the one who actually
   # turned WiFi off - never if it was already off beforehand.
   [ -f "$wifi_state_file" ] || return
+  _another_active_event_wants kill_wifi && return
   local recorded
   recorded="$(cat "$wifi_state_file" 2>/dev/null)"
   rm -f "$wifi_state_file"
@@ -454,21 +586,78 @@ action_doze_undo() {
 
 # ---------- CPU cores ----------
 
+: "${cores_online_file:=/data/local/tmp/PowerSentinel/PowerSentinel.coresonline}"
+: "${cores_manual_gov_file:=/data/local/tmp/PowerSentinel/PowerSentinel.coresgov}"
+
+# Whether $1 (a core name, e.g. "cpu6") is CURRENTLY online, read
+# directly from the same sysfs file action_cores_apply/undo themselves
+# read and write - not a cached array from detection time.
+_core_is_online() {
+  [ "$(cat "$cpu_base_path/$1/online" 2>/dev/null)" = "1" ]
+}
+
+# Records that core $1 was online before PowerSentinel is about to take
+# it offline - only the first time (an already-tracked core keeps its
+# real original, not PowerSentinel's own "0"). $2 is the JSON file to
+# record into (cores_online_file is shared between disable_cores'
+# "auto" and "manual" modes, since both ultimately toggle the exact
+# same sysfs "online" file per core).
+_core_capture_online_orig() {
+  local core="$1" file="$2" existing
+  existing="$("$JQ" -r --arg c "$core" '.[$c] // empty' "$file" 2>/dev/null)"
+  [ -n "$existing" ] && return
+  mkdir -p "$(dirname "$file")" 2>/dev/null
+  [ -s "$file" ] || echo '{}' > "$file"
+  local tmp
+  tmp="$(mktemp "$(dirname "$file")/.coretrack.XXXXXX")" || return
+  if _core_is_online "$core"; then
+    "$JQ" --arg c "$core" '.[$c] = "1"' "$file" > "$tmp" 2>/dev/null
+  else
+    "$JQ" --arg c "$core" '.[$c] = "0"' "$file" > "$tmp" 2>/dev/null
+  fi
+  [ -s "$tmp" ] && chmod 600 "$tmp" 2>/dev/null && mv "$tmp" "$file" || rm -f "$tmp"
+}
+
+# Whether any OTHER currently-active event's own disable_cores (auto or
+# manual) would also disable this specific core - same composition-
+# safety reasoning as GMS/WiFi/low_ram/apps above, applied per core.
+_another_active_event_disables_core() {
+  local core="$1" ev val
+  for ev in "${active_events[@]}"; do
+    [ -n "$ev" ] && [ "$ev" != "$event" ] || continue
+    val="$(config_get_event_raw "$ev" disable_cores false)"
+    [ "$val" = "false" ] && continue
+    if [ "$val" = "auto" ]; then
+      # Can't recompute hp_cpus for another event without re-running
+      # detection - but disable_cores=auto always means the same real
+      # hp_cpus set on this device regardless of which event asked for
+      # it, so checking membership in the CURRENT hp_cpus array (auto-
+      # detected once at startup, not per event) is accurate here.
+      local hp
+      for hp in "${hp_cpus[@]}"; do [ "$hp" = "$core" ] && return 0; done
+    else
+      local c
+      for c in $val; do [ "$c" = "$core" ] && return 0; done
+    fi
+  done
+  return 1
+}
+
 action_cores_apply() {
   { [ "$handle_cores" != "false" ] || [ "$disable_cores" != "false" ]; } || return
-  # BUG FIX: magic_remount_rw/magic_remount_ro (here and further below)
-  # were never defined anywhere in this project's history - going all
-  # the way back to its very first commit. Wrapped in &>/dev/null, they
-  # always failed silently with "command not found". Confirmed via
-  # extensive testing that writing to /sys/devices/system/cpu (a
-  # virtual filesystem controlled by kernel driver permissions, not by
-  # whether /system itself is mounted read-write) works correctly
-  # without any remount step - removed rather than "fixed", since there
-  # was never a working implementation to restore and the feature has
-  # never needed one.
+  # BUG FIX (external code review, same class as GMS/WiFi/low_ram/apps
+  # above): action_cores_undo() used to unconditionally bring every
+  # targeted core back online, with no record of whether it was
+  # already offline (for entirely unrelated reasons - thermal
+  # throttling, a different tool, manual admin action) before
+  # PowerSentinel ever touched it. Now records, per core, whether it
+  # was genuinely online before PowerSentinel takes it offline -
+  # exactly the same reasoning already applied to apps/GMS/WiFi.
   if [ "$disable_cores" = "auto" ]; then
     if capability_has cores_online; then
       for cpu in ${hp_cpus[@]}; do
+        _core_is_online "$cpu" || continue
+        _core_capture_online_orig "$cpu" "$cores_online_file"
         log_msg 3 "Disabling $cpu"
         echo "0" > "$cpu_base_path/$cpu/online"
       done
@@ -481,6 +670,8 @@ action_cores_apply() {
     if capability_has cores_online; then
       for core in $disable_cores; do
         if [ -d "$cpu_base_path/$core" ]; then
+          _core_is_online "$core" || continue
+          _core_capture_online_orig "$core" "$cores_online_file"
           log_msg 3 "Disabling $core"
           echo "0" > "$cpu_base_path/$core/online"
         fi
@@ -512,11 +703,32 @@ action_cores_apply() {
     # never set this cycle) - not the core the log line right above it
     # claimed. Manual (non-"auto") core selection is a comparatively
     # rarely-used mode, which is likely why this went unnoticed.
+    #
+    # BUG FIX (external code review): undo used to restore from
+    # $lp_default_govs, an array populated by auto_map_cores() only for
+    # cores classified as low-power AT STARTUP - a manually-specified
+    # high-power core (e.g. handle_cores=cpu6 where cpu6 is actually a
+    # performance core) has no entry there at all, so undo would write
+    # an EMPTY STRING as the governor. Now captures each manually-
+    # specified core's real, current governor before overwriting it,
+    # regardless of whether that core happens to also be in the auto-
+    # detected low-power set.
     for core in $handle_cores; do
-      [ -d "$cpu_base_path/$core/" ] && \
-      grep -q " powersave " "$cpu_base_path/$core/cpufreq/scaling_available_governors" && \
-      log_msg 3 "Setting powersave on $core" && \
-      echo "powersave" > "$cpu_base_path/$core/cpufreq/scaling_governor"
+      if [ -d "$cpu_base_path/$core/" ] && grep -q " powersave " "$cpu_base_path/$core/cpufreq/scaling_available_governors"; then
+        local existing_gov
+        existing_gov="$("$JQ" -r --arg c "$core" '.[$c] // empty' "$cores_manual_gov_file" 2>/dev/null)"
+        if [ -z "$existing_gov" ]; then
+          mkdir -p "$(dirname "$cores_manual_gov_file")" 2>/dev/null
+          [ -s "$cores_manual_gov_file" ] || echo '{}' > "$cores_manual_gov_file"
+          local tmp real_gov
+          real_gov="$(cat "$cpu_base_path/$core/cpufreq/scaling_governor" 2>/dev/null)"
+          tmp="$(mktemp "$(dirname "$cores_manual_gov_file")/.coresgov.XXXXXX")"
+          "$JQ" --arg c "$core" --arg g "$real_gov" '.[$c] = $g' "$cores_manual_gov_file" > "$tmp" 2>/dev/null \
+            && chmod 600 "$tmp" 2>/dev/null && mv "$tmp" "$cores_manual_gov_file" || rm -f "$tmp"
+        fi
+        log_msg 3 "Setting powersave on $core"
+        echo "powersave" > "$cpu_base_path/$core/cpufreq/scaling_governor"
+      fi
     done
   fi
 }
@@ -526,8 +738,12 @@ action_cores_undo() {
   if [ "$disable_cores" = "auto" ]; then
     if capability_has cores_online; then
       for cpu in ${hp_cpus[@]}; do
+        [ "$("$JQ" -r --arg c "$cpu" '.[$c] // empty' "$cores_online_file" 2>/dev/null)" = "1" ] || continue
+        _another_active_event_disables_core "$cpu" && continue
         log_msg 3 "Enabling $cpu"
         echo "1" > "$cpu_base_path/$cpu/online"
+        "$JQ" --arg c "$cpu" 'del(.[$c])' "$cores_online_file" > "$cores_online_file.tmp" 2>/dev/null \
+          && mv "$cores_online_file.tmp" "$cores_online_file"
       done
     fi
   else
@@ -535,8 +751,12 @@ action_cores_undo() {
     if capability_has cores_online; then
       for cpu in $disable_cores; do
         if [ -d "$cpu_base_path/$cpu/" ]; then
+          [ "$("$JQ" -r --arg c "$cpu" '.[$c] // empty' "$cores_online_file" 2>/dev/null)" = "1" ] || continue
+          _another_active_event_disables_core "$cpu" && continue
           log_msg 3 "Enabling $cpu"
           echo "1" > "$cpu_base_path/$cpu/online"
+          "$JQ" --arg c "$cpu" 'del(.[$c])' "$cores_online_file" > "$cores_online_file.tmp" 2>/dev/null \
+            && mv "$cores_online_file.tmp" "$cores_online_file"
         fi
       done
     fi
@@ -553,11 +773,19 @@ action_cores_undo() {
       done
     fi
   else
-    # the user manually set it
-    for cpu in $handle_cores; do
-      if [ -d "$cpu_base_path/$cpu/" ]; then
-        log_msg 3 "Resetting $cpu"
-        echo "${lp_default_govs[$cpu]}" > "$cpu_base_path/$cpu/cpufreq/scaling_governor"
+    # the user manually set it - restore from the real captured value
+    # (cores_manual_gov_file), not $lp_default_govs (see the matching
+    # comment in action_cores_apply for why that array doesn't work
+    # here).
+    for core in $handle_cores; do
+      if [ -d "$cpu_base_path/$core/" ]; then
+        local recorded_gov
+        recorded_gov="$("$JQ" -r --arg c "$core" '.[$c] // empty' "$cores_manual_gov_file" 2>/dev/null)"
+        [ -n "$recorded_gov" ] || continue
+        log_msg 3 "Resetting $core"
+        echo "$recorded_gov" > "$cpu_base_path/$core/cpufreq/scaling_governor"
+        "$JQ" --arg c "$core" 'del(.[$c])' "$cores_manual_gov_file" > "$cores_manual_gov_file.tmp" 2>/dev/null \
+          && mv "$cores_manual_gov_file.tmp" "$cores_manual_gov_file"
       fi
     done
   fi
