@@ -255,44 +255,100 @@ async function dismissFlagged(pkg) {
 // informational context, never required for the policy list itself to
 // be useful.
 const APP_POLICY_LEVELS = [0, 1, 2, 3];
-let appPolicyState = { allPkgs: null, level: {}, usage: {}, filter: '' };
+let appPolicyState = { allPkgs: null, level: {}, usage: {}, filter: '', liveConfig: null };
 
 async function renderAppPolicyScreen() {
   const list = document.getElementById('ap-policy-list');
   list.innerHTML = `<p class="hint">${escapeHtml(t('apps.loading'))}</p>`;
   try {
-    const [pkgs, policyText] = await Promise.all([
+    const [pkgs, policyText, configText] = await Promise.all([
       listPackages(false),
-      readAppPolicies()
+      readAppPolicies(),
+      readConfig()
     ]);
     let policyMap = {};
     try { policyMap = JSON.parse(policyText); } catch (e) { policyMap = {}; }
     appPolicyState.allPkgs = pkgs;
     appPolicyState.level = policyMap;
+    try { appPolicyState.liveConfig = parseConfig(configText); } catch (e) { appPolicyState.liveConfig = null; }
     drawAppPolicyList();
   } catch (e) {
     list.innerHTML = `<p class="hint">${escapeHtml(t('apps.listError', { msg: e.message }))}</p>`;
   }
 }
 
+// Política por app, en lenguaje de comportamiento real - no solo un
+// nivel técnico 0-3, sino qué pasa DE VERDAD en las situaciones que le
+// importan al usuario. Los nombres reutilizan el mismo vocabulario ya
+// establecido en el dashboard de Estado (Ahorro suave/moderado/
+// extremo) para que un mismo concepto se llame igual en toda la app.
+const APP_POLICY_LEVEL_LABELS = ['apppolicy.protected', 'apppolicy.gentle', 'apppolicy.balanced', 'apppolicy.restricted'];
+const APP_POLICY_EXPLANATIONS = ['apppolicy.explain0', 'apppolicy.explain1', 'apppolicy.explain2', 'apppolicy.explain3'];
+const ACTION_VERB_KEYS = { false: 'apppolicy.actionNone', nice: 'apppolicy.actionNice', kill: 'apppolicy.actionKill', suspend: 'apppolicy.actionSuspend' };
+
+function getEventHandleApps(model, eventName) {
+  if (!model || !model.blocks) return 'false';
+  const block = model.blocks.find((b) => b.name === eventName);
+  return (block && block.fields.handle_apps) || 'false';
+}
+
+// Réplica exacta, en JS, de apppolicy_effective_action() en
+// PowerSentinel-apppolicy.sh - la MISMA regla que decide de verdad qué
+// le pasa a una app, para que esta pantalla nunca describa un
+// comportamiento distinto del que el demonio realmente aplicaría.
+function effectiveActionForLevel(eventAction, level) {
+  if (level === 0) return 'false';
+  if (level === 1) return eventAction === 'false' ? 'false' : 'nice';
+  if (level === 3) return 'suspend';
+  return eventAction;
+}
+
+function actionVerb(action) {
+  return t(ACTION_VERB_KEYS[action] || 'apppolicy.actionNone');
+}
+
+// El motor adaptativo NO se descompone en "pantalla apagada" / "batería
+// baja" como condiciones independientes - combina ambas (y más) en un
+// único score. Describir esa realidad con las mismas dos frases que el
+// modo clásico usa sería sencillamente falso, así que cada modo
+// muestra su propia estructura real: 2 situaciones concretas en modo
+// clásico, 3 niveles de presión en modo adaptativo.
+function describeAppSituations(level, model) {
+  if (!model) return [];
+  if (model.adaptive_mode === 'true') {
+    const tierNames = ['adaptive_tier1', 'adaptive_tier2', 'adaptive_tier3'];
+    const tierLabels = ['dashboard.eventTier1', 'dashboard.eventTier2', 'dashboard.eventTier3'];
+    return tierNames.map((tier, i) => ({
+      label: t(tierLabels[i]),
+      value: actionVerb(effectiveActionForLevel(getEventHandleApps(model, tier), level))
+    }));
+  }
+  return [
+    { label: t('apppolicy.whenScreenOff'), value: actionVerb(effectiveActionForLevel(getEventHandleApps(model, 'screen_off'), level)) },
+    { label: t('apppolicy.whenLowBattery'), value: actionVerb(effectiveActionForLevel(getEventHandleApps(model, 'low_power'), level)) }
+  ];
+}
+
 function drawAppPolicyList() {
   const list = document.getElementById('ap-policy-list');
   const q = (appPolicyState.filter || '').toLowerCase();
   const pkgs = (appPolicyState.allPkgs || []).filter((p) => p.toLowerCase().indexOf(q) !== -1);
-  const levelLabels = [
-    t('apppolicy.level0'), t('apppolicy.level1'), t('apppolicy.level2'), t('apppolicy.level3')
-  ];
   list.innerHTML = '';
   pkgs.forEach((pkg) => {
     const level = appPolicyState.level[pkg] !== undefined ? appPolicyState.level[pkg] : 2;
     const usage = appPolicyState.usage[pkg];
+    const situations = describeAppSituations(level, appPolicyState.liveConfig);
     const row = document.createElement('div');
     row.className = 'card apppolicy-row';
     row.innerHTML =
       `<div class="apppolicy-name">${escapeHtml(pkg)}${usage ? ` <span class="apppolicy-usage">${escapeHtml(usage)}</span>` : ''}</div>` +
       `<div class="apppolicy-levels">${APP_POLICY_LEVELS.map((lvl) =>
-        `<button class="apppolicy-lvl-btn${lvl === level ? ' selected' : ''}" data-lvl="${lvl}">${escapeHtml(levelLabels[lvl])}</button>`
-      ).join('')}</div>`;
+        `<button class="apppolicy-lvl-btn${lvl === level ? ' selected' : ''}" data-lvl="${lvl}">${escapeHtml(t(APP_POLICY_LEVEL_LABELS[lvl]))}</button>`
+      ).join('')}</div>` +
+      (situations.length ? `<div class="apppolicy-situations">${situations.map((s) =>
+        `<div class="apppolicy-situation-row"><span class="apppolicy-situation-label">${escapeHtml(s.label)}</span><span class="apppolicy-situation-value">${escapeHtml(s.value)}</span></div>`
+      ).join('')}</div>` : '') +
+      `<p class="hint apppolicy-explain">${escapeHtml(t(APP_POLICY_EXPLANATIONS[level]))}</p>`;
     row.querySelectorAll('.apppolicy-lvl-btn').forEach((btn) => {
       btn.addEventListener('click', () => setPolicyForApp(pkg, parseInt(btn.dataset.lvl, 10)));
     });

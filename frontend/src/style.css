@@ -465,6 +465,25 @@ main {
   font-weight: 600;
 }
 
+.apppolicy-situations {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.apppolicy-situation-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 3px 0;
+  font-size: 12px;
+}
+.apppolicy-situation-label { color: var(--muted); }
+.apppolicy-situation-value { color: var(--text); font-weight: 500; }
+.apppolicy-explain {
+  margin-top: 8px;
+  margin-bottom: 0;
+}
+
+
 .energy-regime-row {
   display: flex;
   justify-content: space-between;
