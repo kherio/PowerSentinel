@@ -143,9 +143,9 @@ function applyMode() {
 // progresión visual de intensidad) y clave de la descripción de una
 // línea que se muestra en la tarjeta.
 const AGGRESSION_META = {
-  low: { icon: 'leaf', descKey: 'config.basicLowDesc' },
-  medium: { icon: 'gauge', descKey: 'config.basicMediumDesc' },
-  high: { icon: 'bolt', descKey: 'config.basicHighDesc' }
+  low: { emoji: '🚀', labelKey: 'config.basicGoalPerformance', descKey: 'config.basicLowDesc' },
+  medium: { emoji: '⚖️', labelKey: 'config.basicGoalBalanced', descKey: 'config.basicMediumDesc' },
+  high: { emoji: '🔋', labelKey: 'config.basicGoalAutonomy', descKey: 'config.basicHighDesc' }
 };
 
 function renderBasicMode() {
@@ -376,17 +376,25 @@ async function toggleSafeMode() {
 // AGGRESSION_PRESETS sin tener aquí una traducción, se muestra el
 // propio nombre técnico del campo como último recurso, en vez de
 // omitirlo silenciosamente.
-const FIELD_DESCRIPTIONS = {
-  handle_apps: { nice: 'config.basicFieldAppsNice' },
-  doze: { light: 'config.basicFieldDozeLight', deep: 'config.basicFieldDozeDeep' },
-  handle_gms: { nice: 'config.basicFieldGmsNice' },
-  low_ram: { true: 'config.basicFieldLowRam' }
+// Objetivo vs Mecanismo: el usuario elige un OBJETIVO (rendimiento /
+// equilibrio / autonomía) sin necesitar entender los mecanismos
+// técnicos que lo consiguen - esos quedan detrás de "Cómo se
+// consigue", generados directamente desde los mismos datos reales
+// que se aplican (AGGRESSION_PRESETS), nunca escritos a mano aparte.
+const MECHANISM_INFO = {
+  handle_apps: { category: 'config.mechCategoryApps', treatments: { nice: 'config.mechTreatmentAppsNice' } },
+  doze: { category: 'config.mechCategoryDoze', treatments: { light: 'config.mechTreatmentDozeLight', deep: 'config.mechTreatmentDozeDeep' } },
+  handle_gms: { category: 'config.mechCategoryGms', treatments: { nice: 'config.mechTreatmentGmsNice' } },
+  low_ram: { category: 'config.mechCategoryRam', treatments: { true: 'config.mechTreatmentRamOn' } }
 };
 
-function describeTierFields(fields) {
+function describeMechanisms(fields) {
   return Object.keys(fields).map((key) => {
-    const key_i18n = FIELD_DESCRIPTIONS[key] && FIELD_DESCRIPTIONS[key][fields[key]];
-    return key_i18n ? t(key_i18n) : `${key}=${fields[key]}`;
+    const info = MECHANISM_INFO[key];
+    const category = info ? t(info.category) : key;
+    const treatmentKey = info && info.treatments[fields[key]];
+    const treatment = treatmentKey ? t(treatmentKey) : String(fields[key]);
+    return { category, treatment };
   });
 }
 
@@ -394,33 +402,40 @@ function renderAggressionDetail(level) {
   const el = document.getElementById('cb-aggression-detail');
   const preset = level && AGGRESSION_PRESETS[level];
   if (!preset) { el.innerHTML = ''; return; }
-  const tierLabels = {
-    adaptive_tier1: t('config.basicTier1Label'),
-    adaptive_tier2: t('config.basicTier2Label'),
-    adaptive_tier3: t('config.basicTier3Label')
-  };
-  el.innerHTML = Object.keys(preset.tiers).map((tierName) => {
-    const items = describeTierFields(preset.tiers[tierName]);
-    if (!items.length) return '';
-    return `<div class="aggression-tier">` +
-      `<div class="aggression-tier-title">${escapeHtml(tierLabels[tierName] || tierName)}</div>` +
-      `<ul class="aggression-tier-list">${items.map((i) => `<li>${escapeHtml(i)}</li>`).join('')}</ul>` +
-      `</div>`;
-  }).join('');
+  // tier3 es siempre el techo real de cada nivel (la escalada solo
+  // añade o profundiza mecanismos, nunca los retira - confirmado
+  // contra los propios datos), así que muestra de un vistazo TODO lo
+  // que ese nivel puede llegar a hacer, sin fragmentarlo por umbral.
+  const mechanisms = describeMechanisms(preset.tiers.adaptive_tier3);
+  el.innerHTML =
+    `<button class="aggression-detail-toggle" id="cb-detail-toggle" type="button">` +
+    `<span>${escapeHtml(t('config.basicHowTitle'))}</span><span class="aggression-detail-caret">›</span></button>` +
+    `<div class="aggression-detail-body" id="cb-detail-body" style="display:none;">` +
+    mechanisms.map((m) =>
+      `<div class="mechanism-row"><span class="mechanism-cat">${escapeHtml(m.category)}</span>` +
+      `<span class="mechanism-arrow">→</span><span class="mechanism-treatment">${escapeHtml(m.treatment)}</span></div>`
+    ).join('') +
+    `</div>`;
+  const toggle = document.getElementById('cb-detail-toggle');
+  const body = document.getElementById('cb-detail-body');
+  toggle.addEventListener('click', () => {
+    const expand = body.style.display === 'none';
+    body.style.display = expand ? 'block' : 'none';
+    toggle.classList.toggle('expanded', expand);
+  });
 }
 
 function renderAggressionButtons() {
   const wrap = document.getElementById('cb-aggression-buttons');
   const current = currentAggressionLevel();
-  const labels = { low: t('config.basicLow'), medium: t('config.basicMedium'), high: t('config.basicHigh') };
   wrap.innerHTML = '';
   Object.keys(AGGRESSION_PRESETS).forEach((level) => {
     const meta = AGGRESSION_META[level];
     const card = document.createElement('div');
     card.className = 'aggression-card' + (level === current ? ' selected' : '');
     card.innerHTML =
-      `<div class="aggression-icon">${ICONS[meta.icon]}</div>` +
-      `<div class="aggression-title">${escapeHtml(labels[level])}</div>` +
+      `<div class="aggression-icon aggression-emoji">${meta.emoji}</div>` +
+      `<div class="aggression-title">${escapeHtml(t(meta.labelKey))}</div>` +
       `<div class="aggression-desc">${escapeHtml(t(meta.descKey))}</div>`;
     card.addEventListener('click', () => applyAggressionPreset(level));
     wrap.appendChild(card);

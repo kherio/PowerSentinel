@@ -352,23 +352,48 @@ main {
   padding-top: 14px;
   border-top: 1px solid var(--border);
 }
-.aggression-tier {
-  margin-bottom: 12px;
+.aggression-emoji {
+  font-size: 22px;
+  line-height: 1;
 }
-.aggression-tier:last-child { margin-bottom: 0; }
-.aggression-tier-title {
+
+.aggression-detail-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: none;
+  border: none;
+  padding: 0;
   font-size: 12px;
   font-weight: 600;
-  color: var(--text);
-  margin-bottom: 4px;
+  color: var(--muted);
+  cursor: pointer;
 }
-.aggression-tier-list {
-  margin: 0;
-  padding-left: 18px;
-  font-size: 12px;
+.aggression-detail-caret {
+  transition: transform 0.15s ease;
   color: var(--muted);
 }
-.aggression-tier-list li { margin-bottom: 2px; }
+.aggression-detail-toggle.expanded .aggression-detail-caret {
+  transform: rotate(90deg);
+}
+.aggression-detail-body {
+  margin-top: 10px;
+}
+.mechanism-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 0;
+  font-size: 12px;
+}
+.mechanism-cat {
+  color: var(--text);
+  font-weight: 500;
+  min-width: 70px;
+}
+.mechanism-arrow { color: var(--muted); }
+.mechanism-treatment { color: var(--muted); }
 
 .hw-device {
   font-size: 14px;
