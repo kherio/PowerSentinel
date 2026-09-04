@@ -411,6 +411,33 @@ main {
 .hw-cap-yes { color: var(--accent); }
 .hw-cap-no { color: var(--muted); }
 
+.advanced-cat-list {
+  margin-top: 10px;
+}
+.advanced-cat-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+}
+.advanced-cat-row:first-child { border-top: none; }
+.advanced-cat-icon { font-size: 18px; line-height: 1.4; }
+.advanced-cat-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+.advanced-cat-desc {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+.advanced-settings-warn {
+  color: var(--warn);
+  margin-top: 10px;
+}
+
 .cpurank-row {
   display: flex;
   justify-content: space-between;

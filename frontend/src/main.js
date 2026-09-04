@@ -60,6 +60,20 @@ function initTabButtons() {
   });
 }
 
+// Navegación programática entre pestañas desde fuera de este módulo -
+// hoy solo la usa el botón "Ver ajustes avanzados" de Ajustes, para
+// saltar directamente a Automatización sin acoplar ese módulo a los
+// detalles internos de enrutado de éste.
+function initProgrammaticNav() {
+  document.addEventListener('powersentinel:navigate', (e) => {
+    const targetView = e.detail && e.detail.view;
+    const index = VIEWS.indexOf(targetView);
+    if (index === -1 || index === currentIndex) return;
+    if (!confirmLeave(currentIndex)) return;
+    commitToIndex(index);
+  });
+}
+
 // Swipe just switches tabs on release - it does not visually follow the
 // finger mid-drag. An earlier version tried a live-dragging carousel
 // (transform-based, tracking pane width in JS), but that kept rendering
@@ -149,6 +163,7 @@ applyStaticI18n();
 
 initViewportFix();
 initTabButtons();
+initProgrammaticNav();
 initSwipeNav();
 
 initEstado();

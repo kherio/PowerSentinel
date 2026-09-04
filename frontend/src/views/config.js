@@ -1039,6 +1039,12 @@ function refreshLiveStatus() {
 }
 
 export function activateConfig() {
+  // Re-aplica el modo guardado cada vez, no solo al iniciar - por
+  // ejemplo, si el usuario llega aquí desde el botón "Ver ajustes
+  // avanzados" de la pestaña Ajustes, que fija el modo Avanzado antes
+  // de navegar; sin esto, si esta pestaña ya se había visitado antes
+  // en Básico, el salto no cambiaría lo que se ve.
+  applyMode();
   // Refresh which events are active-right-now (for the accordion badges)
   // whenever the user switches into this tab - safe to re-render at this
   // moment since nothing here has input focus yet.

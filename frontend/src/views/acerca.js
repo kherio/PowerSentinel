@@ -148,6 +148,20 @@ export function initAcerca() {
 
   document.getElementById('a-diagnostics-btn').innerHTML = ICONS.download + ' ' + t('acerca.copyDiagnostics');
   document.getElementById('a-diagnostics-btn').addEventListener('click', copyDiagnostics);
+
+  // "Ajustes avanzados" no duplica el editor real - lo señala y lleva
+  // directamente a él (Automatización, en modo Avanzado), en vez de
+  // reconstruir un segundo editor del mismo modelo compartido en una
+  // pestaña distinta, lo que introduciría un riesgo real de estado
+  // desincronizado entre dos ediciones simultáneas de la misma config.
+  document.getElementById('aj-open-advanced-btn').textContent = t('ajustes.openAdvanced');
+  document.getElementById('aj-open-advanced-btn').addEventListener('click', () => {
+    try {
+      localStorage.setItem('powersentinel-advanced-mode', 'true');
+      localStorage.setItem('powersentinel-mode-chosen', 'true');
+    } catch (e) { /* localStorage puede no estar disponible; la navegación sigue funcionando igual */ }
+    document.dispatchEvent(new CustomEvent('powersentinel:navigate', { detail: { view: 'conf' } }));
+  });
   renderHardwareInfo();
 }
 

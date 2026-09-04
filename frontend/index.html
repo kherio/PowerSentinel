@@ -341,6 +341,42 @@
         <span style="font-size:12px;color:var(--muted);" data-i18n="acerca.moduleInfo">Información del módulo</span>
       </div>
       <div class="scroll-area">
+        <div class="card advanced-settings-card" style="margin-bottom:14px;">
+          <div class="section-title" style="margin-top:0;" data-i18n="ajustes.advancedTitle">Ajustes avanzados</div>
+          <p class="hint" data-i18n="ajustes.advancedHint">Todo lo que PowerSentinel puede hacer sigue disponible - simplemente no se muestra nada más abrir la app. Esto es para quien quiera entrar en el detalle técnico.</p>
+          <div class="advanced-cat-list">
+            <div class="advanced-cat-row">
+              <span class="advanced-cat-icon">⚙️</span>
+              <div class="advanced-cat-text">
+                <div class="advanced-cat-name" data-i18n="ajustes.catEngine">Motor</div>
+                <div class="advanced-cat-desc" data-i18n="ajustes.catEngineDesc">Intervalo de comprobación, umbrales del motor adaptativo</div>
+              </div>
+            </div>
+            <div class="advanced-cat-row">
+              <span class="advanced-cat-icon">🔲</span>
+              <div class="advanced-cat-text">
+                <div class="advanced-cat-name" data-i18n="ajustes.catCpu">CPU</div>
+                <div class="advanced-cat-desc" data-i18n="ajustes.catCpuDesc">Gobernador, apagado de núcleos, por cada evento</div>
+              </div>
+            </div>
+            <div class="advanced-cat-row">
+              <span class="advanced-cat-icon">📱</span>
+              <div class="advanced-cat-text">
+                <div class="advanced-cat-name" data-i18n="ajustes.catApps">Apps</div>
+                <div class="advanced-cat-desc" data-i18n="ajustes.catAppsDesc">Prioridad reducida, cierre o suspensión, por cada evento</div>
+              </div>
+            </div>
+            <div class="advanced-cat-row">
+              <span class="advanced-cat-icon">🛰️</span>
+              <div class="advanced-cat-text">
+                <div class="advanced-cat-name" data-i18n="ajustes.catSystem">Sistema</div>
+                <div class="advanced-cat-desc" data-i18n="ajustes.catSystemDesc">Doze, WiFi, modo RAM baja, GMS, por cada evento</div>
+              </div>
+            </div>
+          </div>
+          <p class="hint advanced-settings-warn">⚠️ <span data-i18n="ajustes.advancedWarn">Algunos de estos ajustes son agresivos y pueden afectar al rendimiento si se configuran mal.</span></p>
+          <button class="btn" id="aj-open-advanced-btn" style="width:100%;margin-top:8px;"></button>
+        </div>
         <div class="card" style="margin-bottom:14px;text-align:center;padding:24px 16px;">
           <div class="about-logo"></div>
           <div style="font-size:18px;font-weight:700;margin-top:12px;">PowerSentinel</div>
