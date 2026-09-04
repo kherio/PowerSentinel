@@ -1,0 +1,38 @@
+#!/system/bin/bash
+# PowerSentinel-usagerank - one-shot, on-demand usage-frequency
+# classification for installed third-party apps, via Android's own
+# App Standby Buckets.
+#
+# Deliberately queries `am get-standby-bucket <package>` ONE APP AT A
+# TIME rather than its own bulk (no-argument) "list every app" mode.
+# The single-package form is small, well-documented, and confirmed
+# stable since Android 9 / API 28 (App Standby Buckets themselves):
+# it prints exactly one bare number - 5 (EXEMPTED), 10 (ACTIVE), 20
+# (WORKING_SET), 30 (FREQUENT), 40 (RARE), or 50 (NEVER) - nothing
+# else to parse. The bulk mode's own output format for listing every
+# app at once could not be verified against any real device or
+# documented source, so rather than guess at it (exactly the kind of
+# fragile, unverified text-parsing this project avoids elsewhere,
+# raw `dumpsys usagestats` being the standing example), this script
+# builds its OWN aggregate output by looping the single-package query
+# - slower for many apps, but every line's format is something this
+# script controls and guarantees itself, not something borrowed from
+# an unconfirmed source.
+#
+# Purely informational - this never feeds into any automatic policy
+# decision. It's there for a person to look at in the WebUI's app
+# policy screen alongside the current 4-level setting, nothing more.
+
+JQ="$(dirname "$0")/jq"
+
+{
+  while IFS= read -r pkg; do
+    [ -n "$pkg" ] || continue
+    bucket="$(am get-standby-bucket "$pkg" 2>/dev/null | tr -d '[:space:]')"
+    case "$bucket" in
+      5|10|20|30|40|50)
+        "$JQ" -cn --arg p "$pkg" --argjson b "$bucket" '{package: $p, bucket: $b}' 2>/dev/null
+        ;;
+    esac
+  done < <(pm list packages -3 2>/dev/null | cut -d: -f2-)
+} | "$JQ" -s '.' 2>/dev/null || echo '[]'

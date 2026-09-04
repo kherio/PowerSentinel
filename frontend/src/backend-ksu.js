@@ -130,6 +130,24 @@ export async function readCpuRanking() {
   return run(`PowerSentinel-cpurank 2 2>/dev/null || echo '[]'`);
 }
 
+// Reads the entire per-app policy map at once (package -> level 0-3),
+// for a screen that lists every installed app rather than looking one
+// up at a time.
+export async function readAppPolicies() {
+  return run(`cat '${APP_POLICY_FILE}' 2>/dev/null || echo '{}'`);
+}
+
+// Usage-frequency classification, via PowerSentinel-usagerank (Android's
+// App Standby Buckets, queried one app at a time with the small,
+// documented single-package form of `am get-standby-bucket` - see that
+// script for why the bulk/no-argument mode isn't used instead).
+// Purely informational, never wired into any automatic policy
+// decision - shown alongside the per-app policy setting for a person
+// to look at, nothing more.
+export async function readUsageBuckets() {
+  return run(`PowerSentinel-usagerank 2>/dev/null || echo '[]'`);
+}
+
 // ---------- Apps (allowlist/denylist picker) ----------
 
 export async function listPackages(includeSystem) {

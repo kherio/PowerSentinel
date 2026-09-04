@@ -406,6 +406,40 @@ main {
   font-family: var(--mono);
 }
 
+.apppolicy-row { margin-bottom: 8px; padding: 10px; }
+.apppolicy-name {
+  font-size: 12px;
+  color: var(--text);
+  word-break: break-all;
+  margin-bottom: 8px;
+}
+.apppolicy-usage {
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 400;
+}
+.apppolicy-levels {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.apppolicy-lvl-btn {
+  flex: 1 1 auto;
+  font-size: 11px;
+  padding: 6px 4px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--muted);
+  cursor: pointer;
+}
+.apppolicy-lvl-btn.selected {
+  background: var(--accent-dim);
+  color: var(--accent);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
 .battery-summary {
   font-size: 20px;
   font-weight: 600;

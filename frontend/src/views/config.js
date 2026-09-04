@@ -1,7 +1,8 @@
 import { ICONS } from '../icons.js';
 import {
   readConfig, writeConfig, readStatus, startEvent, stopEvent,
-  enterSafeMode, exitSafeMode, readFlaggedApps, dismissFlaggedApp, setAppPolicy
+  enterSafeMode, exitSafeMode, readFlaggedApps, dismissFlaggedApp, setAppPolicy,
+  readAppPolicies, readUsageBuckets, listPackages
 } from '../api.js';
 import { toast, escapeHtml } from '../helpers.js';
 import { t } from '../i18n.js';
@@ -242,6 +243,103 @@ async function dismissFlagged(pkg) {
     renderFlaggedApps();
   } catch (e) {
     toast(t('config.basicActionError', { msg: e.message }), 'error');
+  }
+}
+
+// ---------- App policy screen (Config > Avanzado > Apps) ----------
+// Lets a person browse every installed app and set its 4-level policy
+// directly, instead of only reachable through PowerSentinelconf or by
+// waiting for appwatch to flag something. Usage-frequency data (App
+// Standby Buckets) is loaded separately, on demand, since it queries
+// every app individually (see PowerSentinel-usagerank) and is purely
+// informational context, never required for the policy list itself to
+// be useful.
+const APP_POLICY_LEVELS = [0, 1, 2, 3];
+let appPolicyState = { allPkgs: null, level: {}, usage: {}, filter: '' };
+
+async function renderAppPolicyScreen() {
+  const list = document.getElementById('ap-policy-list');
+  list.innerHTML = `<p class="hint">${escapeHtml(t('apps.loading'))}</p>`;
+  try {
+    const [pkgs, policyText] = await Promise.all([
+      listPackages(false),
+      readAppPolicies()
+    ]);
+    let policyMap = {};
+    try { policyMap = JSON.parse(policyText); } catch (e) { policyMap = {}; }
+    appPolicyState.allPkgs = pkgs;
+    appPolicyState.level = policyMap;
+    drawAppPolicyList();
+  } catch (e) {
+    list.innerHTML = `<p class="hint">${escapeHtml(t('apps.listError', { msg: e.message }))}</p>`;
+  }
+}
+
+function drawAppPolicyList() {
+  const list = document.getElementById('ap-policy-list');
+  const q = (appPolicyState.filter || '').toLowerCase();
+  const pkgs = (appPolicyState.allPkgs || []).filter((p) => p.toLowerCase().indexOf(q) !== -1);
+  const levelLabels = [
+    t('apppolicy.level0'), t('apppolicy.level1'), t('apppolicy.level2'), t('apppolicy.level3')
+  ];
+  list.innerHTML = '';
+  pkgs.forEach((pkg) => {
+    const level = appPolicyState.level[pkg] !== undefined ? appPolicyState.level[pkg] : 2;
+    const usage = appPolicyState.usage[pkg];
+    const row = document.createElement('div');
+    row.className = 'card apppolicy-row';
+    row.innerHTML =
+      `<div class="apppolicy-name">${escapeHtml(pkg)}${usage ? ` <span class="apppolicy-usage">${escapeHtml(usage)}</span>` : ''}</div>` +
+      `<div class="apppolicy-levels">${APP_POLICY_LEVELS.map((lvl) =>
+        `<button class="apppolicy-lvl-btn${lvl === level ? ' selected' : ''}" data-lvl="${lvl}">${escapeHtml(levelLabels[lvl])}</button>`
+      ).join('')}</div>`;
+    row.querySelectorAll('.apppolicy-lvl-btn').forEach((btn) => {
+      btn.addEventListener('click', () => setPolicyForApp(pkg, parseInt(btn.dataset.lvl, 10)));
+    });
+    list.appendChild(row);
+  });
+  if (pkgs.length === 0) {
+    list.innerHTML = `<p class="hint">${escapeHtml(t('apps.noResults'))}</p>`;
+  }
+}
+
+async function setPolicyForApp(pkg, level) {
+  try {
+    await setAppPolicy(pkg, level);
+    appPolicyState.level[pkg] = level;
+    drawAppPolicyList();
+  } catch (e) {
+    toast(t('config.saveError', { msg: e.message }), 'error');
+  }
+}
+
+const USAGE_BUCKET_LABELS = {
+  5: 'apppolicy.usageExempted', 10: 'apppolicy.usageActive', 20: 'apppolicy.usageWorking',
+  30: 'apppolicy.usageFrequent', 40: 'apppolicy.usageRare', 50: 'apppolicy.usageNever'
+};
+
+async function loadUsageBuckets() {
+  const btn = document.getElementById('ap-usage-btn');
+  btn.disabled = true;
+  btn.textContent = t('apppolicy.usageLoading');
+  try {
+    const text = await readUsageBuckets();
+    let entries = [];
+    try { entries = JSON.parse(text); } catch (e) { entries = []; }
+    const usage = {};
+    if (Array.isArray(entries)) {
+      entries.forEach((e) => {
+        const labelKey = USAGE_BUCKET_LABELS[e.bucket];
+        if (e.package && labelKey) usage[e.package] = t(labelKey);
+      });
+    }
+    appPolicyState.usage = usage;
+    drawAppPolicyList();
+  } catch (e) {
+    toast(t('apppolicy.usageError', { msg: e.message }), 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = t('apppolicy.usageButton');
   }
 }
 
@@ -683,7 +781,7 @@ function switchSubTab(view) {
   if (view === 'text') {
     editor.value = serializeConfig(model);
     refreshHighlight();
-  } else {
+  } else if (view === 'form') {
     try {
       model = parseConfig(editor.value);
     } catch (e) {
@@ -691,12 +789,16 @@ function switchSubTab(view) {
       return;
     }
     renderVersionView();
+  } else if (view === 'apps') {
+    renderAppPolicyScreen();
   }
   activeView = view;
   document.getElementById('c-view-form').style.display = view === 'form' ? 'block' : 'none';
   document.getElementById('c-view-text').style.display = view === 'text' ? 'flex' : 'none';
+  document.getElementById('c-view-apps').style.display = view === 'apps' ? 'block' : 'none';
   document.getElementById('c-tab-form').classList.toggle('active', view === 'form');
   document.getElementById('c-tab-text').classList.toggle('active', view === 'text');
+  document.getElementById('c-tab-apps').classList.toggle('active', view === 'apps');
 }
 
 function currentText() {
@@ -810,12 +912,20 @@ export function initConfig() {
   document.getElementById('c-tab-form').addEventListener('click', () => switchSubTab('form'));
   document.getElementById('c-event-search').addEventListener('input', filterEventCards);
   document.getElementById('c-tab-text').addEventListener('click', () => switchSubTab('text'));
+  document.getElementById('c-tab-apps').addEventListener('click', () => switchSubTab('apps'));
   document.getElementById('c-save-btn').addEventListener('click', saveFile);
   document.getElementById('c-reload-btn').addEventListener('click', () => loadFile(true));
   document.getElementById('c-restore-btn').addEventListener('click', restoreRecommended);
 
   document.getElementById('cb-adaptive-toggle').addEventListener('change', (e) => setAdaptiveEnabled(e.target.checked));
   document.getElementById('cb-safemode-btn').addEventListener('click', toggleSafeMode);
+
+  document.getElementById('ap-usage-btn').textContent = t('apppolicy.usageButton');
+  document.getElementById('ap-usage-btn').addEventListener('click', loadUsageBuckets);
+  document.getElementById('ap-policy-search').addEventListener('input', (e) => {
+    appPolicyState.filter = e.target.value;
+    drawAppPolicyList();
+  });
 
   document.getElementById('c-mode-info-btn').addEventListener('click', openModeModal);
   document.getElementById('mode-choice-basic-btn').addEventListener('click', () => chooseMode(false));
