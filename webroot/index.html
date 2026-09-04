@@ -4,8 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PowerSentinel</title>
-  <script type="module" crossorigin src="./assets/index-BZ0CYF1Q.js"></script>
-  <link rel="stylesheet" crossorigin href="./assets/index-CXaf6s_3.css">
+  <script type="module" crossorigin src="./assets/index-BIZUcS4d.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-ByjBiEpa.css">
 </head>
 <body class="app-shell">
   <header class="app-header">
@@ -276,6 +276,7 @@
           <select class="filter" id="j-severity-filter">
             <option value="ALL" data-i18n="log.allSeverities">Todas</option>
             <option value="critical" data-i18n="log.filterCritical">Solo críticas</option>
+            <option value="warning" data-i18n="log.filterWarning">Solo avisos</option>
             <option value="info" data-i18n="log.filterInfo">Solo informativas</option>
           </select>
           <div class="spacer"></div>
@@ -290,6 +291,10 @@
       </div>
 
       <div id="l-view-energy" style="display:none;" class="scroll-area">
+        <div class="card" style="margin-bottom:14px;">
+          <div class="section-title" style="margin-top:0;" data-i18n="energy.healthTitle">Salud energética</div>
+          <div id="energy-health" style="margin-top:8px;"></div>
+        </div>
         <div class="card" style="margin-bottom:14px;">
           <div class="section-title" style="margin-top:0;" data-i18n="energy.title">Batería y temperatura en el tiempo</div>
           <p class="hint" data-i18n="energy.hint">Solo se registra un punto cuando el nivel de batería o la temperatura cambian de verdad - no es un muestreo continuo.</p>

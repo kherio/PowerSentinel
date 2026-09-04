@@ -2,6 +2,7 @@ import { ICONS } from '../icons.js';
 import { readLog, exportLog, readJournal, readEnergyLog } from '../api.js';
 import { toast, escapeHtml } from '../helpers.js';
 import { t } from '../i18n.js';
+import { eventDisplayName, eventIcon } from './estado.js';
 
 let rawLog = '';
 let rawJournal = '';
@@ -87,6 +88,60 @@ function formatJournalTime(ts) {
   return d.toLocaleString(undefined, { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
 
+// "Timeline de actividad" del roadmap: convierte las entradas ya
+// existentes del journal ("night started" + su detalle de mecanismos
+// resueltos, "night ended", avisos de capacidad) en algo legible,
+// reutilizando exactamente el mismo icono/nombre de evento que ya usa
+// el dashboard de Estado (eventDisplayName/eventIcon), para que un
+// mismo evento se vea siempre igual en toda la app.
+function timelineMechanismPhrases(detail) {
+  if (!detail) return [];
+  const on = (v) => v && v !== 'false';
+  const phrases = [];
+  if (on(detail.handle_cores)) phrases.push(t('journal.mechCores'));
+  if (detail.doze === 'light') phrases.push(t('journal.mechDozeLight'));
+  else if (detail.doze === 'deep') phrases.push(t('journal.mechDozeDeep'));
+  if (on(detail.handle_apps)) phrases.push(t('journal.mechApps'));
+  if (on(detail.handle_gms)) phrases.push(t('journal.mechGms'));
+  if (detail.kill_wifi === 'true') phrases.push(t('journal.mechWifi'));
+  if (detail.low_ram === 'true') phrases.push(t('journal.mechLowRam'));
+  return phrases;
+}
+
+function renderTimelineEntry(entry) {
+  const time = formatJournalTime(entry.ts);
+  if (entry.severity === 'warning' || entry.severity === 'critical') {
+    return `<div class="timeline-entry timeline-warning">` +
+      `<div class="timeline-main"><span class="timeline-time">${time}</span>⚠️ ${escapeHtml(entry.message)}</div>` +
+      `</div>`;
+  }
+  const startedMatch = /^(.+) started$/.exec(entry.message);
+  const endedMatch = /^(.+) ended$/.exec(entry.message);
+  if (startedMatch) {
+    const name = eventDisplayName(entry.event);
+    const phrases = timelineMechanismPhrases(entry.detail);
+    return `<div class="timeline-entry">` +
+      `<div class="timeline-main"><span class="timeline-time">${time}</span>${eventIcon(entry.event)} ${escapeHtml(t('journal.entered', { mode: name }))}</div>` +
+      phrases.map((p) => `<div class="timeline-sub"><span class="timeline-time"></span>${escapeHtml(p)}</div>`).join('') +
+      `</div>`;
+  }
+  if (endedMatch) {
+    const name = eventDisplayName(entry.event);
+    return `<div class="timeline-entry">` +
+      `<div class="timeline-main"><span class="timeline-time">${time}</span>${eventIcon(entry.event)} ${escapeHtml(t('journal.exited', { mode: name }))}</div>` +
+      `<div class="timeline-sub"><span class="timeline-time"></span>${escapeHtml(t('journal.restored'))}</div>` +
+      `</div>`;
+  }
+  // Cualquier otra entrada (appwatch, safemode...) - se muestra como
+  // hasta ahora, sin intentar reinterpretarla como una transición de
+  // evento que no es.
+  const isCritical = entry.severity === 'critical';
+  const badgeCls = isCritical ? 'critical' : 'info';
+  const badgeLabel = isCritical ? t('log.severityCritical') : t('log.severityInfo');
+  return `<div class="log-line ${isCritical ? 'journal-critical' : 'journal-info'}">` +
+    `<span class="journal-time">${time}</span><span class="journal-badge ${badgeCls}">${escapeHtml(badgeLabel)}</span>${escapeHtml(entry.message)}</div>`;
+}
+
 function renderJournal() {
   const wrap = document.getElementById('j-journal-wrap');
   const severityFilter = document.getElementById('j-severity-filter');
@@ -104,13 +159,10 @@ function renderJournal() {
   // on-top, unlike the free-text log (which the daemon already appends
   // oldest-first and autoscroll follows to the bottom for).
   wrap.innerHTML = entries.slice().reverse().map((entry) => {
-    const isCritical = entry.severity === 'critical';
-    let cls = 'log-line ' + (isCritical ? 'journal-critical' : 'journal-info');
-    if (filter !== 'ALL' && entry.severity !== filter) cls += ' hidden'; else shownCount++;
-    const badgeCls = isCritical ? 'critical' : 'info';
-    const badgeLabel = isCritical ? t('log.severityCritical') : t('log.severityInfo');
-    return `<div class="${cls}"><span class="journal-time">${formatJournalTime(entry.ts)}</span>` +
-      `<span class="journal-badge ${badgeCls}">${escapeHtml(badgeLabel)}</span>${escapeHtml(entry.message)}</div>`;
+    const matchesFilter = filter === 'ALL' || entry.severity === filter;
+    if (matchesFilter) shownCount++;
+    const html = renderTimelineEntry(entry);
+    return matchesFilter ? html : html.replace('<div class="timeline-entry', '<div class="hidden timeline-entry').replace('<div class="log-line ', '<div class="hidden log-line ');
   }).join('');
 
   document.getElementById('j-journal-count').textContent = filter === 'ALL' ?
@@ -154,6 +206,65 @@ function parseEnergyLines(text) {
 // whether a given setting genuinely slows discharge, rather than
 // assuming it does. Charging intervals are excluded entirely (a
 // battery going up, or holding steady while plugged in, isn't a
+// "Salud energética" del roadmap: consumo reciente (%/h) y comparación
+// con la media histórica - la MISMA función sirve para ambas ventanas,
+// solo cambia cuántas horas hacia atrás se consideran. Reutiliza
+// exactamente la misma exclusión de tramos cargando ya establecida en
+// computeDischargeRates (una batería subiendo o estable enchufada no
+// es una tasa de descarga real).
+function computeRecentRate(samples, hoursBack) {
+  if (samples.length < 2) return null;
+  const last = samples[samples.length - 1];
+  const cutoff = hoursBack ? last.ts - hoursBack * 3600 : -Infinity;
+  const scoped = samples.filter((s) => s.ts >= cutoff);
+  let totalDrop = 0, totalSeconds = 0;
+  for (let i = 1; i < scoped.length; i++) {
+    const prev = scoped[i - 1], cur = scoped[i];
+    if (prev.charging === 'true' || cur.charging === 'true') continue;
+    const drop = prev.battery - cur.battery;
+    const seconds = cur.ts - prev.ts;
+    if (drop <= 0 || seconds <= 0) continue;
+    totalDrop += drop;
+    totalSeconds += seconds;
+  }
+  if (totalSeconds === 0) return null;
+  return totalDrop / (totalSeconds / 3600);
+}
+
+// "Momento de mayor gasto": agrupa cada tramo de descarga por la HORA
+// del día en la que empezó (0-23), sumando a lo largo de todos los
+// días registrados, y devuelve la hora con mayor tasa media. Una
+// simplificación deliberada frente a buscar el intervalo aislado de
+// mayor caída: con un log que solo registra en cada cambio (no a
+// intervalo fijo), un único tramo corto puede dar una tasa extrapolada
+// muy ruidosa: agrupar por hora del día busca un patrón que se repite
+// entre días, no un pico aislado y probablemente casual.
+function computePeakHour(samples) {
+  const hourTotals = {};
+  for (let i = 1; i < samples.length; i++) {
+    const prev = samples[i - 1], cur = samples[i];
+    if (prev.charging === 'true' || cur.charging === 'true') continue;
+    const drop = prev.battery - cur.battery;
+    const seconds = cur.ts - prev.ts;
+    if (drop <= 0 || seconds <= 0) continue;
+    const hour = new Date(prev.ts * 1000).getHours();
+    if (!hourTotals[hour]) hourTotals[hour] = { drop: 0, seconds: 0 };
+    hourTotals[hour].drop += drop;
+    hourTotals[hour].seconds += seconds;
+  }
+  let bestHour = null, bestRate = -Infinity;
+  Object.keys(hourTotals).forEach((h) => {
+    const rate = hourTotals[h].drop / (hourTotals[h].seconds / 3600);
+    if (rate > bestRate) { bestRate = rate; bestHour = parseInt(h, 10); }
+  });
+  return bestHour === null ? null : { hour: bestHour, ratePerHour: bestRate };
+}
+
+function formatHourRange(hour) {
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${pad(hour)}:00–${pad((hour + 1) % 24)}:00`;
+}
+
 // discharge rate). Higher minutes-per-1% is better (the battery lasts
 // longer under that regime).
 function computeDischargeRates(samples) {
@@ -198,15 +309,49 @@ async function loadEnergyLog() {
   }
 }
 
+// "Salud energética": tasa reciente (últimas 6h) comparada contra el
+// histórico ANTERIOR a ese tramo (no solapado, para que la comparación
+// sea limpia) y el momento de mayor gasto habitual.
+function renderEnergyHealth() {
+  const el = document.getElementById('energy-health');
+  const last = energySamples[energySamples.length - 1];
+  const recentCutoff = last.ts - 6 * 3600;
+  const recentSamples = energySamples.filter((s) => s.ts >= recentCutoff);
+  const olderSamples = energySamples.filter((s) => s.ts < recentCutoff);
+
+  const recentRate = computeRecentRate(recentSamples, null);
+  const baselineRate = olderSamples.length >= 2 ? computeRecentRate(olderSamples, null) : null;
+  const peak = computePeakHour(energySamples);
+
+  const parts = [];
+  if (recentRate !== null) {
+    parts.push(`<div class="energy-health-row"><span class="energy-health-label">${escapeHtml(t('energy.recentRate'))}</span><span class="energy-health-value">${recentRate.toFixed(1)}%/h</span></div>`);
+    if (baselineRate !== null && baselineRate > 0) {
+      const cmpText = recentRate < baselineRate ? t('energy.betterThanAverage') : t('energy.worseThanAverage');
+      parts.push(`<p class="hint">${escapeHtml(cmpText)}</p>`);
+    }
+  } else {
+    parts.push(`<p class="hint">${escapeHtml(t('energy.noRecentData'))}</p>`);
+  }
+  if (peak) {
+    parts.push(`<div class="energy-health-row"><span class="energy-health-label">${escapeHtml(t('energy.peakLabel'))}</span><span class="energy-health-value">${escapeHtml(formatHourRange(peak.hour))}</span></div>`);
+  }
+  el.innerHTML = parts.join('');
+}
+
 function renderEnergyView() {
   const summary = document.getElementById('energy-summary');
+  const healthEl = document.getElementById('energy-health');
   if (energySamples.length < 2) {
     summary.innerHTML = `<p class="hint">${escapeHtml(t('energy.notEnoughData'))}</p>`;
     document.getElementById('energy-chart').innerHTML = '';
     document.getElementById('energy-chart-legend').innerHTML = '';
     document.getElementById('energy-regimes').innerHTML = '';
+    healthEl.innerHTML = `<p class="hint">${escapeHtml(t('energy.notEnoughData'))}</p>`;
     return;
   }
+
+  renderEnergyHealth();
 
   const first = energySamples[0];
   const last = energySamples[energySamples.length - 1];

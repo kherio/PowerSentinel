@@ -110,11 +110,11 @@ const EVENT_META = {
   adaptive_tier3: { icon: '⛈️', nameKey: 'dashboard.eventTier3', whyKey: 'dashboard.whyAdaptive' }
 };
 
-function eventDisplayName(name) {
+export function eventDisplayName(name) {
   const meta = EVENT_META[name];
   return meta ? t(meta.nameKey) : name;
 }
-function eventIcon(name) {
+export function eventIcon(name) {
   const meta = EVENT_META[name];
   return meta ? meta.icon : '⚙️';
 }

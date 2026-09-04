@@ -485,6 +485,23 @@ main {
   font-family: var(--mono);
 }
 
+.energy-health-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 6px 0;
+}
+.energy-health-label {
+  font-size: 13px;
+  color: var(--muted);
+}
+.energy-health-value {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+  font-family: var(--mono);
+}
+
 .dashboard-card { padding: 16px; }
 .dashboard-header {
   display: flex;
@@ -1306,6 +1323,30 @@ label.switch input { accent-color: var(--accent); }
 .journal-badge.critical { background: var(--danger); color: #fff; }
 .journal-badge.info { background: var(--surface-2); color: var(--muted); }
 .log-empty { color: var(--muted); font-size: 13px; padding: 8px 2px; }
+
+.timeline-entry {
+  padding: 6px 0;
+  font-size: 13px;
+}
+.timeline-main {
+  color: var(--text);
+  font-weight: 500;
+}
+.timeline-sub {
+  color: var(--muted);
+  padding-left: 4px;
+  margin-top: 2px;
+}
+.timeline-time {
+  display: inline-block;
+  min-width: 44px;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+.timeline-warning .timeline-main {
+  color: var(--warn);
+}
 
 /* Toasts */
 #toast-container {

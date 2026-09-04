@@ -308,6 +308,7 @@ action_wifi_apply() {
   [ "$kill_wifi" = "true" ] || return
   if ! capability_has rfkill_wifi && ! capability_has svc_wifi; then
     log_msg 1 "Cannot disable WiFi: neither rfkill nor svc is available on this device"
+    emit capabilities warning "WiFi could not be disabled: not supported on this device"
     return
   fi
   log_msg 3 "Disabling WiFi"
@@ -329,6 +330,7 @@ action_wifi_undo() {
   [ "$kill_wifi" = "true" ] || return
   if ! capability_has rfkill_wifi && ! capability_has svc_wifi; then
     log_msg 1 "Cannot re-enable WiFi: neither rfkill nor svc is available on this device"
+    emit capabilities warning "WiFi could not be re-enabled: not supported on this device"
     return
   fi
   log_msg 3 "Enabling WiFi"
@@ -388,6 +390,7 @@ action_cores_apply() {
       done
     else
       log_msg 1 "Cannot disable CPU cores: no writable 'online' control found on this device"
+      emit capabilities warning "CPU cores could not be disabled: not supported on this device"
     fi
   else
     # manual
@@ -400,6 +403,7 @@ action_cores_apply() {
       done
     else
       log_msg 1 "Cannot disable CPU cores: no writable 'online' control found on this device"
+      emit capabilities warning "CPU cores could not be disabled: not supported on this device"
     fi
   fi
   if [ "$handle_cores" = "auto" ]; then
@@ -410,6 +414,7 @@ action_cores_apply() {
       done
     else
       log_msg 1 "Cannot set powersave governor: not supported on this device's cores"
+      emit capabilities warning "The CPU power-save mode could not be set: not supported on this device"
     fi
   else
     # BUG FIX: this used to write to

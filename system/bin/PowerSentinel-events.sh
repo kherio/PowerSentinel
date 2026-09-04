@@ -295,22 +295,25 @@ handle_event() {
     state_save
     reassert_active_events
     log_msg 1 "Actions for $event undone"
+    emit "$event" info "$event ended"
   else
     log_msg 1 "Performing actions for $event event"
     enable_pwr_save
     log_msg 1 "Actions for $event completed"
+    # Timeline roadmap item: the resolved mechanisms are embedded
+    # directly in THIS journal entry (as $detail) rather than the
+    # WebUI trying to reconstruct "what was applied at that past
+    # moment" from the CURRENT config later - the config could have
+    # changed since, and a historical timeline needs to reflect what
+    # actually happened, not what the same event would do today.
+    emit "$event" info "$event started" \
+      "$("$JQ" -cn --arg apps "$handle_apps" --arg cores "$handle_cores" --arg doze "$doze" \
+        --arg gms "$handle_gms" --arg wifi "$kill_wifi" --arg lowram "$low_ram" \
+        '{handle_apps: $apps, handle_cores: $cores, doze: $doze, handle_gms: $gms, kill_wifi: $wifi, low_ram: $lowram}' 2>/dev/null)"
     if [ "$event" = "boot" ] && \
     [ "$quit" = "true" ]; then
       log_msg 1 "Boot event has the quit option set. Killing the daemon."
       exit 0
     fi
   fi
-
-  # build the active events notification
-  for i in ${!active_events[@]}; do
-    active_notif+="${active_events[$i]} "
-  done
-
-  emit events info "Active Events: $active_notif"
-  unset active_notif
 }
