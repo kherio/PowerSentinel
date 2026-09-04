@@ -1,3 +1,8 @@
+### v3.32.0
+  - **Navegación reestructurada**: Inicio / Perfiles / Automatización / Apps / Análisis / Ajustes. Apps pasa a ser su propia pestaña de nivel superior (antes vivía dentro de Config → Avanzado). "Log" pasa a llamarse "Análisis", con su subpestaña técnica renombrada a "Actividad". "Acerca de" pasa a llamarse "Ajustes".
+  - **Ajustes avanzados**: nueva tarjeta en Ajustes que señaliza claramente las 4 categorías técnicas (Motor, CPU, Apps, Sistema) con un acceso directo a Automatización en modo Avanzado - nada se ha eliminado, simplemente ya no aparece nada más abrir la app.
+  - **Jerarquía visual en Inicio**: reestructurado de ~9 tarjetas siempre visibles a un orden de lectura claro (Estado principal → Qué está pasando → Actividad reciente → Detalles técnicos, este último colapsado por defecto).
+
 ### v3.31.0
   - **Apps: de "lista de paquetes" a "política por app"** (Config → Avanzado → Apps). Los 4 niveles se renombraron a lenguaje de comportamiento (Protegida / Suave / Equilibrada / Restringida) con una explicación clara de cada uno. Cada app ahora muestra qué pasaría de verdad en las situaciones reales de tu dispositivo: en modo clásico, "Cuando la pantalla está apagada" / "Cuando la batería está baja"; en modo adaptativo, los 3 niveles de presión (Ahorro suave/moderado/extremo) - nunca la misma plantilla para ambos modos, ya que el motor adaptativo no se descompone en condiciones independientes como los eventos clásicos.
 
