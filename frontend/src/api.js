@@ -3,7 +3,7 @@
 // no local HTTP server, CGI transport, browser token, or runtime backend
 // detection in the module.
 export {
-  readStatus, readConfig, writeConfig, readLog, exportLog, readJournal,
+  readStatus, readConfig, writeConfig, readLog, exportLog, readJournal, readEnergyLog,
   listPackages, readAppListFile, writeAppListFile,
   startEvent, stopEvent,
   listProfiles, readProfile, saveProfile, deleteProfile,

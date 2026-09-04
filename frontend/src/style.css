@@ -440,6 +440,27 @@ main {
   font-weight: 600;
 }
 
+.energy-regime-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+}
+.energy-regime-row:first-child { border-top: none; }
+.energy-regime-name {
+  color: var(--muted);
+  word-break: break-word;
+}
+.energy-regime-rate {
+  flex: 0 0 auto;
+  font-weight: 600;
+  color: var(--text);
+  font-family: var(--mono);
+}
+
+
 .battery-summary {
   font-size: 20px;
   font-weight: 600;

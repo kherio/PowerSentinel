@@ -1,5 +1,5 @@
 import { ICONS } from '../icons.js';
-import { readLog, exportLog, readJournal } from '../api.js';
+import { readLog, exportLog, readJournal, readEnergyLog } from '../api.js';
 import { toast, escapeHtml } from '../helpers.js';
 import { t } from '../i18n.js';
 
@@ -127,6 +127,118 @@ async function loadJournal(showToast) {
   }
 }
 
+// ---------- Energy log analysis ----------
+// The daemon only ever collects this (PowerSentinel-energylog.sh) -
+// deliberately no analysis or conclusions baked in there, since
+// building a view before there was real data to look at would mean
+// guessing what the data would even look like. Now that samples
+// genuinely accumulate over real usage, this is that follow-up.
+//
+// A malformed/unparseable line is skipped rather than breaking the
+// whole render, same reasoning as parseJournalLines above - the file
+// could in principle be read mid-write.
+function parseEnergyLines(text) {
+  return text.split('\n').filter((l) => l.trim().length).map((line) => {
+    try {
+      const obj = JSON.parse(line);
+      if (obj && typeof obj.ts === 'number' && typeof obj.battery === 'number') return obj;
+    } catch (e) { /* skip unparseable line */ }
+    return null;
+  }).filter(Boolean).sort((a, b) => a.ts - b.ts);
+}
+
+// Attributes each interval's battery drop to whatever was active at
+// the START of that interval, then averages minutes-per-1%-battery
+// per distinct "regime" (the exact active-events string at the time) -
+// directly answering the project's own stated goal of checking
+// whether a given setting genuinely slows discharge, rather than
+// assuming it does. Charging intervals are excluded entirely (a
+// battery going up, or holding steady while plugged in, isn't a
+// discharge rate). Higher minutes-per-1% is better (the battery lasts
+// longer under that regime).
+function computeDischargeRates(samples) {
+  const totals = {};
+  for (let i = 1; i < samples.length; i++) {
+    const prev = samples[i - 1];
+    const cur = samples[i];
+    if (prev.charging === 'true' || cur.charging === 'true') continue;
+    const drop = prev.battery - cur.battery;
+    const seconds = cur.ts - prev.ts;
+    if (drop <= 0 || seconds <= 0) continue;
+    const regime = prev.active && prev.active.trim() ? prev.active.trim() : t('energy.noActiveRegime');
+    if (!totals[regime]) totals[regime] = { seconds: 0, drop: 0 };
+    totals[regime].seconds += seconds;
+    totals[regime].drop += drop;
+  }
+  return Object.keys(totals).map((regime) => ({
+    regime,
+    minutesPerPercent: (totals[regime].seconds / 60) / totals[regime].drop
+  })).sort((a, b) => b.minutesPerPercent - a.minutesPerPercent);
+}
+
+function energySparkline(values, w, h, min, max) {
+  if (values.length < 2) return '';
+  const range = (max - min) || 1;
+  const step = w / (values.length - 1);
+  const pts = values.map((v, i) => [i * step, h - ((v - min) / range) * h]);
+  return 'M' + pts.map((p) => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' L');
+}
+
+let energySamples = [];
+
+async function loadEnergyLog() {
+  const summary = document.getElementById('energy-summary');
+  summary.innerHTML = `<p class="hint">${escapeHtml(t('energy.loading'))}</p>`;
+  try {
+    const text = await readEnergyLog();
+    energySamples = parseEnergyLines(text);
+    renderEnergyView();
+  } catch (e) {
+    summary.innerHTML = `<p class="hint">${escapeHtml(t('energy.error', { msg: e.message }))}</p>`;
+  }
+}
+
+function renderEnergyView() {
+  const summary = document.getElementById('energy-summary');
+  if (energySamples.length < 2) {
+    summary.innerHTML = `<p class="hint">${escapeHtml(t('energy.notEnoughData'))}</p>`;
+    document.getElementById('energy-chart').innerHTML = '';
+    document.getElementById('energy-chart-legend').innerHTML = '';
+    document.getElementById('energy-regimes').innerHTML = '';
+    return;
+  }
+
+  const first = energySamples[0];
+  const last = energySamples[energySamples.length - 1];
+  const spanHours = ((last.ts - first.ts) / 3600).toFixed(1);
+  summary.innerHTML = `<p class="hint">${escapeHtml(t('energy.summary', { n: energySamples.length, hours: spanHours }))}</p>`;
+
+  const dayAgo = last.ts - 24 * 3600;
+  const recent = energySamples.filter((s) => s.ts >= dayAgo);
+  const chartSamples = recent.length >= 2 ? recent : energySamples;
+  const w = 300, h = 90;
+  const batteryPath = energySparkline(chartSamples.map((s) => s.battery), w, h, 0, 100);
+  document.getElementById('energy-chart').innerHTML =
+    batteryPath ? `<path d="${batteryPath}" fill="none" stroke="var(--accent)" stroke-width="2"></path>` : '';
+  document.getElementById('energy-chart-legend').innerHTML =
+    `<span>${escapeHtml(formatEnergyTime(chartSamples[0].ts))}</span><span>${escapeHtml(formatEnergyTime(chartSamples[chartSamples.length - 1].ts))}</span>`;
+
+  const rates = computeDischargeRates(energySamples);
+  const regimesEl = document.getElementById('energy-regimes');
+  if (rates.length === 0) {
+    regimesEl.innerHTML = `<p class="hint">${escapeHtml(t('energy.noDischargeData'))}</p>`;
+  } else {
+    regimesEl.innerHTML = rates.map((r) =>
+      `<div class="energy-regime-row"><span class="energy-regime-name">${escapeHtml(r.regime)}</span>` +
+      `<span class="energy-regime-rate">${r.minutesPerPercent.toFixed(1)} ${escapeHtml(t('energy.minPerPercent'))}</span></div>`
+    ).join('');
+  }
+}
+
+function formatEnergyTime(ts) {
+  return new Date(ts * 1000).toLocaleString(undefined, { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+}
+
 // ---------- Sub-tab switching (same pattern as Config's Form/Text) ----------
 
 function switchLogSubTab(view) {
@@ -134,8 +246,11 @@ function switchLogSubTab(view) {
   activeSubView = view;
   document.getElementById('l-view-log').style.display = view === 'log' ? 'block' : 'none';
   document.getElementById('l-view-journal').style.display = view === 'journal' ? 'block' : 'none';
+  document.getElementById('l-view-energy').style.display = view === 'energy' ? 'block' : 'none';
   document.getElementById('l-tab-log').classList.toggle('active', view === 'log');
   document.getElementById('l-tab-journal').classList.toggle('active', view === 'journal');
+  document.getElementById('l-tab-energy').classList.toggle('active', view === 'energy');
+  if (view === 'energy') loadEnergyLog();
 }
 
 export function initLog() {
@@ -180,6 +295,7 @@ export function initLog() {
 
   document.getElementById('l-tab-log').addEventListener('click', () => switchLogSubTab('log'));
   document.getElementById('l-tab-journal').addEventListener('click', () => switchLogSubTab('journal'));
+  document.getElementById('l-tab-energy').addEventListener('click', () => switchLogSubTab('energy'));
 }
 
 export function activateLog() {

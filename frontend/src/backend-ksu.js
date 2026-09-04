@@ -9,6 +9,7 @@ const CONF_FILE = `${DATA_DIR}/PowerSentinel.json`;
 const STATUS_FILE = `${DATA_DIR}/PowerSentinel.status`;
 const DEFAULT_LOG_FILE = `${DATA_DIR}/PowerSentinel.log`;
 const JOURNAL_FILE = `${DATA_DIR}/PowerSentinel.journal`;
+const ENERGYLOG_FILE = `${DATA_DIR}/PowerSentinel.energylog`;
 
 // Reads log_file the same way the daemon itself does now (jq against
 // the JSON config) rather than grepping the old .conf text - that grep
@@ -57,6 +58,10 @@ export async function exportLog() {
 // same convention as readLog(); the caller parses each line.
 export async function readJournal() {
   return run(`cat '${JOURNAL_FILE}' 2>/dev/null || echo ''`);
+}
+
+export async function readEnergyLog() {
+  return run(`cat '${ENERGYLOG_FILE}' 2>/dev/null || echo ''`);
 }
 
 // ---------- Safe mode ----------

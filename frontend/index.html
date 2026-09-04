@@ -218,6 +218,7 @@
       <div class="subtabs">
         <button id="l-tab-log" class="active" data-i18n="log.tabLog">Log</button>
         <button id="l-tab-journal" data-i18n="log.tabJournal">Historial</button>
+        <button id="l-tab-energy" data-i18n="log.tabEnergy">Energía</button>
       </div>
 
       <div id="l-view-log">
@@ -258,6 +259,24 @@
         <div class="fill-area" id="j-pull-area">
           <div class="pull-indicator" id="j-pull-indicator"></div>
           <div class="log-wrap" id="j-journal-wrap"></div>
+        </div>
+      </div>
+
+      <div id="l-view-energy" style="display:none;" class="scroll-area">
+        <div class="card" style="margin-bottom:14px;">
+          <div class="section-title" style="margin-top:0;" data-i18n="energy.title">Batería y temperatura en el tiempo</div>
+          <p class="hint" data-i18n="energy.hint">Solo se registra un punto cuando el nivel de batería o la temperatura cambian de verdad - no es un muestreo continuo.</p>
+          <div id="energy-summary" style="margin-top:8px;"></div>
+        </div>
+        <div class="card" style="margin-bottom:14px;">
+          <div class="section-title" style="margin-top:0;" data-i18n="energy.chartTitle">Últimas 24 horas</div>
+          <svg id="energy-chart" viewBox="0 0 300 100" style="width:100%;height:100px;"></svg>
+          <div id="energy-chart-legend" style="font-size:11px;color:var(--muted);margin-top:6px;display:flex;justify-content:space-between;"></div>
+        </div>
+        <div class="card">
+          <div class="section-title" style="margin-top:0;" data-i18n="energy.regimesTitle">Ritmo de descarga por régimen activo</div>
+          <p class="hint" data-i18n="energy.regimesHint">Compara cuánto tarda en bajar un 1% de batería según lo que estaba activo en ese momento - más alto es mejor (dura más).</p>
+          <div id="energy-regimes" style="margin-top:8px;"></div>
         </div>
       </div>
     </section>
