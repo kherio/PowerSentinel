@@ -201,12 +201,41 @@ action_apps_undo() {
 
 # ---------- Google Mobile Services ----------
 
+: "${gms_state_file:=/data/local/tmp/PowerSentinel/PowerSentinel.gmsstate}"
+
+# Whether GMS is CURRENTLY disabled, independent of anything
+# PowerSentinel has done - `pm list packages -d` (list disabled
+# packages) is a standard, documented pm subcommand, not a fragile
+# dumpsys parse.
+_gms_is_disabled() {
+  pm list packages -d 2>/dev/null | grep -q "com.google.android.gms$"
+}
+
 action_gms_apply() {
   capability_has gms_installed || return
+  # BUG FIX (found during an external code review's broader idempotency
+  # concern, then confirmed by reading this function): this had exactly
+  # the same "restore only what you actually changed" gap already fixed
+  # for apps and low_ram - undo unconditionally re-enabled GMS and reset
+  # its nice to 0, with no record of whether GMS was already disabled
+  # (for entirely unrelated reasons) before PowerSentinel ever touched
+  # it, or what its real original nice value was.
   if [ "$handle_gms" = "nice" ]; then
+    local pid
+    pid="$(pgrep com.google.android.gms)"
+    if [ -n "$pid" ] && [ ! -f "$gms_state_file" ]; then
+      mkdir -p "$(dirname "$gms_state_file")" 2>/dev/null
+      echo "nice:$(_app_current_nice "$pid")" > "$gms_state_file"
+      chmod 600 "$gms_state_file" 2>/dev/null
+    fi
     log_msg 3 "Renicing GMS"
-    renice -n 19 "$(pgrep com.google.android.gms)"
+    renice -n 19 "$pid"
   elif [ "$handle_gms" = "kill" ]; then
+    if ! _gms_is_disabled && [ ! -f "$gms_state_file" ]; then
+      mkdir -p "$(dirname "$gms_state_file")" 2>/dev/null
+      echo "kill" > "$gms_state_file"
+      chmod 600 "$gms_state_file" 2>/dev/null
+    fi
     log_msg 3 "Disabling GMS"
     pm disable com.google.android.gms
     am force-stop com.google.android.gms
@@ -215,13 +244,25 @@ action_gms_apply() {
 
 action_gms_undo() {
   capability_has gms_installed || return
-  if [ "$handle_gms" = "nice" ]; then
-    log_msg 3 "Resetting the nice level for GMS"
-    renice -n 0 "$(pgrep com.google.android.gms)"
-  elif [ "$handle_gms" = "kill" ]; then
-    log_msg 3 "Enabling GMS"
-    pm enable com.google.android.gms
-  fi
+  # Idempotent by construction: a second call (or a call with no
+  # matching apply ever having run) finds nothing recorded and does
+  # nothing further, rather than guessing.
+  [ -f "$gms_state_file" ] || return
+  local recorded
+  recorded="$(cat "$gms_state_file" 2>/dev/null)"
+  rm -f "$gms_state_file"
+  case "$recorded" in
+    nice:*)
+      local orig="${recorded#nice:}"
+      [ -n "$orig" ] || orig="0"
+      log_msg 3 "Restoring the original nice level for GMS"
+      renice -n "$orig" "$(pgrep com.google.android.gms)"
+      ;;
+    kill)
+      log_msg 3 "Enabling GMS"
+      pm enable com.google.android.gms
+      ;;
+  esac
 }
 
 # ---------- Process priorities ----------
@@ -292,11 +333,17 @@ action_low_ram_apply() {
 
 action_low_ram_undo() {
   [ "$low_ram" = "true" ] || return
-  local orig="false"
-  if [ -f "$low_ram_orig_file" ]; then
-    orig="$(cat "$low_ram_orig_file" 2>/dev/null)"
-    rm -f "$low_ram_orig_file"
-  fi
+  # Idempotency hardening (external code review): calling this twice in
+  # a row without an intervening apply used to fall through to a
+  # hardcoded "false" on the second call, once the recorded original
+  # had already been consumed and deleted by the first - potentially
+  # wrong if the real original was "true". Now a second call (or one
+  # with no matching apply ever having run) finds nothing recorded and
+  # does nothing further, rather than guessing.
+  [ -f "$low_ram_orig_file" ] || return
+  local orig
+  orig="$(cat "$low_ram_orig_file" 2>/dev/null)"
+  rm -f "$low_ram_orig_file"
   [ -n "$orig" ] || orig="false"
   log_msg 3 "Restoring low_ram to its original value ($orig)"
   resetprop -n ro.config.low_ram "$orig"
@@ -304,12 +351,40 @@ action_low_ram_undo() {
 
 # ---------- WiFi ----------
 
+# Whether WiFi is CURRENTLY enabled, independent of anything
+# PowerSentinel has done and independent of which control mechanism
+# (rfkill or svc) actually toggles it - `settings get global wifi_on`
+# is backed by the same WifiManager.isWifiEnabled() state either
+# control path ultimately changes, not a fragile dumpsys parse.
+: "${wifi_state_file:=/data/local/tmp/PowerSentinel/PowerSentinel.wifistate}"
+
+_wifi_is_enabled_now() {
+  [ "$(settings get global wifi_on 2>/dev/null)" = "1" ]
+}
+
 action_wifi_apply() {
   [ "$kill_wifi" = "true" ] || return
   if ! capability_has rfkill_wifi && ! capability_has svc_wifi; then
     log_msg 1 "Cannot disable WiFi: neither rfkill nor svc is available on this device"
     emit capabilities warning "WiFi could not be disabled: not supported on this device"
     return
+  fi
+  # BUG FIX (found during an external code review's broader idempotency
+  # concern, then confirmed by reading this function): undo
+  # unconditionally re-enabled WiFi with no record of whether it was
+  # already off before PowerSentinel touched it. This matters more here
+  # than almost anywhere else in the daemon: a user manually turning
+  # WiFi off themselves (no network around, deliberately saving
+  # battery, flight mode) is completely ordinary - undo forcing it back
+  # on regardless would be a real, everyday annoyance, not just a
+  # theoretical edge case. Recorded only the first time this
+  # transitions from untracked to tracked, same reasoning as low_ram's
+  # own fix - a second apply while already active must not overwrite
+  # the real original with PowerSentinel's own "off".
+  if [ ! -f "$wifi_state_file" ]; then
+    mkdir -p "$(dirname "$wifi_state_file")" 2>/dev/null
+    if _wifi_is_enabled_now; then echo "was_on" > "$wifi_state_file"; else echo "was_off" > "$wifi_state_file"; fi
+    chmod 600 "$wifi_state_file" 2>/dev/null
   fi
   log_msg 3 "Disabling WiFi"
   if [ -n "$RFKILL_CMD" ]; then
@@ -333,6 +408,15 @@ action_wifi_undo() {
     emit capabilities warning "WiFi could not be re-enabled: not supported on this device"
     return
   fi
+  # Idempotent (a second call, or a call with no matching apply ever
+  # having run, finds nothing recorded and does nothing further), and
+  # only re-enables if PowerSentinel itself is the one who actually
+  # turned WiFi off - never if it was already off beforehand.
+  [ -f "$wifi_state_file" ] || return
+  local recorded
+  recorded="$(cat "$wifi_state_file" 2>/dev/null)"
+  rm -f "$wifi_state_file"
+  [ "$recorded" = "was_on" ] || return
   log_msg 3 "Enabling WiFi"
   if [ -n "$RFKILL_CMD" ]; then
     log_msg 3 "Attempting to unblock with: $RFKILL_CMD"
