@@ -74,6 +74,29 @@ _another_active_event_wants_app() {
   done
   return 1
 }
+# CRITICAL FIX (external code review, same class as GMS/WiFi/apps/
+# low_ram/cores above, confirmed real by reading this exact code):
+# proc_orig_file is a single global file keyed by PROCESS NAME, not by
+# event - with two active events each targeting the same process
+# through their own handle_proc/proc_file (even with different target
+# nice values), ending ONE of them would restore the real original and
+# delete the shared record while the OTHER event's own background
+# monitor is still actively renicing that same process, exactly the
+# same composition gap already fixed elsewhere. Same fix shape: check
+# whether another currently-active event's own proc_file also targets
+# this process name before actually restoring it.
+_another_active_event_wants_proc() {
+  local proc="$1" ev val other_proc_file
+  for ev in "${active_events[@]}"; do
+    [ -n "$ev" ] && [ "$ev" != "$event" ] || continue
+    val="$(config_get_event_raw "$ev" handle_proc false)"
+    [ "$val" = "true" ] || continue
+    other_proc_file="$(config_get_event_raw "$ev" proc_file "")"
+    [ -n "$other_proc_file" ] && [ -f "$other_proc_file" ] || continue
+    awk -v p="$proc" '$1 == p { found=1 } END { exit !found }' "$other_proc_file" 2>/dev/null && return 0
+  done
+  return 1
+}
 : "${apps_ownership_file:=/data/local/tmp/PowerSentinel/PowerSentinel.appstate}"
 
 # Current nice value of a live PID, via /proc/[pid]/stat (field 19) -
@@ -153,6 +176,23 @@ action_apps_apply() {
     fi
     effective="$(apppolicy_effective_action "$app" "$handle_apps")"
     [ "$effective" = "false" ] && continue
+    # BUG FIX (external code review, then confirmed by reading this
+    # exact code): $effective used to go straight into
+    # if.../elif.../else - the else branch (suspend, the single most
+    # disruptive per-app action this daemon takes) caught EVERY value
+    # that wasn't literally "nice" or "kill", including anything
+    # unexpected - a config typo ("ncie"), manual corruption, or any
+    # future bug elsewhere producing a value outside the known set.
+    # "Fail toward doing less, not more" has been this project's
+    # consistent direction everywhere else; this one path did the
+    # opposite, silently escalating anything unrecognized into the
+    # most aggressive action available. Now an unrecognized value is
+    # treated the same as "false" - skip this app entirely - rather
+    # than falling through to suspend.
+    case "$effective" in
+      nice|kill|suspend) ;;
+      *) continue ;;
+    esac
     if [ "$effective" = "nice" ]; then
       for i in $(pgrep "$app"); do
         if [ -z "${_owned_nice[$app]:-}" ]; then
@@ -421,6 +461,7 @@ action_proc_apply() {
 action_proc_undo() {
   [ "$handle_proc" = "true" ] || return
   while read -r proc nice; do
+    _another_active_event_wants_proc "$proc" && continue
     local orig
     orig="$("$JQ" -r --arg p "$proc" '.[$p] // empty' "$proc_orig_file" 2>/dev/null)"
     [ -n "$orig" ] || orig="0"

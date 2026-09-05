@@ -495,6 +495,20 @@ while true; do
       fi
       ;;
     pause)
+      # BUG FIX (external code review, confirmed with a real
+      # reproduction before trusting it): $resume is a global variable
+      # with no `local` anywhere - once a previous pause cycle set it
+      # to "resume" to exit its own wait loop, it stayed "resume" for
+      # the rest of this daemon process's lifetime (unlike the
+      # persistent-safe-mode wait loop elsewhere in this file, which
+      # calls `exec "$0"` right after resuming and so gets a
+      # completely fresh variable state). A SECOND "pause" command
+      # later in the same session would re-enter this exact `until`
+      # loop with $resume already equal to "resume" from before,
+      # exiting on its very first check without ever actually
+      # pausing. Reproduced exactly: a second pause cycle returned in
+      # ~1.5ms instead of waiting for a real resume signal.
+      resume=""
       until [ "$resume" = "resume" ]; do
         sleep "$delay"
         resume="$(cat $ctl_file)"
@@ -505,9 +519,22 @@ while true; do
       for i in ${!active_events[@]}; do
         handle_event "${active_events[$i]}" 0
       done
-      for pkg in $(pm list packages | cut -d: -f2-); do
-        pm unsuspend "$pkg"
-      done
+      # BUG FIX (external code review, then confirmed by reading this
+      # exact code): this used to ALSO do
+      #   for pkg in $(pm list packages | cut -d: -f2-); do pm unsuspend "$pkg"; done
+      # right after the handle_event loop above - unsuspending
+      # EVERY installed package, not just ones PowerSentinel itself
+      # suspended. This directly contradicted the ownership-tracking
+      # system built specifically to avoid exactly this: a user who
+      # suspended an app themselves, for their own reasons, would find
+      # it silently un-suspended the moment Safe Mode activated -
+      # confirmed with a straightforward trace (a manually-suspended
+      # app has no entry in apps_ownership_file, so it was never
+      # PowerSentinel's to touch in the first place). The handle_event
+      # loop above already correctly reverses everything PowerSentinel
+      # itself suspended, through action_apps_undo()'s own ownership
+      # check - this second, blanket loop was pure leftover, and
+      # actively harmful rather than merely redundant.
       emit safemode critical "Safe Mode is Active"
       # BUG FIX: this loop had no sleep at all (unlike the near-identical
       # "pause" command handler above it, which does) - a pre-existing

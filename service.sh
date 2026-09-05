@@ -32,9 +32,39 @@ is_daemon_running() {
   grep -q "PowerSentineld" "/proc/$pid/cmdline" 2>/dev/null
 }
 
-if ! is_daemon_running; then
-  /system/bin/bash /system/bin/PowerSentineld &
-fi
+# BUG FIX (external code review, then confirmed by reasoning through the
+# real timeline rather than just the code): is_daemon_running() + launch
+# still wasn't atomic - two checks could both see "not running" and both
+# launch, each then overwriting the other's PID file. Boot-time
+# duplicate service.sh runs are one way this could happen, but there's
+# a more concrete one now that a manual "restart daemon" button exists
+# in the WebUI (added the same round as this fix): a person pressing it
+# kills the old process, and for the brief window before the new one
+# finishes starting, the watchdog loop below - which has been ticking
+# independently every 60s since boot, inside this SAME service.sh
+# process - could ALSO wake up, see "not running", and launch its own
+# replacement at the same moment.
+#
+# `mkdir` is a single atomic syscall - it either creates the directory
+# or fails if it already exists, with no window where two callers could
+# both succeed. Used here as a real mutual-exclusion lock: whoever's
+# mkdir succeeds is the only one who checks-and-launches; anyone who
+# loses the race (mkdir fails) does nothing at all, since a launch is
+# already in progress. The launcher re-checks is_daemon_running() AFTER
+# acquiring the lock too, in case someone else's launch (from just
+# before the lock existed) already finished.
+LOCKDIR="/data/local/tmp/PowerSentinel/.daemon_launch.lock"
+
+launch_daemon_if_needed() {
+  is_daemon_running && return
+  if mkdir "$LOCKDIR" 2>/dev/null; then
+    is_daemon_running || /system/bin/bash /system/bin/PowerSentineld &
+    sleep 1
+    rmdir "$LOCKDIR" 2>/dev/null
+  fi
+}
+
+launch_daemon_if_needed
 
 # Watchdog: if the daemon dies unexpectedly (crash, OOM kill, etc.), the
 # device would otherwise stay unmanaged until the next reboot. Checks
@@ -48,7 +78,7 @@ fi
     sleep 60
     if ! is_daemon_running; then
       log -t PowerSentinel "Watchdog: PowerSentineld was not running - restarting it"
-      /system/bin/bash /system/bin/PowerSentineld &
+      launch_daemon_if_needed
     fi
   done
 ) &

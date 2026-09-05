@@ -100,12 +100,27 @@ export async function exitSafeMode() {
 // session, so it survives after this exec() call itself finishes.
 export async function restartDaemon() {
   const pidFile = `${DATA_DIR}/PowerSentineld.pid`;
+  // Same mkdir-based atomic lock service.sh's own watchdog uses (see
+  // the matching comment there) - mkdir either creates the directory
+  // or fails if it already exists, with no window where both this
+  // button and the watchdog's own independent 60s check could launch
+  // a second instance around the same moment. Re-checks for a live PID
+  // AFTER acquiring the lock too, in case the watchdog's own launch
+  // (from just before this lock existed) already finished.
+  const lockDir = `${DATA_DIR}/.daemon_launch.lock`;
   await run(
     `pid=$(cat '${pidFile}' 2>/dev/null); ` +
     `[ -n "$pid" ] && kill -TERM "$pid" 2>/dev/null; ` +
     `sleep 1; ` +
     `[ -n "$pid" ] && kill -0 "$pid" 2>/dev/null && kill -KILL "$pid" 2>/dev/null; ` +
-    `setsid /system/bin/bash /system/bin/PowerSentineld >/dev/null 2>&1 &`
+    `if mkdir '${lockDir}' 2>/dev/null; then ` +
+    `newpid=$(cat '${pidFile}' 2>/dev/null); ` +
+    `if [ -z "$newpid" ] || ! kill -0 "$newpid" 2>/dev/null; then ` +
+    `setsid /system/bin/bash /system/bin/PowerSentineld >/dev/null 2>&1 & ` +
+    `fi; ` +
+    `sleep 1; ` +
+    `rmdir '${lockDir}' 2>/dev/null; ` +
+    `fi`
   );
 }
 
