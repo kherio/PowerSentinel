@@ -1,3 +1,6 @@
+### v3.38.0
+  - **Apps ordenadas por nivel de política**: Protegida primero, luego Suave, Equilibrada, y Restringida al final - antes aparecían en el orden que devolviera el sistema, sin relación con la política de cada una.
+
 ### v3.37.0
   - **Botón de "Reiniciar PowerSentinel"** dentro del aviso de datos desactualizados: mata y relanza el proceso real del demonio (no un `reload` cooperativo, que no serviría si el demonio está atascado en pausa o colgado por cualquier otra razón). Cualquier evento activo se recupera automáticamente al arrancar, por la misma red de seguridad que ya protege contra un crash real.
   - `PowerSentinelconf set/add-event/rm-event` ahora avisan de que hace falta un `reload` para aplicar los cambios, igual que ya hacía el asistente interactivo.
