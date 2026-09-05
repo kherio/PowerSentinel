@@ -1,3 +1,7 @@
+### v3.35.0
+  - **Detección de datos desactualizados**: "Actualizado HH:MM:SS" solo confirmaba que la petición había tenido éxito, no que los datos mostrados fueran recientes - si el demonio está en pausa o atascado, podía mostrar batería de hace una hora con total confianza. Ahora el demonio escribe su propio timestamp real, y el frontend avisa claramente si los datos llevan demasiado tiempo sin refrescarse.
+  - **Nueva barra de comparación bajo la estimación de batería**: tu ritmo de consumo actual frente a tu media histórica real, con el porcentaje de diferencia - nunca una cifra de "ahorro" inventada, ya que no hay forma de medir causalmente cuánto se habría gastado sin PowerSentinel.
+
 ### v3.34.0
   - **CRITICAL FIX: el seguimiento de propiedad (ownership) no era seguro entre eventos simultáneos** - dos eventos activos pidiendo acciones distintas sobre GMS/WiFi/apps/núcleos podían dejar el sistema atascado permanentemente en el estado equivocado. Corregido para GMS, WiFi, `low_ram` y apps, verificado con reproducciones reales.
   - **CRITICAL FIX: `handle_cores` manual restauraba un governor vacío** en núcleos de alto rendimiento no detectados automáticamente; **`disable_cores` reactivaba núcleos** que ya estaban apagados por otra razón antes de que PowerSentinel actuara. Ambos corregidos con el mismo patrón de "restaurar solo lo que cambió".
