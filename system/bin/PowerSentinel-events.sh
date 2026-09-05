@@ -87,6 +87,61 @@ is_event_locked() {
 # so this logic exists in exactly one place rather than three. Still
 # deliberately NOT shared with handle_event() itself - see the comment
 # on reassert_active_events() below for why that one stays separate.
+# CRITICAL FIX: handle_event() re-resolves every field straight from
+# the config file on EVERY call, for both starting (flag=1) AND ending
+# (flag=0) an event. Confirmed with a real reproduction: if the config
+# is saved (or a different profile loaded) WHILE an event is active and
+# that save changes what the event's own fields resolve to (or removes
+# the event block entirely) - completely ordinary things to do from
+# the WebUI - the "undo" that fires as part of the very same reload
+# reads the NEW config, not what was ACTUALLY applied under the OLD
+# one. If the new resolution says handle_apps=false where the old one
+# said "nice", the undo call sees nothing to undo and returns
+# immediately - the reniced/suspended app, disabled core, or disabled
+# WiFi is left exactly as it was, forever, with the daemon believing
+# everything is clean. This isn't a rare edge case: writeConfig() (used
+# by both the normal config-save flow and profile loading) always
+# writes the new file to disk BEFORE requesting the reload that
+# triggers this undo.
+#
+# Fixed by snapshotting the fields actually resolved at the moment an
+# event genuinely starts (or reassert_active_events() genuinely
+# re-applies it), and using THAT snapshot - not a fresh re-resolution -
+# when the event ends. Falls back to fresh resolution only when no
+# snapshot exists for this event (e.g. state_reconcile() undoing a
+# stale event from a previous daemon process, where no in-memory
+# snapshot could possibly have survived the restart - reconcile's own
+# safety net is the idempotent undo functions plus the ownership-
+# tracking files, which DO persist across restarts, so falling back
+# here doesn't weaken anything reconcile already relies on).
+declare -gA _event_applied_fields=()
+
+_snapshot_event_fields() {
+  local ev="$1"
+  _event_applied_fields[$ev]="$(declare -p handle_cores disable_cores handle_apps allowlist denylist handle_proc proc_file handle_gms low_ram doze kill_wifi 2>/dev/null)"
+}
+
+_restore_event_snapshot() {
+  local ev="$1" snap
+  if [ -n "${_event_applied_fields[$ev]:-}" ]; then
+    # `declare -p`'s own output is prefixed with "declare -- " - eval-ing
+    # that verbatim from INSIDE this function would create a new LOCAL
+    # shadow of each variable (declare always scopes to the current
+    # function) instead of updating the actual global handle_event()
+    # and disable_pwr_save() read from, silently discarding the
+    # restored values the moment this function returns. Stripped down
+    # to plain "var=value" assignments, which - with no declare/local
+    # keyword - correctly update whichever "var" is already visible,
+    # global or not. Confirmed this exact failure mode with a minimal
+    # reproduction before trusting the fix.
+    snap="${_event_applied_fields[$ev]//declare -- /}"
+    eval "$snap"
+    unset "_event_applied_fields[$ev]"
+    return 0
+  fi
+  return 1
+}
+
 _resolve_event_fields() {
   local ev="$1" val
   handle_cores=false
@@ -137,6 +192,7 @@ reassert_active_events() {
   for ev in "${active_events[@]}"; do
     [ -n "$ev" ] || continue
     _resolve_event_fields "$ev"
+    _snapshot_event_fields "$ev"
     enable_pwr_save
   done
 }
@@ -279,10 +335,27 @@ handle_event() {
     handle_proc="false"
   fi
 
+  # CRITICAL FIX: capture what's ACTUALLY about to be applied for this
+  # start, so that ending this same event later restores based on this
+  # snapshot rather than whatever the config happens to say when it
+  # ends (which could have changed via a save or profile load in the
+  # meantime) - see the full explanation on _snapshot_event_fields
+  # above. Only meaningful for a genuine start (flag=1); ending an
+  # event doesn't need its own fields re-captured.
+  [ "$flag" = 1 ] && _snapshot_event_fields "$event"
+
   # perform action using the old way
   # instead of a massive refactor which
   # is probably coming in a later update
   if [ "$flag" = 0 ]; then
+    # CRITICAL FIX: restore the real applied-at-start snapshot (if one
+    # exists for this event) BEFORE undoing, overriding the fresh
+    # (and possibly now-wrong) resolution just computed above - see
+    # _snapshot_event_fields's full explanation. Falls through to the
+    # freshly-resolved values already in place when there's no
+    # snapshot (state_reconcile() undoing a stale event from a
+    # previous process, where none could exist).
+    _restore_event_snapshot "$event"
     log_msg 1 "Undoing actions for $event"
     disable_pwr_save
     # remove from active_events
