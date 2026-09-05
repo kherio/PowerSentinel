@@ -332,10 +332,17 @@ function describeAppSituations(level, model) {
 function drawAppPolicyList() {
   const list = document.getElementById('ap-policy-list');
   const q = (appPolicyState.filter || '').toLowerCase();
-  const pkgs = (appPolicyState.allPkgs || []).filter((p) => p.toLowerCase().indexOf(q) !== -1);
+  const levelOf = (pkg) => appPolicyState.level[pkg] !== undefined ? appPolicyState.level[pkg] : 2;
+  // Ordenadas por nivel de política - Protegida primero, Restringida al
+  // final - con el nombre de paquete como criterio secundario dentro de
+  // cada grupo, para que el orden sea predecible y no dependa de lo que
+  // `pm list packages` devuelva.
+  const pkgs = (appPolicyState.allPkgs || [])
+    .filter((p) => p.toLowerCase().indexOf(q) !== -1)
+    .sort((a, b) => levelOf(a) - levelOf(b) || a.localeCompare(b));
   list.innerHTML = '';
   pkgs.forEach((pkg) => {
-    const level = appPolicyState.level[pkg] !== undefined ? appPolicyState.level[pkg] : 2;
+    const level = levelOf(pkg);
     const usage = appPolicyState.usage[pkg];
     const situations = describeAppSituations(level, appPolicyState.liveConfig);
     const row = document.createElement('div');
