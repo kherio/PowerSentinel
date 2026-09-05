@@ -220,6 +220,16 @@ migrate() {
 update_status() {
   status_file="/data/local/tmp/PowerSentinel/PowerSentinel.status"
   echo -n > "$status_file"
+  # A real "this is when the daemon itself wrote this" timestamp - the
+  # frontend previously had no way to tell "the file was read
+  # successfully just now" (which its own "Actualizado HH:MM:SS" label
+  # actually showed) apart from "the DATA inside it is actually
+  # current" - if the daemon is paused, stuck, or hasn't cycled in a
+  # while, a fetch can succeed instantly while returning genuinely
+  # stale readings, with nothing to tell the two apart. See PR
+  # discussion: a user saw 90% in the app against 82% in the real
+  # Android status bar, both labeled as just having been "updated".
+  echo "Timestamp: $(date +%s)" >> "$status_file"
   # CPU Map
   for i in ${!cpus[@]}; do
     core="${cpus[$i]}"

@@ -1174,6 +1174,17 @@ main {
 .pull-indicator.ready { color: var(--accent); }
 .pull-indicator svg { width: 16px; height: 16px; margin-right: 6px; transition: transform 0.15s ease; }
 .pull-indicator.spinning svg { animation: spin 0.7s linear infinite; }
+
+.stale-data-warning {
+  background: rgba(240, 184, 73, 0.12);
+  border: 1px solid var(--warn);
+  color: var(--warn);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  font-size: 12.5px;
+  margin-bottom: 14px;
+  line-height: 1.4;
+}
 @keyframes spin { to { transform: rotate(360deg); } }
 
 .icon {

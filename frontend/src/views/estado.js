@@ -462,6 +462,8 @@ function render(text) {
       sys.pressureThresholds = [parseInt(m[1], 10), parseInt(m[2], 10), parseInt(m[3], 10)];
     } else if ((m = line.match(/^activeeventstarttimes:\s*(\{.*\})/i))) {
       try { sys.activeEventStartTimes = JSON.parse(m[1]); } catch (e) { /* ignore */ }
+    } else if ((m = line.match(/^timestamp:\s*(\d+)/i))) {
+      sys.daemonTimestamp = parseInt(m[1], 10);
     } else if ((m = line.match(/^activemechanisms:\s*(\[.*\])/i))) {
       try { sys.activeMechanisms = JSON.parse(m[1]); } catch (e) { /* ignore */ }
     } else if ((m = line.match(/^capabilities:\s*(.*)$/i))) {
@@ -636,6 +638,28 @@ function render(text) {
     extraBox.querySelector('.value2').textContent = unmatched.join(' · ');
   } else {
     extraBox.style.display = 'none';
+  }
+
+  // Aviso de datos desactualizados: "Actualizado HH:MM:SS" (fijado en
+  // loadStatus) solo confirma que la PETICIÓN tuvo éxito ahora mismo -
+  // no dice nada sobre si el CONTENIDO leído es reciente. Si el
+  // demonio está en pausa, atascado, o lleva un buen rato sin
+  // completar un ciclo, una lectura puede tener éxito al instante
+  // devolviendo datos de hace minutos u horas, y hasta ahora no había
+  // forma de distinguir ambos casos. Compara el timestamp REAL del
+  // demonio (nuevo) contra la hora actual del cliente.
+  const staleWarning = document.getElementById('e-stale-warning');
+  const STALE_THRESHOLD_S = 90; // 30x el delay por defecto (3s) - margen generoso
+  if (typeof sys.daemonTimestamp === 'number') {
+    const ageS = Math.floor(Date.now() / 1000) - sys.daemonTimestamp;
+    if (ageS > STALE_THRESHOLD_S) {
+      staleWarning.style.display = 'block';
+      staleWarning.textContent = '⚠️ ' + t('estado.staleDataWarning', { mins: Math.round(ageS / 60) });
+    } else {
+      staleWarning.style.display = 'none';
+    }
+  } else {
+    staleWarning.style.display = 'none';
   }
 
   savePersisted();
