@@ -1,8 +1,8 @@
 import { ICONS } from '../icons.js';
-import { readStatus, readCpuRanking, readJournal } from '../api.js';
+import { readStatus, readCpuRanking, readJournal, readEnergyLog } from '../api.js';
 import { toast, escapeHtml } from '../helpers.js';
 import { t } from '../i18n.js';
-import { parseJournalLines, renderTimelineEntry } from './log.js';
+import { parseJournalLines, renderTimelineEntry, parseEnergyLines, computeRecentRate } from './log.js';
 
 const GAUGE_C = 2 * Math.PI * 52;
 const HISTORY_MAX = 30; // ~90s at 3s polling
@@ -323,6 +323,57 @@ async function renderRecentActivity() {
     el.innerHTML = entries.map(renderTimelineEntry).join('');
   } catch (e) {
     el.innerHTML = `<p class="hint">${escapeHtml(t('estado.recentActivityEmpty'))}</p>`;
+  }
+}
+
+// Comparación real entre el ritmo de descarga reciente y tu media
+// histórica - nunca una cifra de "ahorro" inventada, ya que no hay
+// forma causal de medir cuánto se habría gastado SIN PowerSentinel.
+// Reutiliza exactamente el mismo cálculo ya construido y verificado
+// para "Salud energética" en Análisis (computeRecentRate/
+// parseEnergyLines, el mismo split reciente/histórico sin solapar) -
+// la MISMA fuente de datos, no una nueva ni menos fiable. Igual que
+// "Actividad reciente", se pide una sola vez al activar la pestaña,
+// nunca en el sondeo de 3s.
+async function renderSavingsBar() {
+  const el = document.getElementById('e-savings-bar');
+  try {
+    const text = await readEnergyLog();
+    const samples = parseEnergyLines(text);
+    if (!samples.length) { el.innerHTML = `<p class="hint">${escapeHtml(t('estado.savingsBarNoData'))}</p>`; return; }
+
+    const last = samples[samples.length - 1];
+    const recentCutoff = last.ts - 6 * 3600;
+    const recentSamples = samples.filter((s) => s.ts >= recentCutoff);
+    const olderSamples = samples.filter((s) => s.ts < recentCutoff);
+    const recentRate = computeRecentRate(recentSamples, null);
+    const baselineRate = olderSamples.length >= 2 ? computeRecentRate(olderSamples, null) : null;
+
+    if (recentRate === null || baselineRate === null || baselineRate <= 0) {
+      el.innerHTML = `<p class="hint">${escapeHtml(t('estado.savingsBarNoData'))}</p>`;
+      return;
+    }
+
+    const better = recentRate < baselineRate;
+    const maxRate = Math.max(recentRate, baselineRate) || 1;
+    const recentPct = Math.max(4, Math.round((recentRate / maxRate) * 100));
+    const baselinePct = Math.max(4, Math.round((baselineRate / maxRate) * 100));
+    const diffPct = Math.round(Math.abs((recentRate - baselineRate) / baselineRate) * 100);
+
+    el.innerHTML =
+      `<div class="savings-bar-row">` +
+        `<span class="savings-bar-label">${escapeHtml(t('estado.savingsBarToday'))}</span>` +
+        `<div class="savings-bar-track"><div class="savings-bar-fill ${better ? 'good' : 'warn'}" style="width:${recentPct}%"></div></div>` +
+        `<span class="savings-bar-value">${recentRate.toFixed(1)}%/h</span>` +
+      `</div>` +
+      `<div class="savings-bar-row">` +
+        `<span class="savings-bar-label">${escapeHtml(t('estado.savingsBarAvg'))}</span>` +
+        `<div class="savings-bar-track"><div class="savings-bar-fill neutral" style="width:${baselinePct}%"></div></div>` +
+        `<span class="savings-bar-value">${baselineRate.toFixed(1)}%/h</span>` +
+      `</div>` +
+      `<p class="hint savings-bar-caption">${escapeHtml(better ? t('estado.savingsBarBetter', { pct: diffPct }) : t('estado.savingsBarWorse', { pct: diffPct }))}</p>`;
+  } catch (e) {
+    el.innerHTML = '';
   }
 }
 
@@ -730,6 +781,7 @@ async function loadCpuRanking() {
 export function activateEstado() {
   loadStatus(true);
   renderRecentActivity();
+  renderSavingsBar();
   if (!pollTimer) pollTimer = setInterval(() => loadStatus(true), 3000);
 }
 
@@ -742,5 +794,6 @@ export function deactivateEstado() {
 // Used by main.js's pull-to-refresh gesture.
 export function refreshEstado() {
   renderRecentActivity();
+  renderSavingsBar();
   return loadStatus(false);
 }

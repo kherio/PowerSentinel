@@ -189,7 +189,7 @@ async function loadJournal(showToast) {
 // A malformed/unparseable line is skipped rather than breaking the
 // whole render, same reasoning as parseJournalLines above - the file
 // could in principle be read mid-write.
-function parseEnergyLines(text) {
+export function parseEnergyLines(text) {
   return text.split('\n').filter((l) => l.trim().length).map((line) => {
     try {
       const obj = JSON.parse(line);
@@ -212,7 +212,7 @@ function parseEnergyLines(text) {
 // exactamente la misma exclusión de tramos cargando ya establecida en
 // computeDischargeRates (una batería subiendo o estable enchufada no
 // es una tasa de descarga real).
-function computeRecentRate(samples, hoursBack) {
+export function computeRecentRate(samples, hoursBack) {
   if (samples.length < 2) return null;
   const last = samples[samples.length - 1];
   const cutoff = hoursBack ? last.ts - hoursBack * 3600 : -Infinity;

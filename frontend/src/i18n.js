@@ -174,6 +174,11 @@ const DICT = {
     'estado.batteryCharging2': 'en carga',
     'estado.batteryRemaining': '≈{h}h {m}m restantes',
     'estado.battSparklineCaption': '{delta}% en {hours}h',
+    'estado.savingsBarToday': 'Ahora',
+    'estado.savingsBarAvg': 'Tu media',
+    'estado.savingsBarBetter': '✓ {pct}% mejor que tu media reciente.',
+    'estado.savingsBarWorse': '{pct}% peor que tu media reciente.',
+    'estado.savingsBarNoData': 'Todavía no hay suficiente historial para comparar.',
     'estado.cpuSummary': '{active}/{total} núcleos activos',
     'estado.cpuSummaryWithFreq': '{pct}% actividad · {active}/{total} núcleos activos',
 
@@ -653,6 +658,11 @@ const DICT = {
     'estado.batteryCharging2': 'charging',
     'estado.batteryRemaining': '≈{h}h {m}m remaining',
     'estado.battSparklineCaption': '{delta}% over {hours}h',
+    'estado.savingsBarToday': 'Now',
+    'estado.savingsBarAvg': 'Your average',
+    'estado.savingsBarBetter': '✓ {pct}% better than your recent average.',
+    'estado.savingsBarWorse': '{pct}% worse than your recent average.',
+    'estado.savingsBarNoData': 'Not enough history yet to compare.',
     'estado.cpuSummary': '{active}/{total} cores active',
     'estado.cpuSummaryWithFreq': '{pct}% activity · {active}/{total} cores active',
 
