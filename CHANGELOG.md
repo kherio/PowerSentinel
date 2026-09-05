@@ -1,3 +1,7 @@
+### v3.37.0
+  - **Botón de "Reiniciar PowerSentinel"** dentro del aviso de datos desactualizados: mata y relanza el proceso real del demonio (no un `reload` cooperativo, que no serviría si el demonio está atascado en pausa o colgado por cualquier otra razón). Cualquier evento activo se recupera automáticamente al arrancar, por la misma red de seguridad que ya protege contra un crash real.
+  - `PowerSentinelconf set/add-event/rm-event` ahora avisan de que hace falta un `reload` para aplicar los cambios, igual que ya hacía el asistente interactivo.
+
 ### v3.36.0
   - **CRITICAL FIX: guardar la configuración (o cargar un perfil) mientras un evento estaba activo podía dejar cambios aplicados para siempre**. Al deshacer un evento tras un `reload`, el demonio releía la configuración desde disco - pero esa config ya era la nueva, guardada justo antes. Si el evento activo ya no coincidía con lo que la nueva config decía, el "deshacer" no encontraba nada que revertir, dejando apps reniced, núcleos apagados, WiFi o GMS deshabilitados de forma permanente, con el demonio creyendo que todo estaba limpio. No es un caso raro - editar un evento activo y guardar, o cambiar de perfil, son acciones completamente normales. Corregido capturando una instantánea real de lo aplicado en el momento de activar cada evento, usada al deshacerlo en vez de releer la config.
   - Hallazgo de una autoauditoría, verificado con reproducciones reales antes de corregir nada - igual que el resto de fixes críticos de esta serie.
