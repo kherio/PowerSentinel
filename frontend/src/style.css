@@ -1229,6 +1229,14 @@ main {
   margin-bottom: 14px;
   line-height: 1.4;
 }
+.stale-data-warning p {
+  margin: 0 0 8px;
+}
+.stale-data-warning #e-restart-daemon-btn {
+  width: 100%;
+  border-color: var(--warn);
+  color: var(--warn);
+}
 @keyframes spin { to { transform: rotate(360deg); } }
 
 .icon {

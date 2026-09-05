@@ -8,7 +8,7 @@ export {
   startEvent, stopEvent,
   listProfiles, readProfile, saveProfile, deleteProfile,
   readModuleInfo, listRunningPackages,
-  enterSafeMode, exitSafeMode,
+  enterSafeMode, exitSafeMode, restartDaemon,
   readFlaggedApps, dismissFlaggedApp, setAppPolicy, readCpuRanking,
   readAppPolicies, readUsageBuckets
 } from './backend-ksu.js';

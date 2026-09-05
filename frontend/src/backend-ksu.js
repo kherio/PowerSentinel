@@ -76,6 +76,39 @@ export async function exitSafeMode() {
   await run('PowerSentinelctl resume');
 }
 
+// Kill + relaunch the actual daemon process, not `PowerSentinelctl
+// reload` - reload asks the daemon to cooperatively re-exec itself,
+// which depends on it still being alive enough to read the control
+// file. A daemon stuck in `pause` only ever recognizes the literal
+// string "resume" while paused (not "reload"), and one hung for any
+// other reason wouldn't be reading the control file at all - this
+// needs to work regardless of why the daemon might be stuck, which a
+// real kill-and-relaunch achieves without depending on its own
+// cooperation. Uses the same PID file the watchdog itself relies on
+// (PowerSentineld writes it as early as possible in its own startup).
+// SIGTERM first, SIGKILL only if it's still alive a moment later -
+// there's no signal trap in the daemon, so either one is a clean stop,
+// but SIGTERM first costs nothing and is the more conventional choice.
+//
+// This command runs inside a short-lived root shell session (KernelSU's
+// exec() - documented as running through BusyBox's ash, not bash), and
+// that session ends the moment the command returns - a plain "&"
+// backgrounded child can be torn down along with it. `setsid` (a real
+// toybox/busybox applet, confirmed via research rather than assumed -
+// unlike `disown`, which is a bash-only shell builtin that plain ash
+// doesn't have at all) detaches the new daemon process into its own
+// session, so it survives after this exec() call itself finishes.
+export async function restartDaemon() {
+  const pidFile = `${DATA_DIR}/PowerSentineld.pid`;
+  await run(
+    `pid=$(cat '${pidFile}' 2>/dev/null); ` +
+    `[ -n "$pid" ] && kill -TERM "$pid" 2>/dev/null; ` +
+    `sleep 1; ` +
+    `[ -n "$pid" ] && kill -0 "$pid" 2>/dev/null && kill -KILL "$pid" 2>/dev/null; ` +
+    `setsid /system/bin/bash /system/bin/PowerSentineld >/dev/null 2>&1 &`
+  );
+}
+
 // ---------- Flagged apps (appwatch) + per-app policy ----------
 // Direct jq manipulation of their own small JSON files, the same
 // pattern config/state/journal already use daemon-side - not by

@@ -1,5 +1,5 @@
 import { ICONS } from '../icons.js';
-import { readStatus, readCpuRanking, readJournal, readEnergyLog } from '../api.js';
+import { readStatus, readCpuRanking, readJournal, readEnergyLog, restartDaemon } from '../api.js';
 import { toast, escapeHtml } from '../helpers.js';
 import { t } from '../i18n.js';
 import { parseJournalLines, renderTimelineEntry, parseEnergyLines, computeRecentRate } from './log.js';
@@ -705,7 +705,7 @@ function render(text) {
     const ageS = Math.floor(Date.now() / 1000) - sys.daemonTimestamp;
     if (ageS > STALE_THRESHOLD_S) {
       staleWarning.style.display = 'block';
-      staleWarning.textContent = '⚠️ ' + t('estado.staleDataWarning', { mins: Math.round(ageS / 60) });
+      document.getElementById('e-stale-warning-text').textContent = '⚠️ ' + t('estado.staleDataWarning', { mins: Math.round(ageS / 60) });
     } else {
       staleWarning.style.display = 'none';
     }
@@ -738,7 +738,31 @@ export function initEstado() {
   document.getElementById('e-recent-activity-more').addEventListener('click', () => {
     document.dispatchEvent(new CustomEvent('powersentinel:navigate', { detail: { view: 'log' } }));
   });
+  document.getElementById('e-restart-daemon-btn').textContent = t('estado.restartDaemonButton');
+  document.getElementById('e-restart-daemon-btn').addEventListener('click', onRestartDaemonClick);
   initTechDetailsToggle();
+}
+
+// Deliberadamente solo se llama desde el click del botón de arriba -
+// nunca automáticamente, ni siquiera cuando el aviso de datos
+// desactualizados aparece: matar y relanzar el proceso real del
+// demonio es una acción real con consecuencias (cualquier evento
+// activo pierde su seguimiento en memoria hasta que
+// state_reconcile() lo recupere al arrancar), así que requiere
+// confirmación explícita de la persona cada vez.
+async function onRestartDaemonClick() {
+  if (!window.confirm(t('estado.restartDaemonConfirm'))) return;
+  const btn = document.getElementById('e-restart-daemon-btn');
+  btn.disabled = true;
+  try {
+    await restartDaemon();
+    toast(t('estado.restartDaemonSuccess'), 'success');
+    setTimeout(() => loadStatus(false), 2000);
+  } catch (e) {
+    toast(t('estado.restartDaemonError', { msg: e.message }), 'error');
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 // Deliberately only ever called from the button click above - never
