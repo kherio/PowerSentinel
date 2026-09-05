@@ -381,16 +381,16 @@ case "$1" in
       echo "Uso: PowerSentinelconf set KEY VALOR [--event NOMBRE]" >&2
       exit 1
     fi
-    setval "$key" "$val" "$event" && echo "$key=$val actualizado$( [ -n "$event" ] && echo " en el evento $event" )."
+    setval "$key" "$val" "$event" && { echo "$key=$val actualizado$( [ -n "$event" ] && echo " en el evento $event" )."; echo "Aplica los cambios con: su -c 'PowerSentinelctl reload'"; }
     ;;
   events)
     list_events
     ;;
   add-event)
-    add_event "$2"
+    add_event "$2" && echo "Aplica los cambios con: su -c 'PowerSentinelctl reload'"
     ;;
   rm-event)
-    rm_event "$2"
+    rm_event "$2" && echo "Aplica los cambios con: su -c 'PowerSentinelctl reload'"
     ;;
   app-policy)
     shift
