@@ -1,3 +1,11 @@
+### v3.39.0
+  - **CRITICAL FIX: Safe Mode des-suspendía todas las apps del sistema**, no solo las que PowerSentinel había suspendido - contradecía directamente el sistema de ownership. Eliminado el bucle global.
+  - **CRITICAL FIX: `pause` solo funcionaba la primera vez** - una variable global nunca se reseteaba, así que una segunda pausa terminaba al instante sin esperar nada. Corregido.
+  - **CRITICAL FIX: un valor inválido de `handle_apps`** (typo, corrupción) caía en `suspend`, la acción más agresiva, en vez de no hacer nada. Ahora falla de forma segura.
+  - **CRITICAL FIX: la carrera del watchdog era real**, y más relevante ahora por el nuevo botón de reinicio manual - dos lanzamientos simultáneos del demonio podían ocurrir de verdad. Corregido con un lock atómico real (`mkdir`), probado con 20 intentos simultáneos.
+  - **CRITICAL FIX: `handle_proc` no tenía la misma protección de composición** ya aplicada a GMS/WiFi/apps/núcleos - dos eventos apuntando al mismo proceso podían dejarlo en un valor de nice incorrecto al terminar.
+  - Hallazgos de una revisión de código externa, verificados con reproducciones reales antes de corregir nada.
+
 ### v3.38.0
   - **Apps ordenadas por nivel de política**: Protegida primero, luego Suave, Equilibrada, y Restringida al final - antes aparecían en el orden que devolviera el sistema, sin relación con la política de cada una.
 
