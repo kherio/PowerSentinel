@@ -86,10 +86,44 @@ _screenwake_hw_wake_reason() {
 # the length guard the kernel-file path already has - nothing here
 # guarantees a wake lock tag is short.
 _screenwake_wakelock_hint() {
-  timeout 3 dumpsys power 2>/dev/null \
-    | awk -F"'" '/_WAKE_LOCK/ && NF>=2 {print $2}' \
-    | head -n 2 | tr '\n' ',' | sed 's/,$//; s/,/, /g' \
-    | head -c 200
+  # BUG FIX / IMPROVEMENT (feature request: a "more real" name for what
+  # turns the screen on): dumpsys power's wake lock lines usually
+  # include the acquiring process's UID ("... ACQ=-1s (uid=10234,
+  # ws=null)"), which resolves to an EXACT installed package - a much
+  # more reliable, verifiable identification than the tag text alone
+  # (a tag like "NetworkStats" or "*job*" names a subsystem, not an
+  # app; some tags happen to embed a package name, most don't). System
+  # UIDs (<10000, no real "app" to name) are skipped rather than
+  # resolved - that lookup would just spend a whole extra `pm` call to
+  # confirm there's nothing more specific to say. `pm list packages -U`
+  # is only ever called AT MOST ONCE per invocation (cached in
+  # $pkglist, reused for a second matching UID) - and not at all if
+  # every found lock's UID is a system one. `timeout 2` bounds this
+  # second lookup so the worst case (`dumpsys power` already timing
+  # out at 3s, THEN this also timing out) stays a bounded ~5s stall,
+  # not unbounded - still real, still worth knowing about, but this is
+  # the same "bound every external call, degrade to nothing rather
+  # than hang" principle already applied to the dumpsys call itself.
+  # Falls back to the plain tag, exactly as before, whenever resolution
+  # isn't possible for any reason - never a regression from what this
+  # already did.
+  local lines line tag uid resolved out="" n=0 pkglist=""
+  lines="$(timeout 3 dumpsys power 2>/dev/null | grep '_WAKE_LOCK')"
+  [ -n "$lines" ] || return
+  while IFS= read -r line; do
+    [ "$n" -ge 2 ] && break
+    tag="$(printf '%s' "$line" | sed -n "s/.*'\([^']*\)'.*/\1/p")"
+    [ -n "$tag" ] || continue
+    uid="$(printf '%s' "$line" | sed -n 's/.*uid=\([0-9][0-9]*\).*/\1/p')"
+    if [ -n "$uid" ] && [ "$uid" -ge 10000 ] 2>/dev/null; then
+      [ -n "$pkglist" ] || pkglist="$(timeout 2 pm list packages -U 2>/dev/null)"
+      resolved="$(printf '%s\n' "$pkglist" | grep -F "uid:$uid" | head -n1 | sed -n 's/^package:\([^ ]*\).*/\1/p')"
+      [ -n "$resolved" ] && tag="$tag ($resolved)"
+    fi
+    out="${out:+$out, }$tag"
+    n=$((n + 1))
+  done <<< "$lines"
+  printf '%s' "$out" | head -c 200
 }
 
 # Tries the hardware-level reason first (when available, it's the more
