@@ -833,14 +833,42 @@ main {
   font-weight: 700;
   color: var(--text);
 }
-.nightwake-window {
+/* Editable window: two real <input type="time"> elements, not just a
+   text badge - tapping either one opens the native time picker
+   directly, right where the current window is already shown, instead
+   of a separate settings form elsewhere (per the maintainer's own
+   suggestion: edit it where you already see it). Visually still reads
+   as one small pill, split by a separator, at roughly the same size/
+   weight the old plain-text badge had. */
+.nightwake-window-editable {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--surface-2);
+  padding: 2px 6px;
+  border-radius: 999px;
+}
+.nightwake-window-sep {
+  font-size: 11px;
+  color: var(--muted);
+}
+/* Native <input type="time"> styling is limited (the picker UI itself
+   is the OS/WebView's, out of reach), but color/size/background/
+   border are all fair game - enough to make it sit inside the pill
+   looking like plain text until tapped. */
+.nightwake-time-input {
   font-size: 11px;
   font-family: var(--mono);
   color: var(--muted);
-  background: var(--surface-2);
-  padding: 2px 7px;
-  border-radius: 999px;
+  background: none;
+  border: none;
+  padding: 0;
+  width: 46px;
+  cursor: pointer;
 }
+.nightwake-time-input:focus { color: var(--text); outline: none; }
+.nightwake-time-input::-webkit-calendar-picker-indicator { display: none; }
+.nightwake-time-input.saving { opacity: 0.5; pointer-events: none; }
 .nightwake-count {
   font-size: 34px;
   font-weight: 700;

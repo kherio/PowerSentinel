@@ -127,7 +127,7 @@ screenwake_summary() {
   done
 
   "$JQ" -c --argjson cs "$cur_start" --argjson ce "$cur_end" --argjson hist "$hist_bounds" \
-    --arg win "${start} - ${end}" '
+    --arg win "${start} - ${end}" --arg start "$start" --arg end "$end" '
     (.wakes // []) as $w |
     ($w | map(select(.ts >= $cs and .ts < $ce))) as $cur |
     ($hist | map(. as $b | ($w | map(select(.ts >= $b.s and .ts < $b.e)) | length))) as $counts |
@@ -135,6 +135,8 @@ screenwake_summary() {
     {
       count: ($cur | length),
       window: $win,
+      start: $start,
+      end: $end,
       times: ($cur | sort_by(.ts) | map(.time)),
       avg: (if $n > 0 then ((($counts | add) / $n) + 0.5 | floor) else null end)
     }

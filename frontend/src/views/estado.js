@@ -1,8 +1,9 @@
 import { ICONS } from '../icons.js';
-import { readStatus, readCpuRanking, readJournal, readEnergyLog, restartDaemon } from '../api.js';
+import { readStatus, readCpuRanking, readJournal, readEnergyLog, restartDaemon, readConfig, writeConfig } from '../api.js';
 import { toast, escapeHtml } from '../helpers.js';
 import { t } from '../i18n.js';
 import { parseJournalLines, renderTimelineEntry, parseEnergyLines, computeRecentRate } from './log.js';
+import { parseConfig, serializeConfig } from '../config-form.js';
 
 const GAUGE_C = 2 * Math.PI * 52;
 const HISTORY_MAX = 30; // ~90s at 3s polling
@@ -329,11 +330,60 @@ function renderProfileChecklist(sys) {
 // what "the average" means. Hidden entirely until at least one wake
 // has ever been recorded (nw.count undefined), rather than showing a
 // misleading "0" on a fresh install with no history yet.
+let nightwakeSaving = false;
+async function saveNightwakeWindow(field, value) {
+  if (nightwakeSaving) return;
+  nightwakeSaving = true;
+  const startInput = document.getElementById('e-nightwake-start-input');
+  const endInput = document.getElementById('e-nightwake-end-input');
+  startInput.classList.add('saving');
+  endInput.classList.add('saving');
+  try {
+    // Read-modify-write the whole config, exactly like the full form
+    // in Automatización does (same parseConfig/serializeConfig,
+    // same writeConfig() call - which already writes the file AND
+    // runs `PowerSentinelctl reload` on its own) - this just changes
+    // the one field the person actually touched, leaving everything
+    // else in the file untouched.
+    const text = await readConfig();
+    const model = parseConfig(text);
+    model[field] = value;
+    await writeConfig(serializeConfig(model));
+    toast(t('dashboard.nightWakeWindowSaved'), 'success');
+  } catch (e) {
+    toast(t('dashboard.nightWakeWindowSaveError', { msg: e.message }), 'error');
+  } finally {
+    startInput.classList.remove('saving');
+    endInput.classList.remove('saving');
+    nightwakeSaving = false;
+  }
+}
 function renderNightWake(nw) {
   const card = document.getElementById('e-nightwake-card');
   if (!nw || typeof nw.count !== 'number') { card.style.display = 'none'; return; }
   card.style.display = 'block';
-  document.getElementById('e-nightwake-window').textContent = nw.window || '';
+
+  // Editable window: two real <input type="time"> in place of the old
+  // plain-text badge - editing the window right where it's already
+  // shown, instead of a separate form buried in Automatización's
+  // global settings (the maintainer's own suggestion, replacing the
+  // config-form fields added the previous round). Never overwrite a
+  // field the person currently has focused/open - a poll landing while
+  // the native time picker is up shouldn't yank the value out from
+  // under them.
+  const startInput = document.getElementById('e-nightwake-start-input');
+  const endInput = document.getElementById('e-nightwake-end-input');
+  if (nw.start && document.activeElement !== startInput) startInput.value = nw.start;
+  if (nw.end && document.activeElement !== endInput) endInput.value = nw.end;
+  if (!startInput.dataset.bound) {
+    startInput.dataset.bound = '1';
+    startInput.addEventListener('change', () => { if (startInput.value) saveNightwakeWindow('nightwake_start', startInput.value); });
+  }
+  if (!endInput.dataset.bound) {
+    endInput.dataset.bound = '1';
+    endInput.addEventListener('change', () => { if (endInput.value) saveNightwakeWindow('nightwake_end', endInput.value); });
+  }
+
   document.getElementById('e-nightwake-count').textContent = nw.count;
 
   const compareEl = document.getElementById('e-nightwake-compare');

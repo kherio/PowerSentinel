@@ -4,8 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PowerSentinel</title>
-  <script type="module" crossorigin src="./assets/index-BJTl2Se6.js"></script>
-  <link rel="stylesheet" crossorigin href="./assets/index-BKdtxEpN.css">
+  <script type="module" crossorigin src="./assets/index-CPVa0zUX.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-HAmhFZy8.css">
 </head>
 <body class="app-shell">
   <header class="app-header">
@@ -91,7 +91,11 @@
         <div class="card nightwake-card" id="e-nightwake-card" style="display:none;margin-bottom:14px;">
           <div class="nightwake-header">
             <span class="nightwake-title">🌙 <span data-i18n="dashboard.nightWakeTitle">Encendidos nocturnos</span></span>
-            <span class="nightwake-window" id="e-nightwake-window"></span>
+            <span class="nightwake-window-editable" id="e-nightwake-window">
+              <input type="time" class="nightwake-time-input" id="e-nightwake-start-input" aria-label="Inicio">
+              <span class="nightwake-window-sep">–</span>
+              <input type="time" class="nightwake-time-input" id="e-nightwake-end-input" aria-label="Fin">
+            </span>
           </div>
           <div class="nightwake-count" id="e-nightwake-count">–</div>
           <div class="nightwake-compare" id="e-nightwake-compare"></div>

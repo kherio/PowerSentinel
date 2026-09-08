@@ -130,21 +130,7 @@ var GLOBAL_DEFS = [
     showIf: function (f) { return f.adaptive_mode === 'true'; } },
   { key: 'adaptive_tier3_threshold', label: t('global.adaptiveTier3.label'), type: 'number', def: '70',
     help: t('global.adaptiveTier3.help'),
-    showIf: function (f) { return f.adaptive_mode === 'true'; } },
-  // Dashboard's "Encendidos nocturnos" card window (PowerSentinel-
-  // screenwake.sh) - deliberately its OWN pair of global fields rather
-  // than reusing the "night" event's night_start/night_end: those only
-  // exist if the user has actually configured a "night" event block,
-  // which this stat never depended on (see the comment in
-  // screenwake.sh). Same 'time' widget as night_start/night_end for
-  // the exact same reason - the native picker's HH:MM output already
-  // matches what config_valid_time_hhmm() (PowerSentinel-config.sh)
-  // validates and what the daemon parses, with nothing to convert and
-  // nothing unparseable to produce.
-  { key: 'nightwake_start', label: t('global.nightwakeStart.label'), type: 'time', def: '23:00',
-    help: t('global.nightwakeStart.help') },
-  { key: 'nightwake_end', label: t('global.nightwakeEnd.label'), type: 'time', def: '07:00',
-    help: t('global.nightwakeEnd.help') }
+    showIf: function (f) { return f.adaptive_mode === 'true'; } }
 ];
 
 // Quick-start templates a user can apply to any event, instead of having
