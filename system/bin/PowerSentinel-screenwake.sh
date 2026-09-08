@@ -73,8 +73,23 @@ _screenwake_hw_wake_reason() {
 # way). Takes the first 2 held locks' tags, whatever they are - no
 # attempt to filter "relevant" ones, since guessing which is relevant
 # would be exactly the kind of unverifiable claim this project avoids.
+#
+# Unlike the kernel-file read above (an instant local read),
+# `dumpsys power` is a Binder call into system_server - normally fast,
+# but on a daemon that must never be the reason something else lags,
+# an unbounded call is a real (if rare) risk: this runs synchronously
+# in the single main loop, on every wake, so a slow/stuck dumpsys would
+# stall event detection for as long as it hangs. `timeout` bounds that
+# to 3s and degrades to "no hint" (empty output) rather than a stuck
+# daemon - the same safe-empty-string outcome as every other failure
+# mode this function already has. Also capped to 200 chars, matching
+# the length guard the kernel-file path already has - nothing here
+# guarantees a wake lock tag is short.
 _screenwake_wakelock_hint() {
-  dumpsys power 2>/dev/null | awk -F"'" '/_WAKE_LOCK/ && NF>=2 {print $2}' | head -n 2 | tr '\n' ',' | sed 's/,$//; s/,/, /g'
+  timeout 3 dumpsys power 2>/dev/null \
+    | awk -F"'" '/_WAKE_LOCK/ && NF>=2 {print $2}' \
+    | head -n 2 | tr '\n' ',' | sed 's/,$//; s/,/, /g' \
+    | head -c 200
 }
 
 # Tries the hardware-level reason first (when available, it's the more
@@ -201,8 +216,8 @@ screenwake_summary() {
       window: $win,
       start: $start,
       end: $end,
-      times: ($cur | sort_by(.ts) | map(.time)),
-      entries: ($cur | sort_by(.ts) | map({time: .time, reason: (.reason // "")})),
+      times: ($cur | sort_by(.ts) | .[-20:] | map(.time)),
+      entries: ($cur | sort_by(.ts) | .[-20:] | map({time: .time, reason: (.reason // "")})),
       avg: (if $n > 0 then ((($counts | add) / $n) + 0.5 | floor) else null end)
     }
   ' "$screenwake_file" 2>/dev/null
