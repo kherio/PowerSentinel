@@ -502,6 +502,10 @@ const DICT = {
     'global.adaptiveTier2.help': 'Puntuación de presión a partir de la cual se activa el Nivel 2 en vez del 1.',
     'global.adaptiveTier3.label': 'Umbral Nivel 3 (agresivo)',
     'global.adaptiveTier3.help': 'Puntuación de presión a partir de la cual se activa el Nivel 3, el más agresivo.',
+    'global.nightwakeStart.label': 'Encendidos nocturnos: inicio de la franja',
+    'global.nightwakeStart.help': 'Hora a partir de la cual un encendido de pantalla cuenta como "nocturno" en la tarjeta Hoy y en la mini-tarjeta de Inicio. No tiene relación con el perfil "Noche" (Automatización) - puedes usar solo esta estadística sin configurar ningún evento.',
+    'global.nightwakeEnd.label': 'Encendidos nocturnos: fin de la franja',
+    'global.nightwakeEnd.help': 'Hora hasta la que cuenta un encendido como "nocturno". Puede cruzar la medianoche (por ejemplo, 23:00 a 07:00).',
 
     'preset.balanced.label': 'Equilibrado',
     'preset.aggressive.label': 'Ahorro agresivo',
@@ -1004,6 +1008,10 @@ const DICT = {
     'global.adaptiveTier2.help': 'Pressure score at or above which Tier 2 activates instead of Tier 1.',
     'global.adaptiveTier3.label': 'Tier 3 threshold (aggressive)',
     'global.adaptiveTier3.help': 'Pressure score at or above which the most aggressive Tier 3 activates.',
+    'global.nightwakeStart.label': 'Night wakes: window start',
+    'global.nightwakeStart.help': 'Time from which a screen wake counts as "night" in the Hoy card and the Inicio mini-card. Unrelated to the "Night" profile (Automatización) - you can use this stat alone without configuring any event.',
+    'global.nightwakeEnd.label': 'Night wakes: window end',
+    'global.nightwakeEnd.help': 'Time until which a wake counts as "night". Can cross midnight (e.g. 23:00 to 07:00).',
 
     'preset.balanced.label': 'Balanced',
     'preset.aggressive.label': 'Aggressive saving',

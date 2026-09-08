@@ -233,7 +233,30 @@ update_status() {
   # project's own "zero cost unless something is actually happening"
   # principle.
   local skip_detect="${1:-}"
-  status_file="/data/local/tmp/PowerSentinel/PowerSentinel.status"
+  # CRITICAL FIX: this function used to truncate the REAL status file
+  # in place (`echo -n > "$status_file"`) and then build it up with
+  # ~20 separate `>>` appends over the rest of this function - not
+  # atomic in any way. Any read of this file (the WebUI's readStatus(),
+  # via `cat`) landing anywhere between the truncation and the final
+  # append would see an empty or partially-written file - missing
+  # fields like ActiveMechanisms/NightWakeSummary/TodayStats, which
+  # made their matching dashboard cards blink out for that one poll
+  # before reappearing on the next. This window was always there, but
+  # got meaningfully wider once this function started running every
+  # single main-loop cycle (v3.40.0) AND started shelling out to jq
+  # several more times per call (screenwake_summary/todaystats_summary,
+  # added since) - together, frequent enough and slow enough for a
+  # real user to reliably notice "the screen flickers every ~3s and
+  # the info briefly disappears", reported after v3.46.0's animation
+  # fix turned out not to be the whole story. Fixed with the exact
+  # same temp-file-then-atomic-rename pattern already used everywhere
+  # else in this codebase for anything the WebUI reads (apppolicy.sh,
+  # the app-ownership file, the journal, the energy log, the two newer
+  # dashboard-stat files) - every line below still targets
+  # "$status_file" completely unchanged, it just now means the temp
+  # file until the very end.
+  local real_status_file="/data/local/tmp/PowerSentinel/PowerSentinel.status"
+  status_file="$(mktemp "$(dirname "$real_status_file")/.PowerSentinel.status.XXXXXX")" || return
   echo -n > "$status_file"
   # A real "this is when the daemon itself wrote this" timestamp - the
   # frontend previously had no way to tell "the file was read
@@ -375,6 +398,13 @@ update_status() {
   # "Hoy" card: screen time today + time since last charge - see
   # PowerSentinel-todaystats.sh.
   echo "TodayStats: $(todaystats_summary)" >> "$status_file"
+
+  # Atomic handoff: nothing reading $real_status_file ever sees a
+  # partial write - it either gets the complete previous version or
+  # the complete new one, never something in between.
+  chmod 600 "$status_file" 2>/dev/null
+  mv "$status_file" "$real_status_file"
+  status_file="$real_status_file"
 }
 
 # read_config() (V1) removed - see below, v1 support has been
