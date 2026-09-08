@@ -169,16 +169,48 @@ compute_pressure_score() {
 # Maps a 0-100 score to a tier (0 = no intervention), using
 # user-configurable thresholds so advanced users can tune sensitivity
 # without touching the scoring formula itself.
+#
+# BUG FIX (security/robustness audit): thresholds now go through
+# _adaptive_tier_thresholds() below instead of reading getconf directly
+# - see that function for why (ordering validation, and being the one
+# place both the real decision and the WebUI's own display draw from).
 pressure_tier_for_score() {
   local score="$1" t1 t2 t3
-  t1=$(getconf adaptive_tier1_threshold 20)
-  t2=$(getconf adaptive_tier2_threshold 45)
-  t3=$(getconf adaptive_tier3_threshold 70)
+  read -r t1 t2 t3 <<< "$(_adaptive_tier_thresholds)"
   if [ "$score" -ge "$t3" ]; then echo 3
   elif [ "$score" -ge "$t2" ]; then echo 2
   elif [ "$score" -ge "$t1" ]; then echo 1
   else echo 0
   fi
+}
+
+# Single source of truth for the three adaptive-tier thresholds -
+# used both for the real tier decision (pressure_tier_for_score above)
+# AND for whatever gets reported to the WebUI (PressureThresholds in
+# PowerSentineld's update_status()), so the two can never disagree
+# about what's actually driving intervention.
+#
+# BUG FIX (security/robustness audit): config_get() already validates
+# each of these three is individually a plain non-negative integer,
+# but nothing checked they're in ASCENDING order (t1 <= t2 <= t3) - a
+# swapped or jumbled set (e.g. t1=90, t2=20, t3=70) would silently
+# activate the MOST aggressive tier (checked first, above) at a much
+# LOWER score than the values would suggest to whoever set them -
+# exactly backwards from the intent. Falls back to the documented
+# defaults on any ordering inconsistency - "fail toward doing less,
+# not more", the same principle already applied to every other
+# unrecognized/inconsistent config value in this project - rather than
+# silently reordering the values or guessing which one was "really"
+# meant.
+_adaptive_tier_thresholds() {
+  local t1 t2 t3
+  t1=$(getconf adaptive_tier1_threshold 20)
+  t2=$(getconf adaptive_tier2_threshold 45)
+  t3=$(getconf adaptive_tier3_threshold 70)
+  if ! { [ "$t1" -le "$t2" ] && [ "$t2" -le "$t3" ]; } 2>/dev/null; then
+    t1=20; t2=45; t3=70
+  fi
+  echo "$t1 $t2 $t3"
 }
 
 # Same formula as compute_pressure_score() above, but returns each

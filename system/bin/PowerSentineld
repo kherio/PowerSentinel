@@ -92,17 +92,35 @@ ensure_ctl_file() {
 # charge_limit_node must be set, since the sysfs path that actually
 # controls charging varies by device/kernel and there's no universal
 # one. Writes "0"/"1" (the most common convention for a
-# "charging_enabled"-style node); if the path is wrong the write simply
-# fails silently rather than touching anything else. Left in the daemon
-# itself (not moved to policy.sh) since it both decides *and* acts
-# (writes to charge_limit_node directly) - untangling that mix is
-# action-extraction work for a later phase, not this one.
+# "charging_enabled"-style node). Left in the daemon itself (not moved
+# to policy.sh) since it both decides *and* acts (writes to
+# charge_limit_node directly) - untangling that mix is action-
+# extraction work for a later phase, not this one.
+#
+# BUG FIX (security/robustness audit): charge_limit_node used to accept
+# ANY writable path with no further restriction - the daemon runs as
+# root, so this was an unbounded "write 0 or 1 to whatever the config
+# says" primitive. The comment above used to claim a wrong path "fails
+# silently rather than touching anything else" - true only if the path
+# doesn't exist; a path that DOES exist and IS writable, but isn't
+# actually a charging control (a typo, a copy-paste mistake, or a
+# malicious config), would get written to exactly the same way,
+# whatever that node actually controls. Every real charging-control
+# node on every Android device/kernel this project is aware of (every
+# OEM, though the exact attribute name varies) lives under
+# /sys/class/power_supply/ - restricting to that prefix keeps every
+# legitimate use working while closing off writing to anything else
+# under root, on a field that's otherwise completely free-form text.
 was_charge_paused="false"
 check_charge_limit() {
   local charge_limit charge_limit_node level charging
   charge_limit=$(getconf charge_limit 0)
   charge_limit_node=$(getconf charge_limit_node "")
   [ "$charge_limit" -gt 0 ] 2>/dev/null || return
+  case "$charge_limit_node" in
+    /sys/class/power_supply/*) ;;
+    *) charge_limit_node="" ;;
+  esac
   [ -n "$charge_limit_node" ] && [ -w "$charge_limit_node" ] || return
 
   level="$DETECT_BATTERY_LEVEL"
@@ -377,7 +395,7 @@ update_status() {
   if [ "$(config_get adaptive_mode false)" = "true" ]; then
     echo "PressureScore: $(compute_pressure_score)" >> "$status_file"
     echo "PressureBreakdown: $(pressure_breakdown)" >> "$status_file"
-    echo "PressureThresholds: $(getconf adaptive_tier1_threshold 20) $(getconf adaptive_tier2_threshold 45) $(getconf adaptive_tier3_threshold 70)" >> "$status_file"
+    echo "PressureThresholds: $(_adaptive_tier_thresholds)" >> "$status_file"
   fi
   if [ "${#active_event_start_ts[@]}" -gt 0 ]; then
     local _ts_json

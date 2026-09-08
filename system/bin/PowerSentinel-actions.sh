@@ -193,8 +193,19 @@ action_apps_apply() {
       nice|kill|suspend) ;;
       *) continue ;;
     esac
+    # BUG FIX (security/robustness audit): every pgrep call in this file
+    # now uses -x (exact match). pgrep's default is an UNANCHORED
+    # SUBSTRING/regex match against process names - confirmed with a
+    # live reproduction that `pgrep e` alone matched nearly every
+    # process on the system. $app here is a real package name (from `pm
+    # list packages`), so accidental over-matching is less likely than
+    # for proc_file's free-form entries (see the other pgrep call sites
+    # below) - but a package with a same-prefixed helper/companion
+    # process (e.g. "com.example.app" vs "com.example.app.helper")
+    # could still both match without -x, affecting a process the user
+    # never intended to touch.
     if [ "$effective" = "nice" ]; then
-      for i in $(pgrep "$app"); do
+      for i in $(pgrep -x "$app"); do
         if [ -z "${_owned_nice[$app]:-}" ]; then
           _owned_nice[$app]="$(_app_current_nice "$i")"
           _owned_action[$app]="nice"
@@ -265,7 +276,7 @@ action_apps_undo() {
     case "${_owned_action[$app]:-}" in
       nice)
         _another_active_event_wants_app "$app" && continue
-        for i in $(pgrep "$app"); do
+        for i in $(pgrep -x "$app"); do
           log_msg 3 "Restoring the original nice level for $app"
           renice -n "${_owned_nice[$app]:-0}" "$i" &>/dev/null &
         done
@@ -340,7 +351,7 @@ action_gms_apply() {
   # change without touching the other.
   if [ "$handle_gms" = "nice" ]; then
     local pid orig_nice
-    pid="$(pgrep com.google.android.gms)"
+    pid="$(pgrep -x com.google.android.gms)"
     orig_nice="$("$JQ" -r '.orig_nice // empty' "$gms_state_file" 2>/dev/null)"
     [ -n "$orig_nice" ] || orig_nice="$(_app_current_nice "$pid")"
     _gms_ensure_state_dir
@@ -378,7 +389,7 @@ action_gms_undo() {
       rm -f "$gms_state_file"
       [ -n "$orig" ] || orig="0"
       log_msg 3 "Restoring the original nice level for GMS"
-      renice -n "$orig" "$(pgrep com.google.android.gms)"
+      renice -n "$orig" "$(pgrep -x com.google.android.gms)"
       ;;
     kill)
       orig="$("$JQ" -r '.orig_disabled // empty' "$gms_state_file" 2>/dev/null)"
@@ -423,14 +434,26 @@ action_proc_apply() {
     while read -r proc nice; do
       [ ! "$nice" ] && nice="10"
       # BUG FIX (external code review): this used to do
-      # `pid="$(pgrep "$proc")"` as a single assignment - for a process
+      # `pid="$(pgrep -x "$proc")"` as a single assignment - for a process
       # with more than one running instance, pgrep returns MULTIPLE
       # PIDs (one per line), so $pid became a multi-line string and
       # `/proc/$pid/stat` was never a valid path at all for any process
       # with more than one PID; the whole check silently did nothing.
       # Now loops over every matching PID individually, the same
       # pattern already used for apps.
-      for pid in $(pgrep "$proc"); do
+      #
+      # BUG FIX (security/robustness audit): -x (exact match) added
+      # here too - $proc is a raw line from proc_file, a free-form text
+      # file the user edits directly (one process name per line), with
+      # nothing constraining what ends up in it. Without -x, pgrep's
+      # default unanchored substring match means a short or generic
+      # entry (confirmed live: `pgrep e` alone matched nearly every
+      # process on the system) could make handle_proc's renice apply
+      # far more broadly than intended - this is the single riskiest
+      # pgrep call site in the project precisely because proc_file's
+      # content isn't a real package name with Android's own naming
+      # constraints, unlike $app elsewhere in this file.
+      for pid in $(pgrep -x "$proc"); do
         [ -n "$pid" ] || continue
         if [ "$(cat /proc/$pid/stat 2>/dev/null | cut -d' ' -f19)" != "$nice" ]; then
           # BUG FIX (same review): also capture the real original nice
@@ -465,7 +488,7 @@ action_proc_undo() {
     local orig
     orig="$("$JQ" -r --arg p "$proc" '.[$p] // empty' "$proc_orig_file" 2>/dev/null)"
     [ -n "$orig" ] || orig="0"
-    for pid in $(pgrep "$proc"); do
+    for pid in $(pgrep -x "$proc"); do
       [ -n "$pid" ] || continue
       log_msg 3 "Restoring the original nice level for $proc ($pid)"
       renice -n "$orig" "$pid"
