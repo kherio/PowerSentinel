@@ -74,6 +74,18 @@
 
         <div id="e-active-now-wrap"></div>
 
+        <div class="card today-card" id="e-today-card" style="display:none;margin-bottom:14px;">
+          <div class="section-title" style="margin-top:0;" data-i18n="dashboard.todayTitle">Hoy</div>
+          <div class="today-rows">
+            <div class="today-row"><span class="today-icon">🔋</span><span class="today-text" id="e-today-charge"></span></div>
+            <div class="today-row"><span class="today-icon">📱</span><span class="today-text" id="e-today-screen"></span></div>
+            <div class="today-row"><span class="today-icon">🌙</span><span class="today-text" id="e-today-wakes"></span></div>
+            <div class="today-row"><span class="today-icon">⚡</span><span class="today-text" id="e-today-interventions"></span></div>
+          </div>
+          <svg class="today-chart" id="e-today-chart" viewBox="0 0 288 40" preserveAspectRatio="none"></svg>
+          <div class="today-chart-caption" id="e-today-chart-caption"></div>
+        </div>
+
         <div class="card nightwake-card" id="e-nightwake-card" style="display:none;margin-bottom:14px;">
           <div class="nightwake-header">
             <span class="nightwake-title">🌙 <span data-i18n="dashboard.nightWakeTitle">Encendidos nocturnos</span></span>

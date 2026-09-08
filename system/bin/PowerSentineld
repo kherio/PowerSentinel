@@ -11,6 +11,7 @@ conf="/data/local/tmp/PowerSentinel/PowerSentinel.conf"
 . "$(dirname "$0")/PowerSentinel-energylog.sh"
 . "$(dirname "$0")/PowerSentinel-appwatch.sh"
 . "$(dirname "$0")/PowerSentinel-screenwake.sh"
+. "$(dirname "$0")/PowerSentinel-todaystats.sh"
 . "$(dirname "$0")/PowerSentinel-state.sh"
 . "$(dirname "$0")/PowerSentinel-events.sh"
 declare -a active_events
@@ -370,6 +371,10 @@ update_status() {
   # see PowerSentinel-screenwake.sh. Only ever non-empty ('{}' otherwise)
   # once at least one wake has ever been recorded.
   echo "NightWakeSummary: $(screenwake_summary)" >> "$status_file"
+
+  # "Hoy" card: screen time today + time since last charge - see
+  # PowerSentinel-todaystats.sh.
+  echo "TodayStats: $(todaystats_summary)" >> "$status_file"
 }
 
 # read_config() (V1) removed - see below, v1 support has been
@@ -488,6 +493,11 @@ while true; do
   # ever writes on a genuine screen off->on transition - see
   # PowerSentinel-screenwake.sh.
   screenwake_check
+
+  # "Hoy" card metrics: cumulative screen-on time for today + time
+  # since the last charging session ended - see
+  # PowerSentinel-todaystats.sh.
+  todaystats_check
 
   # Check for command
   cmd="$(cat $ctl_file)"

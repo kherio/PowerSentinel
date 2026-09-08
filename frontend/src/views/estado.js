@@ -370,6 +370,90 @@ function renderNightWake(nw) {
   }
 }
 
+function formatHoursMins(totalSeconds) {
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  return { h, m };
+}
+
+// "Hoy" card: screen time + time-since-charge come from
+// PowerSentinel-todaystats.sh (TodayStats, refreshed every poll like
+// the rest of the dashboard); night wakes reuses the SAME
+// NightWakeSummary already parsed for the mini-card above rather than
+// a second source of truth for the same number. Interventions today
+// is filled in separately by renderTodayInterventions() (journal-
+// based, fetched once per tab activation - see that function).
+// Hidden entirely until there's at least a day of data to show
+// (todayStats undefined on a fresh install before the first poll
+// cycle has run).
+function renderTodayCard(todayStats, nightWake) {
+  const card = document.getElementById('e-today-card');
+  if (!todayStats) { card.style.display = 'none'; return; }
+  card.style.display = 'block';
+
+  const chargeEl = document.getElementById('e-today-charge');
+  if (typeof todayStats.seconds_since_charge === 'number') {
+    const { h, m } = formatHoursMins(todayStats.seconds_since_charge);
+    chargeEl.textContent = t('dashboard.todaySinceCharge', { h, m });
+  } else {
+    chargeEl.textContent = t('dashboard.todayNoChargeData');
+  }
+
+  const screenEl = document.getElementById('e-today-screen');
+  const { h: sh, m: sm } = formatHoursMins(todayStats.screen_on_seconds || 0);
+  screenEl.textContent = t('dashboard.todayScreenTime', { h: sh, m: sm });
+
+  const wakesEl = document.getElementById('e-today-wakes');
+  wakesEl.textContent = t('dashboard.todayNightWakes', { count: (nightWake && typeof nightWake.count === 'number') ? nightWake.count : 0 });
+
+  renderTodayChart(todayStats.hourly);
+}
+
+// Small per-hour activity chart (redesign spec: "un pequeño gráfico
+// temporal") - the same 24 hourly screen-on buckets TodayStats already
+// tracks for the numbers above, not a separate/new data source. The
+// current hour's bar is highlighted since it's the only one still
+// filling up (comparing it to earlier, complete hours would be
+// misleading).
+function renderTodayChart(hourly) {
+  const svg = document.getElementById('e-today-chart');
+  const caption = document.getElementById('e-today-chart-caption');
+  if (!hourly || !hourly.length) { svg.innerHTML = ''; caption.textContent = ''; return; }
+  const w = 288, h = 40, gap = 2;
+  const barW = (w / hourly.length) - gap;
+  const max = Math.max(3600, ...hourly);
+  const currentHour = new Date().getHours();
+  svg.innerHTML = hourly.map((secs, i) => {
+    const barH = Math.max(1, (secs / max) * h);
+    const x = i * (barW + gap);
+    const y = h - barH;
+    return `<rect class="today-chart-bar${i === currentHour ? ' current' : ''}" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${barH.toFixed(1)}"></rect>`;
+  }).join('');
+  caption.innerHTML = '<span>00</span><span>06</span><span>12</span><span>18</span><span>24</span>';
+}
+
+// Interventions today: counts journal entries whose message is an
+// event START (e.g. "screen_off started") within today's LOCAL
+// calendar day - fetched once per tab activation (activateEstado/
+// refreshEstado), same cadence as renderRecentActivity() and for the
+// same reason: re-fetching and re-parsing the whole journal on every
+// 3s poll just for a slow-changing daily count isn't worth the
+// continuous cost.
+export async function renderTodayInterventions() {
+  const el = document.getElementById('e-today-interventions');
+  if (!el) return;
+  try {
+    const text = await readJournal();
+    const entries = parseJournalLines(text);
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() / 1000;
+    const count = entries.filter((e) => e.ts >= todayStart && /started$/.test(e.message)).length;
+    el.textContent = t('dashboard.todayInterventions', { count });
+  } catch (e) {
+    el.textContent = t('dashboard.todayInterventions', { count: 0 });
+  }
+}
+
 // "¿Qué está haciendo ahora?" - una tarjeta por evento activo, cada
 // una con sus propios mecanismos resueltos (ActiveMechanisms, ya
 // individualizados por evento en el demonio) y desde cuándo
@@ -622,6 +706,8 @@ function render(text) {
       try { sys.activeMechanisms = JSON.parse(m[1]); } catch (e) { /* ignore */ }
     } else if ((m = line.match(/^nightwakesummary:\s*(\{.*\})/i))) {
       try { sys.nightWake = JSON.parse(m[1]); } catch (e) { /* ignore */ }
+    } else if ((m = line.match(/^todaystats:\s*(\{.*\})/i))) {
+      try { sys.todayStats = JSON.parse(m[1]); } catch (e) { /* ignore */ }
     } else if ((m = line.match(/^capabilities:\s*(.*)$/i))) {
       sys.capabilities = {};
       m[1].trim().split(/\s+/).forEach((pair) => {
@@ -640,6 +726,7 @@ function render(text) {
   renderDashboard(sys);
   renderActiveNow(sys);
   renderNightWake(sys.nightWake);
+  renderTodayCard(sys.todayStats, sys.nightWake);
 
   if (sys.error) {
     setGauge(0);
@@ -912,6 +999,7 @@ export function activateEstado() {
   loadStatus(true);
   renderRecentActivity();
   renderSavingsBar();
+  renderTodayInterventions();
   if (!pollTimer) pollTimer = setInterval(() => loadStatus(true), 3000);
 }
 
@@ -925,5 +1013,6 @@ export function deactivateEstado() {
 export function refreshEstado() {
   renderRecentActivity();
   renderSavingsBar();
+  renderTodayInterventions();
   return loadStatus(false);
 }
