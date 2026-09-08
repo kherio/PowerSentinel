@@ -30,35 +30,40 @@
 
         <div class="card dashboard-card" style="margin-bottom:14px;">
           <div class="dashboard-header">
+            <span class="dashboard-live-badge" id="e-live-badge"><span class="dot"></span><span data-i18n="dashboard.now">AHORA</span></span>
             <span class="dashboard-protection-badge" id="e-protection-badge"></span>
           </div>
-          <div class="dashboard-mode-name" id="e-dashboard-mode-name"></div>
 
-          <div class="hero-gauge-wrap">
-            <svg class="gauge" viewBox="0 0 120 120">
-              <circle class="gauge-track" cx="60" cy="60" r="52"></circle>
-              <circle class="gauge-fill" id="e-gauge-fill" cx="60" cy="60" r="52" stroke-dasharray="326.73" stroke-dashoffset="326.73"></circle>
-            </svg>
-            <div class="gauge-center">
-              <div class="gauge-percent" id="e-gauge-percent">–</div>
+          <div class="dashboard-main-row">
+            <div class="hero-gauge-wrap">
+              <svg class="gauge" viewBox="0 0 120 120">
+                <circle class="gauge-track" cx="60" cy="60" r="52"></circle>
+                <circle class="gauge-fill" id="e-gauge-fill" cx="60" cy="60" r="52" stroke-dasharray="326.73" stroke-dashoffset="326.73"></circle>
+              </svg>
+              <div class="gauge-center">
+                <div class="dashboard-mode-name" id="e-dashboard-mode-name"></div>
+                <div class="gauge-percent" id="e-gauge-percent">–</div>
+                <div class="dashboard-intervention-level" id="e-intervention-level" style="display:none;"></div>
+              </div>
+            </div>
+
+            <div class="dashboard-status-col">
+              <div class="dashboard-subtitle" id="e-dashboard-subtitle"></div>
+
+              <div class="dashboard-pressure-wrap" id="e-pressure-wrap" style="display:none;">
+                <div class="dashboard-pressure-label-row">
+                  <span data-i18n="dashboard.pressureLabel">Presión energética</span>
+                  <span id="e-pressure-score-text"></span>
+                </div>
+                <div class="dashboard-pressure-segments" id="e-pressure-segments"></div>
+              </div>
+
+              <div class="dashboard-quickstats" id="e-dashboard-quickstats"></div>
             </div>
           </div>
-          <div class="dashboard-intervention-level" id="e-intervention-level" style="display:none;"></div>
 
           <div class="dashboard-why" id="e-dashboard-why"></div>
 
-          <div class="dashboard-quickstats" id="e-dashboard-quickstats"></div>
-
-          <div class="dashboard-slider-wrap" id="e-dashboard-slider-wrap" style="display:none;">
-            <div class="dashboard-slider-track">
-              <span data-i18n="dashboard.sliderNormal">Normal</span>
-              <span data-i18n="dashboard.sliderSaving">Ahorro</span>
-              <span data-i18n="dashboard.sliderExtreme">Extremo</span>
-            </div>
-            <div class="dashboard-slider-bar">
-              <div class="dashboard-slider-dot" id="e-dashboard-slider-dot"></div>
-            </div>
-          </div>
           <button class="dashboard-detail-toggle" id="e-dashboard-detail-toggle" type="button" style="display:none;">
             <span data-i18n="dashboard.details">Detalles</span><span class="aggression-detail-caret">›</span>
           </button>

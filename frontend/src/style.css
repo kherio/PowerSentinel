@@ -553,7 +553,33 @@ main {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 8px;
+  margin-bottom: 12px;
+}
+/* "AHORA" live indicator: a small pulsing dot + label, distinct from
+   the protection badge (which reports a different fact - whether any
+   event is currently active/protecting - not "this screen is live").
+   Mockup reference: docs/dashboard-redesign, item 1. */
+.dashboard-live-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+.dashboard-live-badge .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 0 var(--accent-dim);
+  animation: livepulse 2s ease-in-out infinite;
+}
+@keyframes livepulse {
+  0%, 100% { box-shadow: 0 0 0 0 var(--accent-dim); }
+  50% { box-shadow: 0 0 0 4px transparent; }
 }
 .dashboard-protection-badge {
   font-size: 11px;
@@ -569,63 +595,118 @@ main {
   background: var(--surface-2);
   color: var(--muted);
 }
+/* Two-column hero: gauge on the left (mode name + score live inside
+   its center, exactly as before), status column on the right (mode
+   headline, pressure bar, quick stats) - replacing the previous
+   fully-stacked/centered layout. Falls back to a single column below
+   360px, where there isn't room for two columns without cramping the
+   gauge. */
+.dashboard-main-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+.dashboard-main-row .hero-gauge-wrap { flex: 0 0 auto; margin: 0; }
+.dashboard-status-col {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+@media (max-width: 360px) {
+  .dashboard-main-row { flex-direction: column; }
+  .dashboard-status-col { width: 100%; align-items: center; text-align: center; }
+}
 .dashboard-mode-name {
-  font-size: 20px;
+  font-size: 15px;
   font-weight: 700;
   color: var(--text);
   text-align: center;
-  margin-top: 4px;
-  letter-spacing: -0.2px;
+  letter-spacing: -0.1px;
 }
 .dashboard-intervention-level {
-  font-size: 12px;
+  font-size: 10px;
   color: var(--muted);
   text-align: center;
-  margin-top: -4px;
-  margin-bottom: 4px;
+}
+.dashboard-subtitle {
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.4;
 }
 .dashboard-why {
   font-size: 13px;
   color: var(--muted);
-  text-align: center;
   line-height: 1.5;
-  padding: 0 8px;
-  margin-bottom: 12px;
+  padding: 10px 0 0;
+  margin-top: 4px;
+  border-top: 1px solid var(--border);
   min-height: 1px;
 }
-.dashboard-quickstats {
-  display: flex;
-  justify-content: center;
-  gap: 4px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text);
-  margin-bottom: 12px;
-}
-.dashboard-slider-wrap { margin-bottom: 12px; }
-.dashboard-slider-track {
+.dashboard-why:empty { display: none; }
+/* Segmented "energy pressure" bar (Option B from the redesign notes) -
+   replaces the previous gradient-bar-with-a-dot slider entirely rather
+   than showing both, since they conveyed the exact same number twice. */
+.dashboard-pressure-wrap { margin: 0; }
+.dashboard-pressure-label-row {
   display: flex;
   justify-content: space-between;
+  align-items: baseline;
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+.dashboard-pressure-label-row span:last-child {
+  font-family: var(--mono);
+  font-weight: 700;
+  color: var(--text);
+  font-size: 13px;
+}
+.dashboard-pressure-segments {
+  display: flex;
+  gap: 4px;
+}
+.pressure-segment {
+  flex: 1 1 0;
+  height: 8px;
+  border-radius: 3px;
+  background: var(--surface-2);
+  transition: background-color 0.25s ease;
+}
+.pressure-segment.lit-normal { background: var(--accent); }
+.pressure-segment.lit-warn { background: var(--warn); }
+.pressure-segment.lit-danger { background: var(--danger); }
+/* Quick-stat tiles: icon + value + label, instead of a single joined
+   text line - each stat now reads as its own small block, closer to
+   the mockup's tile treatment. */
+.dashboard-quickstats {
+  display: flex;
+  gap: 14px;
+}
+.quickstat-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.quickstat-item .qs-icon { font-size: 16px; line-height: 1; flex: 0 0 auto; }
+.quickstat-item .qs-text { min-width: 0; }
+.quickstat-item .qs-value {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.15;
+  white-space: nowrap;
+}
+.quickstat-item .qs-label {
   font-size: 10px;
   color: var(--muted);
-  margin-bottom: 4px;
+  white-space: nowrap;
 }
-.dashboard-slider-bar {
-  position: relative;
-  height: 4px;
-  border-radius: 2px;
-  background: linear-gradient(90deg, var(--accent-dim), var(--warn));
-}
-.dashboard-slider-dot {
-  position: absolute;
-  top: 50%;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: var(--text);
-  border: 2px solid var(--surface);
-  transform: translate(-50%, -50%);
-  transition: left 0.3s ease;
+@media (max-width: 360px) {
+  .dashboard-quickstats { justify-content: center; flex-wrap: wrap; }
 }
 .dashboard-detail-toggle {
   width: 100%;
@@ -1080,12 +1161,15 @@ main {
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* --- Estado hero: overall savings gauge --- */
+/* --- Estado hero: overall savings gauge ---
+   Sized down slightly from its previous 140px (when it was the sole,
+   centered focal point of the card) now that it shares the hero row
+   with the status column - still large enough to read the mode name/
+   score inside it comfortably. */
 .hero-gauge-wrap {
   position: relative;
-  width: 140px;
-  height: 140px;
-  margin: 4px auto 8px;
+  width: 116px;
+  height: 116px;
 }
 
 .gauge { width: 100%; height: 100%; transform: rotate(-90deg); }
@@ -1106,7 +1190,7 @@ main {
   align-items: center;
   justify-content: center;
 }
-.gauge-percent { font-size: 30px; font-weight: 700; line-height: 1; letter-spacing: -0.3px; }
+.gauge-percent { font-size: 24px; font-weight: 700; line-height: 1; letter-spacing: -0.3px; margin-top: 2px; }
 
 /* --- Battery card: level, charging state, temperature, estimated
    remaining time. Shown only once the daemon reports Battery: in the

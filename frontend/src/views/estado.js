@@ -187,6 +187,27 @@ function buildWhyText(sys) {
   return candidates.slice(0, 2).map((c) => c.text).join(' ');
 }
 
+// Segment count for the "energy pressure" bar (Option B from the
+// redesign notes) - 8 gives a granularity close to the mockup (42/100
+// lights ~4 of 8) without needing a value per point like a full 0-100
+// bar would.
+const PRESSURE_SEGMENTS = 8;
+function pressureSegmentClass(tier) {
+  if (tier >= 3) return 'lit-danger';
+  if (tier >= 2) return 'lit-warn';
+  return 'lit-normal';
+}
+function renderPressureSegments(score, tier) {
+  const lit = Math.min(PRESSURE_SEGMENTS, Math.max(0, Math.ceil((score / 100) * PRESSURE_SEGMENTS)));
+  const cls = pressureSegmentClass(tier);
+  let html = '';
+  for (let i = 0; i < PRESSURE_SEGMENTS; i++) {
+    html += `<div class="pressure-segment${i < lit ? ' ' + cls : ''}"></div>`;
+  }
+  document.getElementById('e-pressure-segments').innerHTML = html;
+  document.getElementById('e-pressure-score-text').textContent = `${score}/100`;
+}
+
 function renderDashboard(sys) {
   const active = !!(sys.activeEvents && sys.activeEvents.length);
   const badge = document.getElementById('e-protection-badge');
@@ -195,7 +216,8 @@ function renderDashboard(sys) {
 
   const modeNameEl = document.getElementById('e-dashboard-mode-name');
   const interventionEl = document.getElementById('e-intervention-level');
-  const sliderWrap = document.getElementById('e-dashboard-slider-wrap');
+  const subtitleEl = document.getElementById('e-dashboard-subtitle');
+  const pressureWrap = document.getElementById('e-pressure-wrap');
   const toggle = document.getElementById('e-dashboard-detail-toggle');
   const detailBody = document.getElementById('e-dashboard-detail-body');
 
@@ -207,8 +229,9 @@ function renderDashboard(sys) {
     interventionEl.textContent = t('dashboard.interventionLevel', { score: sys.pressureScore });
     setGauge(sys.pressureScore);
 
-    sliderWrap.style.display = 'block';
-    document.getElementById('e-dashboard-slider-dot').style.left = `${Math.min(100, Math.max(0, sys.pressureScore))}%`;
+    subtitleEl.textContent = tier > 0 ? t('dashboard.subtitleActive') : t('dashboard.subtitleIdle');
+    pressureWrap.style.display = 'block';
+    renderPressureSegments(sys.pressureScore, tier);
 
     toggle.style.display = 'flex';
     if (!toggle.dataset.bound) {
@@ -235,36 +258,46 @@ function renderDashboard(sys) {
       ).join('');
     }
   } else {
-    sliderWrap.style.display = 'none';
+    pressureWrap.style.display = 'none';
     toggle.style.display = 'none';
     detailBody.style.display = 'none';
     interventionEl.style.display = 'none';
     modeNameEl.textContent = active
       ? sys.activeEvents.map(eventDisplayName).join(', ')
       : t('dashboard.modeIdle');
+    subtitleEl.textContent = active ? t('dashboard.subtitleActive') : t('dashboard.subtitleIdle');
     // El gauge en modo clásico usa la proporción de mecanismos de
     // ahorro activos (núcleos/wifi/doze) - se fija más abajo en
     // render(), una vez se conocen los núcleos, ya que aquí todavía no
     // están disponibles.
   }
 
-  document.getElementById('e-dashboard-why').textContent = buildWhyText(sys);
+  const whyEl = document.getElementById('e-dashboard-why');
+  const whyText = buildWhyText(sys);
+  // Prefixed with a small icon per the redesign notes ("🌙 La batería
+  // está bajando y..."). Plain textContent (auto-escaped by the
+  // browser) is enough here - no markup involved, unlike the other
+  // innerHTML-built blocks in this file.
+  whyEl.textContent = whyText ? `${active ? eventIcon(sys.activeEvents[0]) : 'ℹ️'} ${whyText}` : '';
 
-  // Estadísticas rápidas: batería, temperatura y ritmo de consumo real
-  // (computeBattDrainRate, la MISMA fuente que ya alimenta "horas
-  // restantes" en la tarjeta de batería) - nunca una cifra de ahorro
-  // inventada.
+  // Quick-stat tiles: battery, temperature, and real drain rate
+  // (computeBattDrainRate - the SAME source that already feeds "hours
+  // remaining" on the battery card). Never an invented savings figure -
+  // only what's actually measured this session. Rendered as icon+value
+  // tiles (redesign item 1/2) instead of one joined text line.
   const quickEl = document.getElementById('e-dashboard-quickstats');
-  const quickParts = [];
+  const tiles = [];
   if (sys.battery) {
-    quickParts.push(`🔋 ${sys.battery.level}%`);
-    quickParts.push(`🌡️ ${(sys.battery.temp / 10).toFixed(1)}°C`);
+    tiles.push({ icon: '🔋', value: `${sys.battery.level}%`, label: t('dashboard.batteryQuickLabel') });
+    tiles.push({ icon: '🌡️', value: `${(sys.battery.temp / 10).toFixed(1)}°C`, label: t('dashboard.tempQuickLabel') });
     if (!sys.battery.charging) {
       const rate = computeBattDrainRate();
-      if (rate !== null) quickParts.push(`⚡ ${rate.toFixed(1)}%/h`);
+      if (rate !== null) tiles.push({ icon: '⚡', value: `${rate.toFixed(1)}%/h`, label: t('dashboard.rateQuickLabel') });
     }
   }
-  quickEl.textContent = quickParts.join('     ');
+  quickEl.innerHTML = tiles.map((s) =>
+    `<div class="quickstat-item"><span class="qs-icon">${s.icon}</span><div class="qs-text"><div class="qs-value">${escapeHtml(s.value)}</div><div class="qs-label">${escapeHtml(s.label)}</div></div></div>`
+  ).join('');
 }
 
 // "¿Qué está haciendo ahora?" - una tarjeta por evento activo, cada
