@@ -74,6 +74,33 @@ config_valid_bool() {
   case "$1" in true|false) return 0 ;; *) return 1 ;; esac
 }
 
+# BUG FIX (found during a security/robustness audit): nightwake_start/
+# nightwake_end (PowerSentinel-screenwake.sh, the night-wake counter's
+# own config, added in v3.42.0) were read straight through getconf()
+# with NO format validation at all - unlike every other config key
+# with format constraints, which all go through this function's own
+# switch below. A malformed value (wrong shape, or literally anything
+# without a valid "HH:MM" structure) flows into arithmetic contexts
+# (`10#$start_h`, etc. in _screenwake_window_bounds()) that fail at
+# runtime with a stderr error and silently produce empty/wrong
+# numbers - the night-wake card would show broken or stale data,
+# repeating a spurious error to the log every single cycle, with no
+# obvious cause from the WebUI. Confirmed this does NOT allow command
+# injection despite the value flowing into `$(( ))` - bash arithmetic
+# only re-evaluates a LITERAL `$(...)` written directly in the
+# expression text, not one already inside an expanded variable's
+# stored value (verified experimentally) - so this is a robustness/
+# input-validation gap, not a code-execution one. Still worth closing
+# properly, the same way every other format-constrained key already
+# is here.
+config_valid_time_hhmm() {
+  case "$1" in
+    [0-2][0-9]:[0-5][0-9]) ;;
+    *) return 1 ;;
+  esac
+  [ "$((10#${1%%:*}))" -le 23 ]
+}
+
 config_get() {
   local key="$1"
   local default="${2-}"
@@ -92,6 +119,9 @@ config_get() {
       ;;
     notify|keep_on_charge|handle_proc|low_ram|doze_enabled|kill_wifi|safemode|adaptive_mode)
       config_valid_bool "$value" || value="$default"
+      ;;
+    nightwake_start|nightwake_end)
+      config_valid_time_hhmm "$value" || value="$default"
       ;;
     doze)
       case "$value" in false|light|deep) ;; *) value="$default" ;; esac

@@ -18,9 +18,29 @@
 # state (charging/screen/battery) - it's purely a clock range read from
 # its own event block's night_start/night_end fields (HH:MM), and can be
 # active at the same time as any other event.
+#
+# BUG FIX (found during a security/robustness audit): config_get_event_raw()
+# has no per-field validation (unlike config_get(), used for global
+# settings, which validates every format-constrained key). A malformed
+# night_start/night_end - anything not a real "HH:MM" - used to flow
+# straight into is_night_now()'s arithmetic below, failing at runtime
+# with a stderr error every single cycle and leaving the night profile
+# stuck in a broken state, with no obvious cause visible from the
+# WebUI. Confirmed this can't be used for command injection despite
+# reaching a `$(( ))` context (bash only re-evaluates a literal $(...)
+# written directly in the expression text, not one already inside an
+# already-expanded variable's value) - a robustness gap, not a code-
+# execution one, but worth closing the same way every other config
+# value already is. An invalid value now behaves exactly like an
+# unconfigured one (night_start/night_end left empty) - is_night_now()
+# already treats that as "never night", the same safe fallback it's
+# always had.
 get_night_times() {
-  night_start="$(config_get_event_raw night night_start "")"
-  night_end="$(config_get_event_raw night night_end "")"
+  local raw_start raw_end
+  raw_start="$(config_get_event_raw night night_start "")"
+  raw_end="$(config_get_event_raw night night_end "")"
+  config_valid_time_hhmm "$raw_start" && night_start="$raw_start" || night_start=""
+  config_valid_time_hhmm "$raw_end" && night_end="$raw_end" || night_end=""
 }
 
 is_night_now() {
@@ -53,8 +73,20 @@ is_night_now() {
 # its threshold from the "thermal" event block's thermal_threshold field
 # (whole degrees Celsius). Hysteresis (3C below the threshold) avoids
 # rapidly flapping on/off when the temperature hovers right at the line.
+#
+# BUG FIX (same audit as get_night_times() above): thermal_threshold
+# went straight from config_get_event_raw() (no validation) into
+# arithmetic and numeric comparisons in is_thermal_now() below - a
+# non-numeric value would fail at runtime on every cycle instead of
+# being treated as "not configured". Validated the same way every
+# other numeric config value already is elsewhere in this codebase.
 get_thermal_threshold() {
-  thermal_threshold="$(config_get_event_raw thermal thermal_threshold "")"
+  local raw
+  raw="$(config_get_event_raw thermal thermal_threshold "")"
+  case "$raw" in
+    ''|*[!0-9]*) thermal_threshold="" ;;
+    *) thermal_threshold="$raw" ;;
+  esac
 }
 
 is_thermal_now() {
