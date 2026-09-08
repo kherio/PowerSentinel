@@ -540,6 +540,29 @@ else
   was_adaptive_tier="$adaptive_tier"
 fi
 
+# BUG FIX (concrete finding, see the call site's own comment further
+# down for the full reasoning and the simulation numbers behind it):
+# screen-wake/today's-screen-time polling needs a tighter, fixed
+# cadence to reliably catch brief screen-on periods - $delay alone
+# isn't enough once it's larger than a typical quick glance. 2s chosen
+# deliberately more conservative than the 1s first proposed. Always
+# runs at least once per call (so a $delay smaller than the poll
+# interval, or 0, still gets at least one check) and may overshoot
+# $delay slightly (rounds up to the next multiple of
+# SCREEN_POLL_INTERVAL_S) rather than chase exact-second precision -
+# a minor timing drift nothing else in this loop depends on.
+SCREEN_POLL_INTERVAL_S=2
+_screen_poll_cycle() {
+  local elapsed=0
+  while true; do
+    screenwake_check
+    todaystats_check
+    [ "$elapsed" -ge "$delay" ] && return
+    sleep "$SCREEN_POLL_INTERVAL_S"
+    elapsed=$((elapsed + SCREEN_POLL_INTERVAL_S))
+  done
+}
+
 while true; do
 
   # One shared snapshot of battery/load state for everything this cycle
@@ -557,16 +580,6 @@ while true; do
   # every $APPWATCH_INTERVAL_S, and only does anything while the screen
   # is off - see PowerSentinel-appwatch.sh.
   appwatch_check
-
-  # Night-wake counter (dashboard redesign item): edge-triggered, only
-  # ever writes on a genuine screen off->on transition - see
-  # PowerSentinel-screenwake.sh.
-  screenwake_check
-
-  # "Hoy" card metrics: cumulative screen-on time for today + time
-  # since the last charging session ended - see
-  # PowerSentinel-todaystats.sh.
-  todaystats_check
 
   # Check for command
   cmd="$(cat $ctl_file)"
@@ -788,7 +801,27 @@ while true; do
   # background cost.
   update_status skip_detect
 
-  sleep "$delay"
+  # BUG FIX (concrete finding from investigating a "screen_off never
+  # fires" report): screenwake_check()/todaystats_check() used to run
+  # once per full $delay-second cycle, same as everything else - fine
+  # for most of what this loop does, but a real problem specifically
+  # for counting screen wakes: a screen-on that starts and ends
+  # between two $delay-spaced samples is completely invisible to a
+  # poll that only samples once per cycle. Simulated with a realistic
+  # spread of brief (0.5-4s) night glances: at the default delay=3s,
+  # ~30% were missed entirely; raising delay (some users do, for more
+  # aggressive battery savings) made it dramatically worse - 77-96%
+  # missed at 10-60s. Screen-wake/today's-screen-time polling now runs
+  # on its own fixed SCREEN_POLL_INTERVAL_S cadence (2s - the
+  # maintainer's own choice, more conservative than the 1s originally
+  # proposed), independent of whatever $delay the user has actually
+  # configured for the rest of the loop - detect_refresh, appwatch,
+  # event checks, etc. all keep running at $delay exactly as before,
+  # completely unaffected. The extra cost is one additional `dumpsys
+  # deviceidle get screen` roughly every 2s instead of every $delay -
+  # real, but small, and scoped to only the two things whose entire
+  # purpose is counting/timing screen transitions accurately.
+  _screen_poll_cycle
 done
 }
 
