@@ -1058,6 +1058,22 @@ function refreshLiveStatus() {
 }
 
 export function activateConfig() {
+  // BUG FIX (found during a second security/robustness audit): this
+  // used to only ever load PowerSentinel.json once per app session
+  // (initConfig(), or an explicit tap on "Reload") - fine as long as
+  // this form was the ONLY thing that could write the file. Since
+  // v3.49.0 it isn't: the "Encendidos nocturnos" card on Inicio does
+  // its own independent read-modify-write of the same file for just
+  // its two time fields. Sequence that silently lost data: open
+  // Automatización (loads the file into `model` once) -> go to Inicio
+  // -> change the night-wake window there (writes straight to disk) ->
+  // come back to Automatización -> hit Guardar without reloading first
+  // - `model` is still the pre-edit snapshot, so saving it overwrites
+  // the night-wake change that was just made, with no warning. Now
+  // silently refreshes from disk on every activation, but ONLY when
+  // there are no unsaved local edits (isDirty) - reloading over actual
+  // work-in-progress would be strictly worse than the bug it fixes.
+  if (!isDirty) loadFile(false);
   // Re-aplica el modo guardado cada vez, no solo al iniciar - por
   // ejemplo, si el usuario llega aquí desde el botón "Ver ajustes
   // avanzados" de la pestaña Ajustes, que fija el modo Avanzado antes

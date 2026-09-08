@@ -333,9 +333,25 @@ function renderProfileChecklist(sys) {
 let nightwakeSaving = false;
 async function saveNightwakeWindow(field, value) {
   if (nightwakeSaving) return;
-  nightwakeSaving = true;
   const startInput = document.getElementById('e-nightwake-start-input');
   const endInput = document.getElementById('e-nightwake-end-input');
+  // BUG FIX (found during a second audit pass): start==end makes
+  // _screenwake_window_bounds() (PowerSentinel-screenwake.sh) compute a
+  // ZERO-LENGTH window (cur_start === cur_end) - not a crash, just a
+  // count that's silently always 0 forever, with nothing telling the
+  // person why. Both times individually pass config_valid_time_hhmm
+  // (each is a perfectly valid HH:MM on its own), so the daemon's own
+  // validation never catches this - it has to be caught here, where
+  // the OTHER field's current value is actually known. Reverts the
+  // input to its last real value rather than saving a window that
+  // would never count anything.
+  const other = field === 'nightwake_start' ? endInput.value : startInput.value;
+  if (other && other === value) {
+    toast(t('dashboard.nightWakeWindowSameTime'), 'error');
+    (field === 'nightwake_start' ? startInput : endInput).value = field === 'nightwake_start' ? startInput.defaultValue : endInput.defaultValue;
+    return;
+  }
+  nightwakeSaving = true;
   startInput.classList.add('saving');
   endInput.classList.add('saving');
   try {
@@ -349,6 +365,8 @@ async function saveNightwakeWindow(field, value) {
     const model = parseConfig(text);
     model[field] = value;
     await writeConfig(serializeConfig(model));
+    startInput.defaultValue = startInput.value;
+    endInput.defaultValue = endInput.value;
     toast(t('dashboard.nightWakeWindowSaved'), 'success');
   } catch (e) {
     toast(t('dashboard.nightWakeWindowSaveError', { msg: e.message }), 'error');
@@ -373,8 +391,8 @@ function renderNightWake(nw) {
   // under them.
   const startInput = document.getElementById('e-nightwake-start-input');
   const endInput = document.getElementById('e-nightwake-end-input');
-  if (nw.start && document.activeElement !== startInput) startInput.value = nw.start;
-  if (nw.end && document.activeElement !== endInput) endInput.value = nw.end;
+  if (nw.start && document.activeElement !== startInput) { startInput.value = nw.start; startInput.defaultValue = nw.start; }
+  if (nw.end && document.activeElement !== endInput) { endInput.value = nw.end; endInput.defaultValue = nw.end; }
   if (!startInput.dataset.bound) {
     startInput.dataset.bound = '1';
     startInput.addEventListener('change', () => { if (startInput.value) saveNightwakeWindow('nightwake_start', startInput.value); });
