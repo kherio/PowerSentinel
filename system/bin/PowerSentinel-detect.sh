@@ -43,16 +43,48 @@ declare -g DETECT_LOAD15=0
 # in PowerSentineld itself, just relocated here since it's exactly the
 # kind of pure device-state read this file exists to hold.
 is_device() {
+  # BUG FIX (found while investigating a report that screen_off "never
+  # activates" in classic mode): this used to call dumpsys with no
+  # stderr redirection and no validation of what it printed - the ONLY
+  # dumpsys call in the whole codebase without either, everywhere else
+  # already does both (see detect_refresh() a few lines below for the
+  # established pattern). If `dumpsys deviceidle get screen` ever fails
+  # or returns anything other than exactly "true"/"false" - a
+  # permission issue, a device/ROM where this subcommand behaves
+  # differently, a transient system_server hiccup - the caller's
+  # was_screen_on (PowerSentineld) never gets set to a valid value,
+  # and since that same variable being empty is also what gates
+  # whether change-detection runs AT ALL ("if [ "$was_screen_on" !=
+  # "" ]"), a single bad read at boot could silently disable
+  # screen_off/charging/low_power detection for the rest of the
+  # daemon's life - with nothing anywhere reporting it, since dumpsys
+  # errors were being swallowed as if they were a real state. Now
+  # trims/validates before returning, and callers get "unknown"
+  # instead of raw error text or garbage.
+  local raw
   if [ "$1" != "low_power" ]; then
-    dumpsys deviceidle get $1
+    raw="$(dumpsys deviceidle get "$1" 2>/dev/null | tr -d '[:space:]')"
+    case "$raw" in
+      true|false) printf '%s' "$raw" ;;
+      *) printf 'unknown' ;;
+    esac
   else
-    if [ $(settings get global low_power) = 1 ]; then
+    if [ "$(settings get global low_power 2>/dev/null)" = 1 ]; then
       echo true
     else
       echo false
     fi
   fi
 }
+
+# Companion to the is_device() fix above: true only for an actual
+# "true"/"false" reading. PowerSentineld's classic-mode detectors use
+# this to decide whether a fresh is_device() reading is safe to act on
+# and persist into was_screen_on/was_charging/was_low_power - an
+# "unknown" reading is skipped entirely (state keeps its last known-
+# good value, no transition fires) rather than corrupting the
+# detector or getting misread as a real state change.
+is_valid_bool_reading() { case "$1" in true|false) return 0 ;; *) return 1 ;; esac; }
 
 # Call once per poll cycle before reading any DETECT_* global - not
 # automatically refreshed on read, matching the same "cache for the

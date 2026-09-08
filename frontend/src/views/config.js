@@ -315,14 +315,17 @@ function actionVerb(action) {
 // clásico, 3 niveles de presión en modo adaptativo.
 function describeAppSituations(level, model) {
   if (!model) return [];
-  if (model.adaptive_mode === 'true') {
-    const tierNames = ['adaptive_tier1', 'adaptive_tier2', 'adaptive_tier3'];
-    const tierLabels = ['dashboard.eventTier1', 'dashboard.eventTier2', 'dashboard.eventTier3'];
-    return tierNames.map((tier, i) => ({
-      label: t(tierLabels[i]),
-      value: actionVerb(effectiveActionForLevel(getEventHandleApps(model, tier), level))
-    }));
-  }
+  // Removed per maintainer feedback: in adaptive mode this used to
+  // show the effective action for adaptive_tier1/2/3 under every
+  // single app - but those tier event blocks aren't configured with
+  // real actions on most installs (buildRecommendedModel()'s
+  // "recommended settings" preset never touches them), so in practice
+  // this just repeated "no action" three times under every app in the
+  // list, adding noise without telling the person anything they didn't
+  // already know. Classic mode's two situations (screen off / low
+  // battery) stay - those weren't reported as a problem, and they DO
+  // reflect real, normally-configured events.
+  if (model.adaptive_mode === 'true') return [];
   return [
     { label: t('apppolicy.whenScreenOff'), value: actionVerb(effectiveActionForLevel(getEventHandleApps(model, 'screen_off'), level)) },
     { label: t('apppolicy.whenLowBattery'), value: actionVerb(effectiveActionForLevel(getEventHandleApps(model, 'low_power'), level)) }

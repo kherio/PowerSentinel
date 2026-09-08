@@ -477,22 +477,43 @@ handle_event boot 1
 
 if [ "$adaptive_mode" != "true" ]; then
   charging="$(is_device charging)"
-  if [ "$charging" = "true" ]; then
-    handle_event charging 1
+  if is_valid_bool_reading "$charging"; then
+    [ "$charging" = "true" ] && handle_event charging 1
+    was_charging="$charging"
+  else
+    log_msg 1 "is_device charging returned an unexpected value at startup - charging detection will retry on the next cycle"
+    was_charging=""
   fi
-  was_charging="$charging"
   low_power="$(is_device low_power)"
-  if [ "$low_power" = "true" ]; then
-    handle_event low_power 1
+  if is_valid_bool_reading "$low_power"; then
+    [ "$low_power" = "true" ] && handle_event low_power 1
+    was_low_power="$low_power"
+  else
+    log_msg 1 "is_device low_power returned an unexpected value at startup - low-power detection will retry on the next cycle"
+    was_low_power=""
   fi
-  was_low_power="$low_power"
   screen_on="$(is_device screen)"
-  # here we invert because we only want to
-  # do something if the screen is off
-  if [ "$screen_on" = "false" ]; then
-    handle_event screen_off 1
+  if is_valid_bool_reading "$screen_on"; then
+    # here we invert because we only want to
+    # do something if the screen is off
+    [ "$screen_on" = "false" ] && handle_event screen_off 1
+    was_screen_on="$screen_on"
+  else
+    # BUG FIX: this used to unconditionally do `was_screen_on="$screen_on"`
+    # - if dumpsys ever returned something other than true/false here,
+    # was_screen_on became (and stayed) that same invalid value forever,
+    # since nothing ever refreshed it again except a successful
+    # transition - and the main loop's own screen-change check only ever
+    # runs when was_screen_on is non-empty in the first place, so a
+    # single bad read at boot could permanently disable screen_off
+    # detection for the entire life of the daemon, completely silently.
+    # Now left empty (never set to a value we don't trust), which the
+    # main loop's own is_valid_bool_reading guard below already treats
+    # as "not initialized yet, try again next cycle" - the exact
+    # behavior intended for a temporarily-unavailable reading.
+    log_msg 1 "is_device screen returned an unexpected value at startup - screen-off detection will retry on the next cycle"
+    was_screen_on=""
   fi
-  was_screen_on="$screen_on"
 
   get_night_times
   night_now="$(is_night_now)"
@@ -649,8 +670,17 @@ while true; do
   # check charging state
   if [ "$adaptive_mode" != "true" ]; then
     charging=$(is_device charging)
-    if [ "$was_charging" != "" ]; then
-      if [ "$charging" != "$was_charging" ]; then
+    # BUG FIX: guard added so an invalid/unavailable reading (see
+    # is_device()'s own fix) never gets written into was_charging - it
+    # used to be assigned unconditionally below, so a single bad read
+    # permanently froze this at whatever garbage came back, silently
+    # disabling charging-event detection for the rest of the daemon's
+    # life. An invalid reading now just retries next cycle, and if
+    # was_charging was never successfully initialized, this cycle
+    # establishes the baseline without treating it as a "change" (there
+    # was nothing to compare against yet).
+    if is_valid_bool_reading "$charging"; then
+      if [ "$was_charging" != "" ] && [ "$charging" != "$was_charging" ]; then
         log_msg 2 "Charging event was triggered"
         if [ "$charging" = "true" ]; then
           handle_event charging 1
@@ -658,13 +688,13 @@ while true; do
           handle_event charging 0
         fi
       fi
+      was_charging="$charging"
     fi
-    was_charging="$charging"
 
     # check low_power state
     low_power=$(is_device low_power)
-    if [ "$was_low_power" != "" ]; then
-      if [ "$low_power" != "$was_low_power" ]; then
+    if is_valid_bool_reading "$low_power"; then
+      if [ "$was_low_power" != "" ] && [ "$low_power" != "$was_low_power" ]; then
         log_msg 2 "Low Power event was triggered"
         if [ "$low_power" = "true" ]; then
           handle_event low_power 1
@@ -672,13 +702,13 @@ while true; do
           handle_event low_power 0
         fi
       fi
+      was_low_power="$low_power"
     fi
-    was_low_power="$low_power"
 
     # check screen change
     screen_on=$(is_device screen)
-    if [ "$was_screen_on" != "" ]; then
-      if [ "$screen_on" != "$was_screen_on" ]; then
+    if is_valid_bool_reading "$screen_on"; then
+      if [ "$was_screen_on" != "" ] && [ "$screen_on" != "$was_screen_on" ]; then
         log_msg 2 "Screen change was detected"
         # here we invert because we only want to
         # do something if the screen is off
@@ -688,8 +718,8 @@ while true; do
           handle_event screen_off 0
         fi
       fi
+      was_screen_on="$screen_on"
     fi
-    was_screen_on="$screen_on"
 
     # check night profile (time-of-day, independent of any device state)
     night_now="$(is_night_now)"
