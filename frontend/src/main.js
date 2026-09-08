@@ -8,12 +8,20 @@ import { initLog, activateLog, deactivateLog, refreshLog, refreshJournal } from 
 import { initPerfiles, activatePerfiles, deactivatePerfiles } from './views/perfiles.js';
 import { initAcerca, activateAcerca, deactivateAcerca } from './views/acerca.js';
 
-// Orden de navegación: Inicio / Perfiles / Automatización / Apps /
-// Análisis / Ajustes - las claves internas ('estado', 'conf', 'log',
-// 'acerca') se mantienen sin cambios a propósito para no arrastrar
-// renombrados a cada referencia del código ya probado; solo cambian
-// las etiquetas visibles (i18n) y el orden de aparición.
-const VIEWS = ['estado', 'perfiles', 'conf', 'apps', 'log', 'acerca'];
+// Orden de navegación: Inicio / Análisis / Automatización / Apps -
+// las 4 acciones principales, siempre visibles en la barra inferior -
+// seguidas de Perfiles/Ajustes, que solo se alcanzan a través del
+// botón "Más" (redesign item "nav inferior reducida"). El orden de
+// swipe sigue este mismo array: deslizar más allá de Apps lleva a
+// Perfiles y luego a Ajustes, aunque no tengan su propio botón fijo.
+// Las claves internas ('estado', 'conf', 'log', 'acerca') se
+// mantienen sin cambios a propósito para no arrastrar renombrados a
+// cada referencia del código ya probado; solo cambian las etiquetas
+// visibles (i18n) y el orden de aparición.
+const VIEWS = ['estado', 'log', 'conf', 'apps', 'perfiles', 'acerca'];
+// Vistas con un botón propio en la barra inferior - el resto
+// (perfiles, acerca) solo se resalta a través de "Más".
+const PRIMARY_NAV_VIEWS = ['estado', 'log', 'conf', 'apps'];
 const LIFECYCLE = {
   estado: { activate: activateEstado, deactivate: deactivateEstado },
   conf: { activate: activateConfig, deactivate: deactivateConfig },
@@ -34,10 +42,17 @@ function confirmLeave(fromIndex) {
 }
 
 function setTabActive(index) {
-  VIEWS.forEach((name, i) => {
-    document.getElementById(`tab-btn-${name}`).classList.toggle('active', i === index);
-    document.getElementById(`view-${name}`).classList.toggle('active', i === index);
+  const activeName = VIEWS[index];
+  VIEWS.forEach((name) => {
+    document.getElementById(`view-${name}`).classList.toggle('active', name === activeName);
   });
+  // Only the 4 primary views have their own bottom-nav button - the
+  // rest (perfiles/acerca) are reached through "Más", which lights up
+  // instead of a button that doesn't exist for them.
+  PRIMARY_NAV_VIEWS.forEach((name) => {
+    document.getElementById(`tab-btn-${name}`).classList.toggle('active', name === activeName);
+  });
+  document.getElementById('tab-btn-more').classList.toggle('active', !PRIMARY_NAV_VIEWS.includes(activeName));
 }
 
 function commitToIndex(newIndex) {
@@ -51,9 +66,42 @@ function commitToIndex(newIndex) {
 
 function initTabButtons() {
   VIEWS.forEach((name, index) => {
-    document.getElementById(`bn-icon-${name}`).innerHTML = NAV_ICONS[name];
-    document.getElementById(`tab-btn-${name}`).addEventListener('click', () => {
+    document.getElementById(`bn-icon-${name}`) && (document.getElementById(`bn-icon-${name}`).innerHTML = NAV_ICONS[name]);
+    const btn = document.getElementById(`tab-btn-${name}`);
+    if (!btn) return; // perfiles/acerca: no fixed button, reached via "Más"
+    btn.addEventListener('click', () => {
       if (index === currentIndex) return;
+      if (!confirmLeave(currentIndex)) return;
+      commitToIndex(index);
+    });
+  });
+}
+
+// "Más" sheet: a lightweight bottom sheet (reuses the same
+// .modal-overlay pattern already used for the basic/advanced mode
+// picker) listing Perfiles, Ajustes, and a "Detalles técnicos"
+// shortcut straight into Automatización - the same destination the
+// existing "Ver ajustes avanzados" shortcut in Ajustes already uses,
+// just reachable from one tap further down too.
+function initMoreSheet() {
+  const overlay = document.getElementById('more-sheet-overlay');
+  const open = () => { overlay.style.display = 'flex'; };
+  const close = () => { overlay.style.display = 'none'; };
+
+  document.getElementById('bn-icon-more').innerHTML = ICONS.more;
+  document.getElementById('more-icon-perfiles').innerHTML = NAV_ICONS.perfiles;
+  document.getElementById('more-icon-acerca').innerHTML = NAV_ICONS.acerca;
+  document.getElementById('more-icon-details').innerHTML = ICONS.settings;
+
+  document.getElementById('tab-btn-more').addEventListener('click', open);
+  document.getElementById('more-sheet-cancel').addEventListener('click', close);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+
+  overlay.querySelectorAll('.more-sheet-item').forEach((item) => {
+    item.addEventListener('click', () => {
+      close();
+      const index = VIEWS.indexOf(item.dataset.view);
+      if (index === -1 || index === currentIndex) return;
       if (!confirmLeave(currentIndex)) return;
       commitToIndex(index);
     });
@@ -163,6 +211,7 @@ applyStaticI18n();
 
 initViewportFix();
 initTabButtons();
+initMoreSheet();
 initProgrammaticNav();
 initSwipeNav();
 

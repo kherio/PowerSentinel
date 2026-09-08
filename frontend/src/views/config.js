@@ -329,6 +329,19 @@ function describeAppSituations(level, model) {
   ];
 }
 
+// Explicación única de los 4 niveles, mostrada UNA vez arriba de la
+// lista en vez de repetida en cada tarjeta de app (como hacía antes
+// apppolicy-explain) - el mismo texto por nivel ya existente
+// (APP_POLICY_EXPLANATIONS), solo que ahora se lee una vez, no una vez
+// por cada app visible.
+function renderAppPolicyLegend() {
+  const el = document.getElementById('ap-policy-legend');
+  if (!el) return;
+  el.innerHTML = APP_POLICY_LEVELS.map((lvl) =>
+    `<div class="apppolicy-legend-row"><span class="apppolicy-legend-name">${escapeHtml(t(APP_POLICY_LEVEL_LABELS[lvl]))}</span><span class="apppolicy-legend-text">${escapeHtml(t(APP_POLICY_EXPLANATIONS[lvl]))}</span></div>`
+  ).join('');
+}
+
 function drawAppPolicyList() {
   const list = document.getElementById('ap-policy-list');
   const q = (appPolicyState.filter || '').toLowerCase();
@@ -354,8 +367,7 @@ function drawAppPolicyList() {
       ).join('')}</div>` +
       (situations.length ? `<div class="apppolicy-situations">${situations.map((s) =>
         `<div class="apppolicy-situation-row"><span class="apppolicy-situation-label">${escapeHtml(s.label)}</span><span class="apppolicy-situation-value">${escapeHtml(s.value)}</span></div>`
-      ).join('')}</div>` : '') +
-      `<p class="hint apppolicy-explain">${escapeHtml(t(APP_POLICY_EXPLANATIONS[level]))}</p>`;
+      ).join('')}</div>` : '');
     row.querySelectorAll('.apppolicy-lvl-btn').forEach((btn) => {
       btn.addEventListener('click', () => setPolicyForApp(pkg, parseInt(btn.dataset.lvl, 10)));
     });
@@ -1077,6 +1089,7 @@ let appsViewInited = false;
 export function initAppsView() {
   if (appsViewInited) return;
   appsViewInited = true;
+  renderAppPolicyLegend();
   document.getElementById('ap-usage-btn').textContent = t('apppolicy.usageButton');
   document.getElementById('ap-usage-btn').addEventListener('click', loadUsageBuckets);
   document.getElementById('ap-policy-search').addEventListener('input', (e) => {

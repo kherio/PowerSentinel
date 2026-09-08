@@ -47,6 +47,8 @@ const DICT = {
     'nav.log': 'Análisis',
     'nav.perfiles': 'Perfiles',
     'nav.acerca': 'Ajustes',
+    'nav.more': 'Más',
+    'nav.technicalDetails': 'Detalles técnicos',
 
     'common.loading': 'Cargando…',
     'common.update': 'Actualizar',
@@ -547,6 +549,8 @@ const DICT = {
     'nav.log': 'Analysis',
     'nav.perfiles': 'Profiles',
     'nav.acerca': 'Settings',
+    'nav.more': 'More',
+    'nav.technicalDetails': 'Technical details',
 
     'common.loading': 'Loading…',
     'common.update': 'Refresh',

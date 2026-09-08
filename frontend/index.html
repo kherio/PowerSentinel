@@ -117,7 +117,7 @@
 
         <div class="card" style="margin-bottom:14px;">
           <div class="section-title" style="margin-top:0;" data-i18n="estado.recentActivityTitle">Actividad reciente</div>
-          <div id="e-recent-activity"></div>
+          <div id="e-recent-activity" class="timeline-list"></div>
           <button class="link-btn" id="e-recent-activity-more" data-i18n="estado.recentActivityMore">Ver todo en Análisis ›</button>
         </div>
 
@@ -294,6 +294,7 @@
         <div class="card" style="margin-bottom:14px;">
           <div class="section-title" style="margin-top:0;" data-i18n="apppolicy.title">Políticas por app</div>
           <p class="hint" data-i18n="apppolicy.hint">Anula, para una app concreta, lo que pida cualquier evento: nunca tocarla, tratarla siempre con suavidad, seguir el evento activo (por defecto), o tratarla siempre con la máxima severidad.</p>
+          <div class="apppolicy-legend" id="ap-policy-legend"></div>
           <input class="filter" id="ap-policy-search" type="text" data-i18n-placeholder="apppolicy.searchPlaceholder" placeholder="Buscar app…" style="margin-top:8px;width:100%;">
           <button class="btn ghost" id="ap-usage-btn" style="width:100%;margin-top:8px;"></button>
         </div>
@@ -347,7 +348,7 @@
 
         <div class="fill-area" id="j-pull-area">
           <div class="pull-indicator" id="j-pull-indicator"></div>
-          <div class="log-wrap" id="j-journal-wrap"></div>
+          <div class="log-wrap timeline-list" id="j-journal-wrap"></div>
         </div>
       </div>
 
@@ -483,9 +484,9 @@
       <span class="bn-icon" id="bn-icon-estado"></span>
       <span class="bn-label" data-i18n="nav.estado">Inicio</span>
     </button>
-    <button id="tab-btn-perfiles" data-view="perfiles">
-      <span class="bn-icon" id="bn-icon-perfiles"></span>
-      <span class="bn-label" data-i18n="nav.perfiles">Perfiles</span>
+    <button id="tab-btn-log" data-view="log">
+      <span class="bn-icon" id="bn-icon-log"></span>
+      <span class="bn-label" data-i18n="nav.log">Análisis</span>
     </button>
     <button id="tab-btn-conf" data-view="conf">
       <span class="bn-icon" id="bn-icon-conf"></span>
@@ -495,15 +496,34 @@
       <span class="bn-icon" id="bn-icon-apps"></span>
       <span class="bn-label" data-i18n="nav.apps">Apps</span>
     </button>
-    <button id="tab-btn-log" data-view="log">
-      <span class="bn-icon" id="bn-icon-log"></span>
-      <span class="bn-label" data-i18n="nav.log">Análisis</span>
-    </button>
-    <button id="tab-btn-acerca" data-view="acerca">
-      <span class="bn-icon" id="bn-icon-acerca"></span>
-      <span class="bn-label" data-i18n="nav.acerca">Ajustes</span>
+    <button id="tab-btn-more">
+      <span class="bn-icon" id="bn-icon-more"></span>
+      <span class="bn-label" data-i18n="nav.more">Más</span>
     </button>
   </nav>
+
+  <!-- "Más": Perfiles, Ajustes y un acceso directo a Automatización en
+       modo Avanzado ("Detalles técnicos") - las 2 secciones menos
+       usadas a diario más un atajo, en vez de ocupar un botón fijo
+       cada una en la barra inferior (redesign item "nav inferior
+       reducida"). -->
+  <div id="more-sheet-overlay" class="modal-overlay overlay-bottom" style="display:none;">
+    <div class="more-sheet-card">
+      <button class="more-sheet-item" id="more-item-perfiles" data-view="perfiles">
+        <span class="bn-icon" id="more-icon-perfiles"></span>
+        <span data-i18n="nav.perfiles">Perfiles</span>
+      </button>
+      <button class="more-sheet-item" id="more-item-acerca" data-view="acerca">
+        <span class="bn-icon" id="more-icon-acerca"></span>
+        <span data-i18n="nav.acerca">Ajustes</span>
+      </button>
+      <button class="more-sheet-item" id="more-item-details" data-view="conf">
+        <span class="bn-icon" id="more-icon-details"></span>
+        <span data-i18n="nav.technicalDetails">Detalles técnicos</span>
+      </button>
+      <button class="more-sheet-cancel" id="more-sheet-cancel" data-i18n="common.cancel">Cancelar</button>
+    </div>
+  </div>
 
   <div id="toast-container"></div>
 

@@ -108,38 +108,54 @@ function timelineMechanismPhrases(detail) {
   return phrases;
 }
 
+// Rediseño visual del timeline (redesign item "timeline mucho más
+// visual"): un carril vertical propio (.timeline-rail) para el punto,
+// con la línea de conexión dibujada en CSS entre entradas consecutivas
+// - antes el punto vivía inline junto al texto, sin ninguna relación
+// visual entre una entrada y la siguiente. La estructura (rail + body)
+// es la MISMA para las 4 variantes (started/ended/warning/genérica);
+// solo cambian el color del punto y el contenido.
+function timelineEntryHtml(dotCls, time, mainHtml, subLines) {
+  const subHtml = (subLines || []).map((s) =>
+    `<div class="timeline-sub">${s}</div>`
+  ).join('');
+  return `<div class="timeline-entry">` +
+    `<div class="timeline-rail"><span class="timeline-dot ${dotCls}"></span></div>` +
+    `<div class="timeline-body">` +
+    `<div class="timeline-main"><span class="timeline-time">${time}</span>${mainHtml}</div>` +
+    subHtml +
+    `</div></div>`;
+}
+
 export function renderTimelineEntry(entry) {
   const time = formatJournalTime(entry.ts);
   if (entry.severity === 'warning' || entry.severity === 'critical') {
-    return `<div class="timeline-entry timeline-warning">` +
-      `<div class="timeline-main"><span class="timeline-dot dot-warn"></span><span class="timeline-time">${time}</span>⚠️ ${escapeHtml(entry.message)}</div>` +
-      `</div>`;
+    return timelineEntryHtml('dot-warn', time, `⚠️ ${escapeHtml(entry.message)}`);
   }
   const startedMatch = /^(.+) started$/.exec(entry.message);
   const endedMatch = /^(.+) ended$/.exec(entry.message);
   if (startedMatch) {
     const name = eventDisplayName(entry.event);
     const phrases = timelineMechanismPhrases(entry.detail);
-    return `<div class="timeline-entry">` +
-      `<div class="timeline-main"><span class="timeline-dot dot-start"></span><span class="timeline-time">${time}</span>${eventIcon(entry.event)} ${escapeHtml(t('journal.entered', { mode: name }))}</div>` +
-      phrases.map((p) => `<div class="timeline-sub"><span class="timeline-time"></span>${escapeHtml(p)}</div>`).join('') +
-      `</div>`;
+    return timelineEntryHtml('dot-start', time,
+      `${eventIcon(entry.event)} ${escapeHtml(t('journal.entered', { mode: name }))}`,
+      phrases.map((p) => escapeHtml(p)));
   }
   if (endedMatch) {
     const name = eventDisplayName(entry.event);
-    return `<div class="timeline-entry">` +
-      `<div class="timeline-main"><span class="timeline-dot dot-end"></span><span class="timeline-time">${time}</span>${eventIcon(entry.event)} ${escapeHtml(t('journal.exited', { mode: name }))}</div>` +
-      `<div class="timeline-sub"><span class="timeline-time"></span>${escapeHtml(t('journal.restored'))}</div>` +
-      `</div>`;
+    return timelineEntryHtml('dot-end', time,
+      `${eventIcon(entry.event)} ${escapeHtml(t('journal.exited', { mode: name }))}`,
+      [escapeHtml(t('journal.restored'))]);
   }
-  // Cualquier otra entrada (appwatch, safemode...) - se muestra como
-  // hasta ahora, sin intentar reinterpretarla como una transición de
-  // evento que no es.
+  // Cualquier otra entrada (appwatch, safemode...) - misma estructura
+  // rail+body que el resto, en vez del bloque "log-line" con badge que
+  // usaba antes, para que la línea de conexión no se rompa cuando el
+  // journal mezcla este tipo de entradas con transiciones de evento.
   const isCritical = entry.severity === 'critical';
   const badgeCls = isCritical ? 'critical' : 'info';
   const badgeLabel = isCritical ? t('log.severityCritical') : t('log.severityInfo');
-  return `<div class="log-line ${isCritical ? 'journal-critical' : 'journal-info'}">` +
-    `<span class="journal-time">${time}</span><span class="journal-badge ${badgeCls}">${escapeHtml(badgeLabel)}</span>${escapeHtml(entry.message)}</div>`;
+  return timelineEntryHtml(isCritical ? 'dot-warn' : 'dot-end', time,
+    `<span class="journal-badge ${badgeCls}">${escapeHtml(badgeLabel)}</span>${escapeHtml(entry.message)}`);
 }
 
 function renderJournal() {

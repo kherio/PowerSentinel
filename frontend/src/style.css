@@ -255,6 +255,51 @@ main {
   font-weight: 600;
   margin-bottom: 4px;
 }
+/* "Más" bottom sheet - same overlay dimming as the mode-choice modal,
+   but anchored to the bottom edge and sliding up, since this is a
+   quick menu rather than a dialog to read and decide on. */
+.overlay-bottom { align-items: flex-end; padding: 0; }
+.more-sheet-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-bottom: none;
+  border-radius: 16px 16px 0 0;
+  width: 100%;
+  padding: 8px 0 max(8px, env(safe-area-inset-bottom, 0px));
+  animation: sheet-slide-up 0.2s ease-out;
+}
+@keyframes sheet-slide-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+.more-sheet-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  padding: 14px 18px;
+  font-size: 15px;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+.more-sheet-item .bn-icon { width: 20px; height: 20px; color: var(--muted); }
+.more-sheet-item .bn-icon svg { width: 20px; height: 20px; }
+.more-sheet-item:active { background: var(--surface-2); }
+.more-sheet-cancel {
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 14px 18px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--muted);
+  text-align: center;
+  cursor: pointer;
+}
 .mode-choice-grid {
   display: grid;
   grid-template-columns: 1fr;
@@ -509,6 +554,22 @@ main {
   margin-top: 8px;
   margin-bottom: 0;
 }
+/* Leyenda única de los 4 niveles (arriba de la lista, una sola vez) */
+.apppolicy-legend {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.apppolicy-legend-row { font-size: 12px; line-height: 1.4; }
+.apppolicy-legend-name {
+  font-weight: 700;
+  color: var(--text);
+  margin-right: 6px;
+}
+.apppolicy-legend-text { color: var(--muted); }
 
 
 .energy-regime-row {
@@ -669,6 +730,7 @@ main {
   border-radius: 999px;
   border: 1px solid var(--border);
   color: var(--muted);
+  transition: color 0.2s ease, border-color 0.2s ease, background-color 0.2s ease;
 }
 .profile-chip.active {
   color: var(--accent);
@@ -1263,8 +1325,16 @@ main {
 .core-summary-row .legend.l-save .dot { background: var(--warn); }
 .core-summary-row .legend.l-off .dot { background: var(--muted); }
 
-/* --- gentle fade-in for the whole status content once loaded --- */
-.scroll-area.loaded .hero-card,
+/* --- gentle fade-in for the whole status content once loaded ---
+   Updated to the card classes actually in use after the dashboard
+   redesign (hero-card no longer exists as a class name - dashboard-
+   card replaced it) - also extended to the newer cards (today/
+   nightwake/active-now) so the whole Inicio tab settles in together
+   rather than only the technical core-tiles/grid section animating. */
+.scroll-area.loaded .dashboard-card,
+.scroll-area.loaded .today-card,
+.scroll-area.loaded .nightwake-card,
+.scroll-area.loaded .active-now-card,
 .scroll-area.loaded .core-tiles,
 .scroll-area.loaded .grid {
   animation: fade-up 0.4s ease;
@@ -1684,18 +1754,46 @@ label.switch input { accent-color: var(--accent); }
 .log-empty { color: var(--muted); font-size: 13px; padding: 8px 2px; }
 
 .timeline-entry {
+  display: flex;
+  gap: 10px;
   padding: 6px 0;
   font-size: 13px;
+  animation: timeline-fade-in 0.25s ease both;
+}
+@keyframes timeline-fade-in {
+  from { opacity: 0; transform: translateY(3px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.timeline-rail {
+  flex: 0 0 auto;
+  width: 8px;
+  position: relative;
+  display: flex;
+  justify-content: center;
+}
+/* Connecting line between one entry's dot and the next - drawn on the
+   rail itself rather than the dot, so it sits correctly regardless of
+   how tall this entry's own sub-lines make it. Hidden on the last
+   entry in the list (nothing to connect to). */
+.timeline-list .timeline-entry:not(:last-child) .timeline-rail::after {
+  content: '';
+  position: absolute;
+  top: 13px;
+  bottom: -6px;
+  width: 1px;
+  background: var(--border);
 }
 .timeline-main {
   color: var(--text);
   font-weight: 500;
 }
+.timeline-body { flex: 1 1 auto; min-width: 0; }
 .timeline-sub {
   color: var(--muted);
-  padding-left: 4px;
+  padding-left: 2px;
   margin-top: 2px;
 }
+.timeline-sub::before { content: '↳ '; }
 .timeline-time {
   display: inline-block;
   min-width: 44px;
@@ -1708,7 +1806,7 @@ label.switch input { accent-color: var(--accent); }
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  margin-right: 6px;
+  margin-top: 5px;
 }
 .timeline-dot.dot-start { background: var(--accent); }
 .timeline-dot.dot-end { background: var(--muted); }
