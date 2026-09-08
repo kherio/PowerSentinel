@@ -1,3 +1,6 @@
+### v3.51.0
+  - **Night-wake time pickers enlarged** - reported as "casi no se ve" ("barely visible"): they were sized at 11px/46px wide, noticeably smaller than anything else on the card and a poor tap target. Sized up to 16px/66px, matching the rest of the card's text instead of standing out as the one hard-to-read element.
+
 ### v3.50.0
   - **Second security/robustness audit pass, two more real findings**:
   - **Stale in-memory config silently overwriting a change made elsewhere**: Automatización only ever loaded PowerSentinel.json once per app session (on first visit, or an explicit "Reload" tap) - harmless while it was the only thing that could write the file. Since v3.49.0 it isn't: the night-wake card on Inicio does its own independent write for its two time fields. Sequence that silently lost data: open Automatización -> go to Inicio and change the night-wake window -> come back to Automatización -> hit Guardar without reloading first - the in-memory model was still the pre-edit snapshot, so saving it overwrote the night-wake change with no warning. Fixed: Automatización now silently refreshes from disk on every activation, but only when there are no unsaved local edits.
