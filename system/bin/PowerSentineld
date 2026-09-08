@@ -218,6 +218,19 @@ migrate() {
 # detection (CPU topology, available rfkill mechanism), not actions.
 
 update_status() {
+  # CRITICAL FIX: this function used to always call detect_refresh and
+  # energylog_sample itself, unconditionally - fine for its two
+  # original callers (enable_pwr_save/disable_pwr_save, fired on an
+  # event transition), but it means every call pays for a fresh
+  # dumpsys/proc read even when the main loop already refreshed the
+  # exact same data moments earlier THIS SAME cycle (see the new call
+  # site at the bottom of the main loop, below). $1="skip_detect" lets
+  # a caller that just guaranteed freshness itself skip the redundant
+  # re-read, instead of doubling every dumpsys/proc/cat call on every
+  # single cycle forever - which would have directly contradicted this
+  # project's own "zero cost unless something is actually happening"
+  # principle.
+  local skip_detect="${1:-}"
   status_file="/data/local/tmp/PowerSentinel/PowerSentinel.status"
   echo -n > "$status_file"
   # A real "this is when the daemon itself wrote this" timestamp - the
@@ -289,13 +302,20 @@ update_status() {
 
   # Battery. update_status() can run at any point during an event
   # transition (it's called from both enable_pwr_save and
-  # disable_pwr_save), not only once per poll cycle, so it refreshes
-  # detection itself here rather than trusting whatever the main loop's
-  # own detect_refresh last captured - the WebUI's Estado tab reads this
+  # disable_pwr_save), so by default it refreshes detection itself
+  # here rather than trusting whatever the main loop's own
+  # detect_refresh last captured - the WebUI's Estado tab reads this
   # file, and stale battery data there would be worse than one extra
-  # dumpsys call on a state change.
-  detect_refresh
-  energylog_sample
+  # dumpsys call on a state change. The one exception is the periodic
+  # call from the bottom of the main loop (see PowerSentineld's `while
+  # true` block), which passes skip_detect because THAT call already
+  # ran detect_refresh/energylog_sample at the top of this exact same
+  # cycle, a few lines of bash earlier - re-running them here would
+  # just double the same reads for no new information.
+  if [ "$skip_detect" != "skip_detect" ]; then
+    detect_refresh
+    energylog_sample
+  fi
   if [ -n "$DETECT_BATTERY_LEVEL" ]; then
     echo "Battery: level=${DETECT_BATTERY_LEVEL} temp=${DETECT_BATTERY_TEMP_RAW} voltage=${DETECT_BATTERY_VOLTAGE} charging=${DETECT_BATTERY_CHARGING}" >> "$status_file"
   fi
@@ -644,6 +664,30 @@ while true; do
   fi
 
   check_charge_limit
+
+  # CRITICAL FIX: update_status() was only ever invoked from
+  # enable_pwr_save()/disable_pwr_save() - i.e. exclusively when an
+  # event actually started or ended. Outside of a transition (the
+  # ordinary, steady-state case: screen on, not charging, adaptive
+  # mode off or sitting in the same tier) the status file - battery
+  # level/temperature, CPU frequencies, WiFi/Doze state, and the
+  # daemon's own "I'm alive and current" timestamp - was never
+  # refreshed again, for as long as that steady state lasted. The
+  # stale-data warning added in v3.35 explicitly assumes a refresh
+  # roughly every $delay seconds (its own threshold comment says "30x
+  # the default delay - generous margin"), but nothing ever delivered
+  # that cadence outside of an event transition. Confirmed by reading
+  # every call site (grep for update_status across system/bin/): there
+  # were exactly two, both inside enable_pwr_save/disable_pwr_save. In
+  # practice this meant anyone whose device sat in one state for more
+  # than ~90s - an extremely common case, not an edge one - would see
+  # a permanent "datos desactualizados" warning and frozen readings in
+  # Inicio/Estado while the daemon was actually running fine.
+  # skip_detect avoids paying for detect_refresh/energylog_sample
+  # twice this same cycle (see update_status's own comment) - this is
+  # a real, continuous refresh at the daemon's normal cadence, not new
+  # background cost.
+  update_status skip_detect
 
   sleep "$delay"
 done
