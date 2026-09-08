@@ -38,6 +38,14 @@ declare -g _screenwake_prev_screen=""
 # comment below), and is deliberately tolerant of neither existing at
 # all: callers get an empty string, and the WebUI already treats that
 # as "reason unknown" for that specific wake rather than guessing.
+#
+# BUG FIX: reported as "always says 'motivo no disponible'" - neither
+# of these two paths exists on every kernel (this interface has been
+# replaced by /sys/class/wakeup/wakeupN/ on newer (5.x-based) kernels,
+# and some OEM trees restrict it entirely regardless of root). Rather
+# than chase every kernel's own layout indefinitely, _screenwake_wake_cause()
+# below now falls back to something that DOES exist on every Android
+# version: active wake locks (see _screenwake_wakelock_hint()).
 _screenwake_hw_wake_reason() {
   local f
   for f in /sys/kernel/wakeup_reasons/last_resume_reason /sys/power/wakeup_reason; do
@@ -49,6 +57,37 @@ _screenwake_hw_wake_reason() {
   done
 }
 
+# Fallback for when no kernel-level wake reason is available (the
+# common case in practice - see the bug-fix note above). Wake lock TAGS
+# are set by whichever app/service acquired them, and very often
+# already contain a real, recognizable name - a package name, an SDK's
+# own tag ("*job*/com.example.app", "NlpWakeLock",
+# "GCM_HB_ALARM"...) - a meaningfully "more real" name than a bare
+# kernel IRQ line ever gives, which is exactly what was asked for here.
+# This is still NOT proof that a specific held wakelock is what turned
+# the screen on (most PARTIAL_WAKE_LOCKs keep the CPU running WITHOUT
+# ever touching the screen, and this reads whatever's active a moment
+# AFTER the wake was already detected, not necessarily the trigger) -
+# it's the closest-to-real signal actually available, presented as
+# such (the WebUI's categorization/labels don't claim certainty either
+# way). Takes the first 2 held locks' tags, whatever they are - no
+# attempt to filter "relevant" ones, since guessing which is relevant
+# would be exactly the kind of unverifiable claim this project avoids.
+_screenwake_wakelock_hint() {
+  dumpsys power 2>/dev/null | awk -F"'" '/_WAKE_LOCK/ && NF>=2 {print $2}' | head -n 2 | tr '\n' ',' | sed 's/,$//; s/,/, /g'
+}
+
+# Tries the hardware-level reason first (when available, it's the more
+# precise of the two - a real IRQ source, not an inference from
+# whatever else happens to be running); falls back to active wake
+# locks only when that gave nothing.
+_screenwake_wake_cause() {
+  local reason
+  reason="$(_screenwake_hw_wake_reason)"
+  [ -n "$reason" ] && { printf '%s' "$reason"; return; }
+  _screenwake_wakelock_hint
+}
+
 # Called once per main loop cycle. Records a wake ONLY on a genuine
 # false->true transition (edge-triggered) - never on every cycle the
 # screen happens to be on, which would count one wake as dozens of
@@ -57,7 +96,7 @@ screenwake_check() {
   local now_on
   now_on="$(is_device screen)"
   if [ "$_screenwake_prev_screen" = "false" ] && [ "$now_on" = "true" ]; then
-    _screenwake_record_wake "$(date +%s)" "$(date +%H:%M)" "$(_screenwake_hw_wake_reason)"
+    _screenwake_record_wake "$(date +%s)" "$(date +%H:%M)" "$(_screenwake_wake_cause)"
   fi
   _screenwake_prev_screen="$now_on"
 }

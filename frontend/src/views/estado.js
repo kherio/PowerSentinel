@@ -389,8 +389,10 @@ const WAKE_REASON_PATTERNS = [
   { re: /rtc_alarm|alarm/i, key: 'alarm' },
   { re: /wlan|wifi|sdio|bcmsdh/i, key: 'wifi' },
   { re: /rmnet|modem|mdm_|\bril\b|smd-modem/i, key: 'mobile' },
+  { re: /gcm|fcm|firebase|push/i, key: 'push' },
   { re: /usb|charger|typec|\botg\b/i, key: 'charging' },
-  { re: /pwrkey|power.?key|gpio_keys|volume/i, key: 'button' }
+  { re: /pwrkey|power.?key|gpio_keys|volume/i, key: 'button' },
+  { re: /jobscheduler|\bsync\b/i, key: 'sync' }
 ];
 function categorizeWakeReason(raw) {
   if (!raw) return null;
@@ -399,8 +401,9 @@ function categorizeWakeReason(raw) {
 }
 const WAKE_REASON_LABEL_KEYS = {
   alarm: 'dashboard.wakeReasonAlarm', wifi: 'dashboard.wakeReasonWifi',
-  mobile: 'dashboard.wakeReasonMobile', charging: 'dashboard.wakeReasonCharging',
-  button: 'dashboard.wakeReasonButton'
+  mobile: 'dashboard.wakeReasonMobile', push: 'dashboard.wakeReasonPush',
+  charging: 'dashboard.wakeReasonCharging', button: 'dashboard.wakeReasonButton',
+  sync: 'dashboard.wakeReasonSync'
 };
 
 // "Remediarlo en la medida de lo posible": only ever suggests a
@@ -420,7 +423,7 @@ function renderWakeRemediationHint(entries) {
   });
   let hintKey = null;
   if ((counts.wifi || 0) >= 2) hintKey = 'dashboard.wakeHintWifi';
-  else if ((counts.mobile || 0) >= 2) hintKey = 'dashboard.wakeHintMobile';
+  else if ((counts.mobile || 0) + (counts.push || 0) >= 2) hintKey = 'dashboard.wakeHintMobile';
   if (!hintKey) { hintEl.style.display = 'none'; hintEl.innerHTML = ''; return; }
   hintEl.style.display = 'block';
   hintEl.innerHTML = `${escapeHtml(t(hintKey))} ` +
@@ -480,7 +483,7 @@ function renderNightWake(nw) {
     toggle.style.display = 'flex';
     timesEl.innerHTML = entries.map((e) => {
       const key = categorizeWakeReason(e.reason);
-      const label = key ? t(WAKE_REASON_LABEL_KEYS[key]) : (e.reason || t('dashboard.wakeReasonUnknown'));
+      const label = key ? `${t(WAKE_REASON_LABEL_KEYS[key])} · ${e.reason}` : (e.reason || t('dashboard.wakeReasonUnknown'));
       return `<div class="nightwake-entry"><span class="nightwake-entry-time">${escapeHtml(e.time)}</span><span class="nightwake-entry-reason">${escapeHtml(label)}</span></div>`;
     }).join('');
     renderWakeRemediationHint(entries);

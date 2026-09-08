@@ -861,13 +861,13 @@ main {
    to match the rest of the card's small-label text instead of being
    noticeably smaller than everything around it. */
 .nightwake-time-input {
-  font-size: 16px;
+  font-size: 13px;
   font-family: var(--mono);
   color: var(--muted);
   background: none;
   border: none;
   padding: 2px 0;
-  width: 66px;
+  width: 74px;
   cursor: pointer;
 }
 .nightwake-time-input:focus { color: var(--text); outline: none; }
