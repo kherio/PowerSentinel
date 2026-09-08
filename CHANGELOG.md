@@ -1,3 +1,7 @@
+### v3.40.0
+  - **CRITICAL FIX: los datos de Inicio/Estado (batería, temperatura, frecuencias de CPU, WiFi, Doze) solo se refrescaban cuando arrancaba o terminaba un evento**, nunca durante un periodo estable (pantalla encendida, sin cargar, sin cambios de nivel adaptativo). El propio aviso de "datos desactualizados" (v3.35) asumía un refresco cada ~3s, pero nada lo entregaba fuera de una transición - así que cualquiera con más de ~90s sin transición de evento veía el aviso de forma permanente y lecturas congeladas, con el demonio funcionando con normalidad. Ahora el bucle principal refresca el estado en cada ciclo (reutilizando la detección ya hecha ese mismo ciclo, sin trabajo duplicado) en vez de depender solo de las transiciones.
+  - Hallazgo de una revisión de código, verificado leyendo cada punto de llamada a `update_status` antes de corregir nada.
+
 ### v3.39.0
   - **CRITICAL FIX: Safe Mode des-suspendía todas las apps del sistema**, no solo las que PowerSentinel había suspendido - contradecía directamente el sistema de ownership. Eliminado el bucle global.
   - **CRITICAL FIX: `pause` solo funcionaba la primera vez** - una variable global nunca se reseteaba, así que una segunda pausa terminaba al instante sin esperar nada. Corregido.
