@@ -10,6 +10,7 @@ conf="/data/local/tmp/PowerSentinel/PowerSentinel.conf"
 . "$(dirname "$0")/PowerSentinel-alertbridge.sh"
 . "$(dirname "$0")/PowerSentinel-energylog.sh"
 . "$(dirname "$0")/PowerSentinel-appwatch.sh"
+. "$(dirname "$0")/PowerSentinel-screenwake.sh"
 . "$(dirname "$0")/PowerSentinel-state.sh"
 . "$(dirname "$0")/PowerSentinel-events.sh"
 declare -a active_events
@@ -364,6 +365,11 @@ update_status() {
     echo "ActiveEventStartTimes: ${_ts_json:-\{\}}" >> "$status_file"
   fi
   echo "ActiveMechanisms: $(active_mechanisms_snapshot)" >> "$status_file"
+
+  # Night-wake counter for the "Encendidos nocturnos" dashboard card -
+  # see PowerSentinel-screenwake.sh. Only ever non-empty ('{}' otherwise)
+  # once at least one wake has ever been recorded.
+  echo "NightWakeSummary: $(screenwake_summary)" >> "$status_file"
 }
 
 # read_config() (V1) removed - see below, v1 support has been
@@ -477,6 +483,11 @@ while true; do
   # every $APPWATCH_INTERVAL_S, and only does anything while the screen
   # is off - see PowerSentinel-appwatch.sh.
   appwatch_check
+
+  # Night-wake counter (dashboard redesign item): edge-triggered, only
+  # ever writes on a genuine screen off->on transition - see
+  # PowerSentinel-screenwake.sh.
+  screenwake_check
 
   # Check for command
   cmd="$(cat $ctl_file)"

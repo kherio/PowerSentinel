@@ -300,6 +300,54 @@ function renderDashboard(sys) {
   ).join('');
 }
 
+// "Encendidos nocturnos" mini-card: count + comparison to the average
+// of the 7 completed windows before it (NightWakeSummary, computed
+// entirely on the daemon side - PowerSentinel-screenwake.sh) - never
+// recomputed here, so the frontend and the raw data always agree on
+// what "the average" means. Hidden entirely until at least one wake
+// has ever been recorded (nw.count undefined), rather than showing a
+// misleading "0" on a fresh install with no history yet.
+function renderNightWake(nw) {
+  const card = document.getElementById('e-nightwake-card');
+  if (!nw || typeof nw.count !== 'number') { card.style.display = 'none'; return; }
+  card.style.display = 'block';
+  document.getElementById('e-nightwake-window').textContent = nw.window || '';
+  document.getElementById('e-nightwake-count').textContent = nw.count;
+
+  const compareEl = document.getElementById('e-nightwake-compare');
+  if (typeof nw.avg === 'number') {
+    const diff = nw.count - nw.avg;
+    if (diff === 0) {
+      compareEl.textContent = t('dashboard.nightWakeSameAsAvg', { avg: nw.avg });
+    } else {
+      const cls = diff > 0 ? 'up' : 'down';
+      const arrow = diff > 0 ? '↑' : '↓';
+      compareEl.innerHTML = `<span class="${cls}">${arrow} ${Math.abs(diff)}</span> ` +
+        escapeHtml(t('dashboard.nightWakeVsAvg', { avg: nw.avg }));
+    }
+  } else {
+    compareEl.textContent = t('dashboard.nightWakeNoHistory');
+  }
+
+  const toggle = document.getElementById('e-nightwake-toggle');
+  const timesEl = document.getElementById('e-nightwake-times');
+  if (nw.times && nw.times.length) {
+    toggle.style.display = 'flex';
+    timesEl.textContent = nw.times.join('  ·  ');
+    if (!toggle.dataset.bound) {
+      toggle.dataset.bound = '1';
+      toggle.addEventListener('click', () => {
+        const expand = timesEl.style.display === 'none';
+        timesEl.style.display = expand ? 'block' : 'none';
+        toggle.classList.toggle('expanded', expand);
+      });
+    }
+  } else {
+    toggle.style.display = 'none';
+    timesEl.style.display = 'none';
+  }
+}
+
 // "¿Qué está haciendo ahora?" - una tarjeta por evento activo, cada
 // una con sus propios mecanismos resueltos (ActiveMechanisms, ya
 // individualizados por evento en el demonio) y desde cuándo
@@ -550,6 +598,8 @@ function render(text) {
       sys.daemonTimestamp = parseInt(m[1], 10);
     } else if ((m = line.match(/^activemechanisms:\s*(\[.*\])/i))) {
       try { sys.activeMechanisms = JSON.parse(m[1]); } catch (e) { /* ignore */ }
+    } else if ((m = line.match(/^nightwakesummary:\s*(\{.*\})/i))) {
+      try { sys.nightWake = JSON.parse(m[1]); } catch (e) { /* ignore */ }
     } else if ((m = line.match(/^capabilities:\s*(.*)$/i))) {
       sys.capabilities = {};
       m[1].trim().split(/\s+/).forEach((pair) => {
@@ -567,6 +617,7 @@ function render(text) {
   renderSystemHealth(sys.capabilities);
   renderDashboard(sys);
   renderActiveNow(sys);
+  renderNightWake(sys.nightWake);
 
   if (sys.error) {
     setGauge(0);

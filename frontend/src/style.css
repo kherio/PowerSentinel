@@ -729,6 +729,68 @@ main {
 }
 .dashboard-detail-body { margin-top: 10px; }
 
+/* --- "Encendidos nocturnos" mini-card (dashboard redesign) --- */
+.nightwake-card { padding: 16px; }
+.nightwake-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.nightwake-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+}
+.nightwake-window {
+  font-size: 11px;
+  font-family: var(--mono);
+  color: var(--muted);
+  background: var(--surface-2);
+  padding: 2px 7px;
+  border-radius: 999px;
+}
+.nightwake-count {
+  font-size: 34px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--text);
+  letter-spacing: -0.5px;
+}
+.nightwake-compare {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 8px;
+  min-height: 1px;
+}
+.nightwake-compare .up { color: var(--warn); font-weight: 700; }
+.nightwake-compare .down { color: var(--accent); font-weight: 700; }
+.nightwake-detail-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: none;
+  border: none;
+  border-top: 1px solid var(--border);
+  padding: 8px 0 0;
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+}
+.nightwake-detail-toggle .aggression-detail-caret { transition: transform 0.15s ease; }
+.nightwake-detail-toggle.expanded .aggression-detail-caret { transform: rotate(90deg); }
+.nightwake-times {
+  margin-top: 8px;
+  font-size: 13px;
+  font-family: var(--mono);
+  color: var(--text);
+  line-height: 1.6;
+  word-spacing: 2px;
+}
+
 .active-now-card { padding: 14px; }
 .active-now-header {
   display: flex;
