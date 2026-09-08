@@ -646,6 +646,35 @@ main {
   min-height: 1px;
 }
 .dashboard-why:empty { display: none; }
+/* Profile checklist: all classic profile types at a glance, active in
+   green with a check (same visual language as "Hardware detectado"'s
+   hw-cap-yes/hw-cap-no - reused deliberately, not a new pattern), the
+   rest muted with no icon at all rather than a "✕" - being inactive
+   isn't a problem the way an unsupported capability is, so it doesn't
+   get a warning-shaped symbol. Classic-mode only: in adaptive mode the
+   gauge/tier name already IS the "what's active" answer, and these 7
+   discrete profiles don't independently apply. */
+.dashboard-profile-checklist {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-top: 10px;
+  margin-top: 2px;
+  border-top: 1px solid var(--border);
+}
+.profile-chip {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+.profile-chip.active {
+  color: var(--accent);
+  border-color: var(--accent-dim);
+  background: var(--accent-dim);
+}
 /* Segmented "energy pressure" bar (Option B from the redesign notes) -
    replaces the previous gradient-bar-with-a-dot slider entirely rather
    than showing both, since they conveyed the exact same number twice. */

@@ -280,24 +280,46 @@ function renderDashboard(sys) {
   // innerHTML-built blocks in this file.
   whyEl.textContent = whyText ? `${active ? eventIcon(sys.activeEvents[0]) : 'ℹ️'} ${whyText}` : '';
 
-  // Quick-stat tiles: battery, temperature, and real drain rate
-  // (computeBattDrainRate - the SAME source that already feeds "hours
-  // remaining" on the battery card). Never an invented savings figure -
-  // only what's actually measured this session. Rendered as icon+value
-  // tiles (redesign item 1/2) instead of one joined text line.
+  renderProfileChecklist(sys);
+
+  // Quick-stat tiles: only the real drain rate now (computeBattDrainRate
+  // - the SAME source that already feeds "hours remaining" on the
+  // battery card). Battery % and temperature were dropped from here -
+  // they already appear on the battery card just below, and repeating
+  // them in the hero was pure duplication, not a second useful view of
+  // the same number. Never an invented savings figure either way.
   const quickEl = document.getElementById('e-dashboard-quickstats');
   const tiles = [];
-  if (sys.battery) {
-    tiles.push({ icon: '🔋', value: `${sys.battery.level}%`, label: t('dashboard.batteryQuickLabel') });
-    tiles.push({ icon: '🌡️', value: `${(sys.battery.temp / 10).toFixed(1)}°C`, label: t('dashboard.tempQuickLabel') });
-    if (!sys.battery.charging) {
-      const rate = computeBattDrainRate();
-      if (rate !== null) tiles.push({ icon: '⚡', value: `${rate.toFixed(1)}%/h`, label: t('dashboard.rateQuickLabel') });
-    }
+  if (sys.battery && !sys.battery.charging) {
+    const rate = computeBattDrainRate();
+    if (rate !== null) tiles.push({ icon: '⚡', value: `${rate.toFixed(1)}%/h`, label: t('dashboard.rateQuickLabel') });
   }
+  quickEl.style.display = tiles.length ? 'flex' : 'none';
   quickEl.innerHTML = tiles.map((s) =>
     `<div class="quickstat-item"><span class="qs-icon">${s.icon}</span><div class="qs-text"><div class="qs-value">${escapeHtml(s.value)}</div><div class="qs-label">${escapeHtml(s.label)}</div></div></div>`
   ).join('');
+}
+
+// Profile checklist ("qué está pasando y por qué" at a glance): every
+// CLASSIC profile type, active ones in green with a check, the rest
+// muted - same visual language as "Hardware detectado"'s hw-cap-yes/
+// hw-cap-no (Acerca de). Deliberately classic-mode only
+// (sys.pressureScore undefined) - in adaptive mode the gauge/tier name
+// in the hero already answers "what's active" on its own, and these 7
+// discrete profiles aren't independently meaningful there (adaptive
+// mode replaces them with a single 0-100 score). "boot" and "manual"
+// are real, ordinary members of this list, not special-cased, since
+// both can genuinely be active like any other profile.
+const CLASSIC_PROFILE_ORDER = ['boot', 'charging', 'screen_off', 'low_power', 'night', 'thermal', 'manual'];
+function renderProfileChecklist(sys) {
+  const el = document.getElementById('e-profile-checklist');
+  if (typeof sys.pressureScore === 'number') { el.style.display = 'none'; return; }
+  const activeSet = new Set(sys.activeEvents || []);
+  el.style.display = 'flex';
+  el.innerHTML = CLASSIC_PROFILE_ORDER.map((name) => {
+    const isActive = activeSet.has(name);
+    return `<span class="profile-chip${isActive ? ' active' : ''}">${isActive ? '✓ ' : ''}${escapeHtml(eventDisplayName(name))}</span>`;
+  }).join('');
 }
 
 // "Encendidos nocturnos" mini-card: count + comparison to the average
