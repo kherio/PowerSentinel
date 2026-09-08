@@ -376,6 +376,60 @@ async function saveNightwakeWindow(field, value) {
     nightwakeSaving = false;
   }
 }
+// Wake-reason categorization (feature request: "qué procesos despiertan
+// la pantalla"). Deliberately NOT app/process-level - see the comment
+// in PowerSentinel-screenwake.sh: there is no reliable way to get that
+// on Android, with or without root. What the daemon reports is a raw
+// HARDWARE wake source string (from the kernel's own wakeup_reasons
+// interface), and this is purely a best-effort, keyword-based label
+// for a handful of well-known, common patterns - anything that
+// doesn't match one is shown as-is (the raw string), never silently
+// hidden or guessed into a category it might not belong to.
+const WAKE_REASON_PATTERNS = [
+  { re: /rtc_alarm|alarm/i, key: 'alarm' },
+  { re: /wlan|wifi|sdio|bcmsdh/i, key: 'wifi' },
+  { re: /rmnet|modem|mdm_|\bril\b|smd-modem/i, key: 'mobile' },
+  { re: /usb|charger|typec|\botg\b/i, key: 'charging' },
+  { re: /pwrkey|power.?key|gpio_keys|volume/i, key: 'button' }
+];
+function categorizeWakeReason(raw) {
+  if (!raw) return null;
+  const match = WAKE_REASON_PATTERNS.find((p) => p.re.test(raw));
+  return match ? match.key : null;
+}
+const WAKE_REASON_LABEL_KEYS = {
+  alarm: 'dashboard.wakeReasonAlarm', wifi: 'dashboard.wakeReasonWifi',
+  mobile: 'dashboard.wakeReasonMobile', charging: 'dashboard.wakeReasonCharging',
+  button: 'dashboard.wakeReasonButton'
+};
+
+// "Remediarlo en la medida de lo posible": only ever suggests a
+// mechanism the module ALREADY has (kill_wifi / handle_gms on the
+// Night event) - never a blind automatic action, and never for
+// categories with nothing to actually do about them (an alarm or the
+// physical power button aren't something PowerSentinel can act on).
+// Needs at least 2 matching wakes before suggesting anything, so one
+// coincidental match doesn't trigger a recommendation.
+function renderWakeRemediationHint(entries) {
+  const hintEl = document.getElementById('e-nightwake-hint');
+  if (!entries || !entries.length) { hintEl.style.display = 'none'; hintEl.innerHTML = ''; return; }
+  const counts = {};
+  entries.forEach((e) => {
+    const key = categorizeWakeReason(e.reason);
+    if (key) counts[key] = (counts[key] || 0) + 1;
+  });
+  let hintKey = null;
+  if ((counts.wifi || 0) >= 2) hintKey = 'dashboard.wakeHintWifi';
+  else if ((counts.mobile || 0) >= 2) hintKey = 'dashboard.wakeHintMobile';
+  if (!hintKey) { hintEl.style.display = 'none'; hintEl.innerHTML = ''; return; }
+  hintEl.style.display = 'block';
+  hintEl.innerHTML = `${escapeHtml(t(hintKey))} ` +
+    `<button class="link-btn nightwake-hint-link" id="e-nightwake-hint-link" type="button">${escapeHtml(t('dashboard.wakeHintAction'))}</button>`;
+  document.getElementById('e-nightwake-hint-link').addEventListener('click', () => {
+    document.dispatchEvent(new CustomEvent('powersentinel:navigate', { detail: { view: 'conf' } }));
+  });
+}
+
 function renderNightWake(nw) {
   const card = document.getElementById('e-nightwake-card');
   if (!nw || typeof nw.count !== 'number') { card.style.display = 'none'; return; }
@@ -421,9 +475,15 @@ function renderNightWake(nw) {
 
   const toggle = document.getElementById('e-nightwake-toggle');
   const timesEl = document.getElementById('e-nightwake-times');
-  if (nw.times && nw.times.length) {
+  const entries = nw.entries || (nw.times || []).map((time) => ({ time, reason: '' }));
+  if (entries.length) {
     toggle.style.display = 'flex';
-    timesEl.textContent = nw.times.join('  ·  ');
+    timesEl.innerHTML = entries.map((e) => {
+      const key = categorizeWakeReason(e.reason);
+      const label = key ? t(WAKE_REASON_LABEL_KEYS[key]) : (e.reason || t('dashboard.wakeReasonUnknown'));
+      return `<div class="nightwake-entry"><span class="nightwake-entry-time">${escapeHtml(e.time)}</span><span class="nightwake-entry-reason">${escapeHtml(label)}</span></div>`;
+    }).join('');
+    renderWakeRemediationHint(entries);
     if (!toggle.dataset.bound) {
       toggle.dataset.bound = '1';
       toggle.addEventListener('click', () => {
@@ -435,6 +495,7 @@ function renderNightWake(nw) {
   } else {
     toggle.style.display = 'none';
     timesEl.style.display = 'none';
+    document.getElementById('e-nightwake-hint').style.display = 'none';
   }
 }
 

@@ -28,6 +28,27 @@
 : "${screenwake_file:=/data/local/tmp/PowerSentinel/PowerSentinel.screenwake}"
 declare -g _screenwake_prev_screen=""
 
+# Best-effort hardware wake reason (feature request: "qué procesos
+# despiertan la pantalla"). What Android/the kernel actually expose to
+# root is a HARDWARE-level wake source ("qpnp_rtc_alarm", "Power Key",
+# a WiFi/modem chip IRQ...), never an app/process name - there is no
+# reliable, general API for "app X turned the screen on", with or
+# without root. This reads whichever of the two known kernel paths for
+# that exists on THIS device (they vary by vendor/kernel version - see
+# comment below), and is deliberately tolerant of neither existing at
+# all: callers get an empty string, and the WebUI already treats that
+# as "reason unknown" for that specific wake rather than guessing.
+_screenwake_hw_wake_reason() {
+  local f
+  for f in /sys/kernel/wakeup_reasons/last_resume_reason /sys/power/wakeup_reason; do
+    if [ -r "$f" ]; then
+      local reason
+      reason="$(head -c 200 "$f" 2>/dev/null | tr -d '\n\r' | sed 's/[[:space:]]\+$//')"
+      [ -n "$reason" ] && { printf '%s' "$reason"; return; }
+    fi
+  done
+}
+
 # Called once per main loop cycle. Records a wake ONLY on a genuine
 # false->true transition (edge-triggered) - never on every cycle the
 # screen happens to be on, which would count one wake as dozens of
@@ -36,7 +57,7 @@ screenwake_check() {
   local now_on
   now_on="$(is_device screen)"
   if [ "$_screenwake_prev_screen" = "false" ] && [ "$now_on" = "true" ]; then
-    _screenwake_record_wake "$(date +%s)" "$(date +%H:%M)"
+    _screenwake_record_wake "$(date +%s)" "$(date +%H:%M)" "$(_screenwake_hw_wake_reason)"
   fi
   _screenwake_prev_screen="$now_on"
 }
@@ -49,8 +70,12 @@ screenwake_check() {
 # on anywhere else (grep confirms: every existing `date` call in this
 # codebase reads the CURRENT time via `date +FORMAT`, never converts
 # an arbitrary past epoch - this keeps that same, tested-safe pattern).
+# $3 (reason) is the RAW hardware string as-is, or empty - categorizing
+# it into something human-readable ("Actividad de WiFi", etc.) happens
+# entirely in the WebUI (estado.js), not here: the daemon's job is
+# reporting the fact, not interpreting it.
 _screenwake_record_wake() {
-  local ts="$1" hhmm="$2" dir tmp
+  local ts="$1" hhmm="$2" reason="${3:-}" dir tmp
   dir="$(dirname "$screenwake_file")"
   mkdir -p "$dir" 2>/dev/null
   [ -s "$screenwake_file" ] || echo '{"wakes":[]}' > "$screenwake_file"
@@ -58,8 +83,8 @@ _screenwake_record_wake() {
   # Prune anything older than 30 days on every write, so the file
   # never grows without bound - same "keep it small forever" approach
   # already used by the energy log and journal.
-  if "$JQ" --argjson ts "$ts" --arg hhmm "$hhmm" --argjson cutoff "$(( ts - 30*86400 ))" \
-      '.wakes = ((.wakes // []) + [{ts:$ts, time:$hhmm}] | map(select(.ts >= $cutoff)))' \
+  if "$JQ" --argjson ts "$ts" --arg hhmm "$hhmm" --arg reason "$reason" --argjson cutoff "$(( ts - 30*86400 ))" \
+      '.wakes = ((.wakes // []) + [{ts:$ts, time:$hhmm, reason:$reason}] | map(select(.ts >= $cutoff)))' \
       "$screenwake_file" > "$tmp" 2>/dev/null \
       && [ -s "$tmp" ] && "$JQ" -e . "$tmp" >/dev/null 2>&1; then
     chmod 600 "$tmp" 2>/dev/null
@@ -138,6 +163,7 @@ screenwake_summary() {
       start: $start,
       end: $end,
       times: ($cur | sort_by(.ts) | map(.time)),
+      entries: ($cur | sort_by(.ts) | map({time: .time, reason: (.reason // "")})),
       avg: (if $n > 0 then ((($counts | add) / $n) + 0.5 | floor) else null end)
     }
   ' "$screenwake_file" 2>/dev/null

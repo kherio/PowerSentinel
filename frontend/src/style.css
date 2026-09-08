@@ -907,11 +907,36 @@ main {
 .nightwake-detail-toggle.expanded .aggression-detail-caret { transform: rotate(90deg); }
 .nightwake-times {
   margin-top: 8px;
+}
+/* One row per wake: time (mono, fixed-width) + a best-effort reason
+   label - never a bare list of times anymore (see renderNightWake's
+   entries/categorizeWakeReason). */
+.nightwake-entry {
+  display: flex;
+  gap: 10px;
   font-size: 13px;
+  padding: 3px 0;
+}
+.nightwake-entry-time {
   font-family: var(--mono);
   color: var(--text);
-  line-height: 1.6;
-  word-spacing: 2px;
+  min-width: 44px;
+}
+.nightwake-entry-reason { color: var(--muted); }
+/* Remediation hint: only ever suggests an EXISTING mechanism
+   (kill_wifi/handle_gms on the Night event), never a blind automatic
+   fix - see renderWakeRemediationHint(). */
+.nightwake-hint {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.nightwake-hint-link {
+  font-weight: 700;
+  color: var(--accent);
 }
 
 /* --- "Hoy" card --- */
