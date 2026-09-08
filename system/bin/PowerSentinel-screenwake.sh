@@ -103,13 +103,36 @@ _screenwake_wake_cause() {
   _screenwake_wakelock_hint
 }
 
-# Called once per main loop cycle. Records a wake ONLY on a genuine
-# false->true transition (edge-triggered) - never on every cycle the
-# screen happens to be on, which would count one wake as dozens of
-# "wakes" over however long the screen stays lit.
+# Called every SCREEN_POLL_INTERVAL_S (see _screen_poll_cycle() in
+# PowerSentineld). Records a wake ONLY on a genuine false->true
+# transition (edge-triggered) - never on every cycle the screen
+# happens to be on, which would count one wake as dozens of "wakes"
+# over however long the screen stays lit.
+#
+# BUG FIX (found while re-auditing after the polling-cadence change):
+# takes an optional pre-fetched screen-state reading ($1) so
+# _screen_poll_cycle() can share ONE is_device call with
+# todaystats_check() instead of each function making its own - this
+# duplication already existed before the cadence fix (both were
+# already called once per main-loop cycle), but tightening the cadence
+# to run every 2s instead of every $delay makes the wasted second
+# dumpsys call meaningfully more frequent in absolute terms. Falls
+# back to calling is_device itself when invoked without an argument,
+# so nothing breaks for any other caller.
 screenwake_check() {
-  local now_on
-  now_on="$(is_device screen)"
+  local now_on="${1:-}"
+  [ -n "$now_on" ] || now_on="$(is_device screen)"
+  # BUG FIX: skip entirely on an "unknown" reading (is_device's own
+  # fix - PowerSentinel-detect.sh) rather than persisting it into
+  # _screenwake_prev_screen - same reasoning as the classic screen_off
+  # detector's fix (PowerSentineld): persisting "unknown" would make
+  # the FOLLOWING cycle's comparison ("was it false last time?") fail
+  # even once the reading recovers, silently missing whatever
+  # false->true transition happened to land right after a transient
+  # dumpsys hiccup. Less severe here than the classic bug was (this
+  # self-heals within one more cycle either way, never gets
+  # permanently stuck), but the same fix is just as cheap.
+  is_valid_bool_reading "$now_on" || return
   if [ "$_screenwake_prev_screen" = "false" ] && [ "$now_on" = "true" ]; then
     _screenwake_record_wake "$(date +%s)" "$(date +%H:%M)" "$(_screenwake_wake_cause)"
   fi

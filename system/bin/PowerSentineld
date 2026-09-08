@@ -553,10 +553,18 @@ fi
 # a minor timing drift nothing else in this loop depends on.
 SCREEN_POLL_INTERVAL_S=2
 _screen_poll_cycle() {
-  local elapsed=0
+  local elapsed=0 shared_screen_on
   while true; do
-    screenwake_check
-    todaystats_check
+    # BUG FIX (found while re-auditing this fix): screenwake_check()
+    # and todaystats_check() each used to call is_device screen
+    # independently - a pre-existing duplication (both were already
+    # called once per cycle before this round), but tightening the
+    # cadence to 2s made the wasted second dumpsys call meaningfully
+    # more frequent in absolute terms. One shared read per iteration
+    # now, passed to both.
+    shared_screen_on="$(is_device screen)"
+    screenwake_check "$shared_screen_on"
+    todaystats_check "$shared_screen_on"
     [ "$elapsed" -ge "$delay" ] && return
     sleep "$SCREEN_POLL_INTERVAL_S"
     elapsed=$((elapsed + SCREEN_POLL_INTERVAL_S))

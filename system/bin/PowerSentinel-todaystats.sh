@@ -65,12 +65,28 @@ _todaystats_save() {
   fi
 }
 
-# Called once per main loop cycle.
+# Called every SCREEN_POLL_INTERVAL_S (see _screen_poll_cycle() in
+# PowerSentineld).
 todaystats_check() {
   local now_epoch now_hour now_on now_charging state elapsed
   now_epoch="$(date +%s)"
   now_hour="$(date +%H)"
-  now_on="$(is_device screen)"
+  now_on="${1:-}"
+  [ -n "$now_on" ] || now_on="$(is_device screen)"
+  # BUG FIX (found while re-auditing after the polling-cadence change,
+  # same reasoning as screenwake_check()'s matching fix): skip this
+  # whole check on an "unknown" reading (is_device's own fix) rather
+  # than persisting it into _todaystats_prev_screen - accepting it
+  # would silently stop crediting screen-on time for exactly one
+  # interval once the reading recovers (the accumulation below is
+  # gated on what the PREVIOUS cycle's screen state was, not this
+  # one), and would do so almost invisibly, no error, no wrong-looking
+  # data, just a slightly-lower "tiempo de pantalla hoy" than reality.
+  # Charging-transition detection is skipped alongside it for
+  # simplicity, even though it's an independent signal - both self-
+  # heal on the very next successful reading either way, exactly like
+  # screenwake_check().
+  is_valid_bool_reading "$now_on" || return
   now_charging="$DETECT_BATTERY_CHARGING"
 
   state="$(_todaystats_load)"
