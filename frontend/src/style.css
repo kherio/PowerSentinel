@@ -1145,10 +1145,18 @@ main {
   gap: 6px;
   text-align: center;
   overflow: hidden;
-  opacity: 0;
-  transform: translateY(4px);
-  animation: tile-in 0.35s ease forwards;
 }
+/* BUG FIX (found while tracking down a "flickers every 3 seconds"
+   report - see the matching fix on .active-now-card above): this used
+   to start at opacity:0/translateY(4px) and rely on `animation: tile-in
+   ... forwards` to reach its resting state - fine for a one-time
+   entrance, but coreGrid.innerHTML is fully rebuilt every ~3s poll
+   cycle (render() in estado.js), so every tile replayed its own
+   entrance animation on every single refresh, all evening, for anyone
+   with "Detalles técnicos" expanded. Removed the animation and made
+   the resting state (opaque, untranslated) the only state, exactly
+   like today-card/nightwake-card's fix - correct for a section that's
+   genuinely rebuilt this often. */
 @keyframes tile-in {
   to { opacity: 1; transform: translateY(0); }
 }
@@ -1207,7 +1215,6 @@ main {
 
 .core-tile.core-off {
   opacity: 0.7;
-  animation: tile-in 0.35s ease forwards;
 }
 .core-tile.core-off .ct-icon { background: rgba(139, 147, 159, 0.12); color: var(--muted); }
 .core-tile.core-off .ct-state { color: var(--muted); }
@@ -1328,13 +1335,24 @@ main {
 /* --- gentle fade-in for the whole status content once loaded ---
    Updated to the card classes actually in use after the dashboard
    redesign (hero-card no longer exists as a class name - dashboard-
-   card replaced it) - also extended to the newer cards (today/
-   nightwake/active-now) so the whole Inicio tab settles in together
-   rather than only the technical core-tiles/grid section animating. */
+   card replaced it) - also extended to today-card/nightwake-card,
+   whose own DOM nodes are updated in place every poll (only their
+   child elements' text/style change) so animating them doesn't risk
+   re-triggering on a routine refresh.
+   BUG FIX: .active-now-card was ALSO added here in the same round,
+   but that one is wrong to include - renderActiveNow() fully rebuilds
+   it via innerHTML on every 3s poll (loadStatus's pollTimer), whether
+   or not anything actually changed. A CSS `animation` re-runs from
+   scratch whenever the element it's attached to is a freshly-inserted
+   DOM node - so as long as this selector matched .active-now-card,
+   any active event's card visibly faded in again every single poll
+   cycle, looking like a flicker every ~3 seconds. Removed rather than
+   fixing renderActiveNow() to diff instead of replace - that's a
+   real improvement worth doing on its own, not as a side effect of a
+   CSS animation bug fix. */
 .scroll-area.loaded .dashboard-card,
 .scroll-area.loaded .today-card,
 .scroll-area.loaded .nightwake-card,
-.scroll-area.loaded .active-now-card,
 .scroll-area.loaded .core-tiles,
 .scroll-area.loaded .grid {
   animation: fade-up 0.4s ease;
