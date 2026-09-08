@@ -824,7 +824,7 @@ main {
 .nightwake-card { padding: 16px; }
 .nightwake-header {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   margin-bottom: 6px;
 }
@@ -843,27 +843,31 @@ main {
 .nightwake-window-editable {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   background: var(--surface-2);
-  padding: 2px 6px;
+  padding: 5px 11px;
   border-radius: 999px;
 }
 .nightwake-window-sep {
-  font-size: 11px;
+  font-size: 14px;
   color: var(--muted);
 }
 /* Native <input type="time"> styling is limited (the picker UI itself
    is the OS/WebView's, out of reach), but color/size/background/
    border are all fair game - enough to make it sit inside the pill
-   looking like plain text until tapped. */
+   looking like plain text until tapped.
+   BUG FIX: this used to be 11px/46px wide - barely legible and a poor
+   tap target, reported as "casi no se ve" ("barely visible"). Sized up
+   to match the rest of the card's small-label text instead of being
+   noticeably smaller than everything around it. */
 .nightwake-time-input {
-  font-size: 11px;
+  font-size: 16px;
   font-family: var(--mono);
   color: var(--muted);
   background: none;
   border: none;
-  padding: 0;
-  width: 46px;
+  padding: 2px 0;
+  width: 66px;
   cursor: pointer;
 }
 .nightwake-time-input:focus { color: var(--text); outline: none; }
