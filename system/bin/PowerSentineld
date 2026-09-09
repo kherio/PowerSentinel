@@ -743,6 +743,27 @@ while true; do
     fi
 
     # check night profile (time-of-day, independent of any device state)
+    #
+    # BUG FIX (reported: "night didn't activate at 23:00 as configured"):
+    # get_night_times() - which sets $night_start/$night_end from
+    # config - used to only ever be called ONCE, at daemon boot/reload
+    # (see the init block above). is_night_now() itself was already
+    # called fresh every cycle here, but it was reading whatever
+    # night_start/night_end happened to be snapshotted at the LAST
+    # boot/reload, never refreshed again for the rest of the daemon's
+    # run. In practice this mostly self-healed because saving config
+    # from the WebUI already triggers a full reload (`exec "$0"`,
+    # which re-runs the entire boot sequence) - but that's an
+    # assumption this code was silently relying on rather than
+    # guaranteeing itself, and directly contradicts this project's own
+    # documented reasoning for config_get_event_raw() (PowerSentinel-
+    # config.sh): "comparatively rare (once per event evaluation)" -
+    # i.e. once per cycle, not once ever. thermal has the exact same
+    # pattern just below, fixed the same way. The refresh itself is
+    # cheap (a couple of direct jq reads, not the daemon's hot path),
+    # so there's no real cost to doing it every cycle instead of
+    # trusting a boot-time snapshot to stay correct forever.
+    get_night_times
     night_now="$(is_night_now)"
     if [ "$was_night" != "" ]; then
       if [ "$night_now" != "$was_night" ]; then
@@ -757,6 +778,7 @@ while true; do
     was_night="$night_now"
 
     # check thermal profile (temperature-based, independent of any device state)
+    get_thermal_threshold
     thermal_now="$(is_thermal_now)"
     if [ "$thermal_now" != "$was_thermal" ]; then
       log_msg 2 "Thermal profile boundary crossed"
