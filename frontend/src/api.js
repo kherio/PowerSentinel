@@ -9,7 +9,7 @@ export {
   listProfiles, readProfile, saveProfile, deleteProfile, exportProfile,
   readModuleInfo, listRunningPackages,
   enterSafeMode, exitSafeMode, restartDaemon,
-  readFlaggedApps, dismissFlaggedApp, setAppPolicy, readCpuRanking, readSuggestedNightWindow,
+  readFlaggedApps, dismissFlaggedApp, setAppPolicy, readCpuRanking, readSuggestedNightWindow, readDiagnostics,
   readAppPolicies, readUsageBuckets
 } from './backend-ksu.js';
 

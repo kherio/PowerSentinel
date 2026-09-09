@@ -255,6 +255,33 @@ main {
   font-weight: 600;
   margin-bottom: 4px;
 }
+/* Diagnostics panel rows - plain pass/warn/fail icon + message, one
+   per check, colored just enough to scan quickly without turning the
+   whole panel into a wall of red/green. */
+.diagnose-list { margin-top: 10px; display: flex; flex-direction: column; gap: 2px; }
+.diagnose-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.diagnose-row:last-child { border-bottom: none; }
+.diagnose-icon { flex: none; font-size: 14px; line-height: 1.5; }
+.diagnose-message { color: var(--text); line-height: 1.5; }
+.diagnose-row.diagnose-fail .diagnose-message { color: var(--danger); }
+.diagnose-row.diagnose-warn .diagnose-message { color: var(--warn); }
+
+.update-available-badge {
+  margin-top: 10px;
+  padding: 8px 12px;
+  background: var(--accent-dim);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  font-size: 12.5px;
+}
+.update-available-badge a { color: var(--accent); font-weight: 700; text-decoration: none; }
 /* "Más" bottom sheet - same overlay dimming as the mode-choice modal,
    but anchored to the bottom edge and sliding up, since this is a
    quick menu rather than a dialog to read and decide on. */

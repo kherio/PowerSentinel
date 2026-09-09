@@ -183,6 +183,14 @@ export async function readCpuRanking() {
   return run(`PowerSentinel-cpurank 2 2>/dev/null || echo '[]'`);
 }
 
+// Diagnostic panel (feature request): every check the standalone
+// script runs exists because of a real bug this project actually hit
+// and fixed - see the script's own header. One-shot/on-demand, same
+// reasoning as readSuggestedNightWindow() just above.
+export async function readDiagnostics() {
+  return run(`PowerSentinel-diagnose 2>/dev/null || echo '[]'`);
+}
+
 // Feature request: suggest a night-window start/end from the person's
 // OWN real screen-wake history. One-shot/on-demand (see the script's
 // own header for why this isn't computed inside the always-running

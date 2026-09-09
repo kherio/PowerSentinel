@@ -4,8 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PowerSentinel</title>
-  <script type="module" crossorigin src="./assets/index-BuEgiqQj.js"></script>
-  <link rel="stylesheet" crossorigin href="./assets/index-B7poKxvy.css">
+  <script type="module" crossorigin src="./assets/index-CkkJGcm4.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-ClOJXm7h.css">
 </head>
 <body class="app-shell">
   <header class="app-header">
@@ -482,6 +482,9 @@
           <div class="about-logo"></div>
           <div style="font-size:18px;font-weight:700;margin-top:12px;">PowerSentinel</div>
           <div id="a-version" style="font-size:13px;color:var(--muted);margin-top:4px;" data-i18n="acerca.loadingVersion">Cargando versión…</div>
+          <div id="a-update-available" class="update-available-badge" style="display:none;">
+            <a id="a-update-link" href="#" target="_blank" rel="noopener"></a>
+          </div>
         </div>
         <div class="card" style="margin-bottom:14px;">
           <div class="section-title" style="margin-top:0;" data-i18n="acerca.language">Idioma</div>
@@ -549,6 +552,10 @@
        reducida"). -->
   <div id="more-sheet-overlay" class="modal-overlay overlay-bottom" style="display:none;">
     <div class="more-sheet-card">
+      <button class="more-sheet-item" id="more-item-diagnose">
+        <span class="bn-icon" id="more-icon-diagnose"></span>
+        <span data-i18n="nav.diagnose">Diagnóstico</span>
+      </button>
       <button class="more-sheet-item" id="more-item-perfiles" data-view="perfiles">
         <span class="bn-icon" id="more-icon-perfiles"></span>
         <span data-i18n="nav.perfiles">Perfiles</span>
@@ -571,6 +578,33 @@
        primera vez que se visita Config (sin preferencia guardada
        todavía), y también bajo demanda con el icono de ayuda junto al
        interruptor "Modo avanzado". -->
+  <div id="diagnose-modal-overlay" class="modal-overlay" style="display:none;">
+    <div class="modal-card">
+      <div class="modal-title" data-i18n="diagnose.title">Diagnóstico</div>
+      <p class="hint" data-i18n="diagnose.intro">Comprueba en el momento si las partes del módulo que más suelen fallar en silencio están funcionando correctamente en tu dispositivo.</p>
+      <div id="diagnose-status" class="hint"></div>
+      <div id="diagnose-list" class="diagnose-list"></div>
+      <div class="add-event-row" style="margin-top:10px;">
+        <button class="btn ghost" id="diagnose-rerun" data-i18n="diagnose.rerun">Volver a comprobar</button>
+        <button class="btn primary" id="diagnose-close" data-i18n="common.close">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="wizard-schedule-modal-overlay" class="modal-overlay" style="display:none;">
+    <div class="modal-card">
+      <div class="modal-title" data-i18n="wizard.scheduleTitle">¿A qué hora sueles dormir?</div>
+      <p class="hint" data-i18n="wizard.scheduleIntro">PowerSentinel puede ahorrar más batería durante tus horas de sueño. Si no lo sabes todavía, no pasa nada - puedes ajustarlo más tarde, o dejar que el propio módulo te lo sugiera con el tiempo a partir de tu uso real.</p>
+      <div class="add-event-row" style="align-items:center;">
+        <input type="time" class="filter" id="wizard-night-start" value="23:00">
+        <span>–</span>
+        <input type="time" class="filter" id="wizard-night-end" value="07:00">
+      </div>
+      <button class="btn primary" id="wizard-schedule-save" style="width:100%;margin-top:14px;" data-i18n="wizard.scheduleSave">Guardar y empezar</button>
+      <button class="btn ghost" id="wizard-schedule-skip" style="width:100%;margin-top:8px;" data-i18n="wizard.scheduleSkip">Usar 23:00 - 07:00 por ahora</button>
+    </div>
+  </div>
+
   <div id="mode-modal-overlay" class="modal-overlay" style="display:none;">
     <div class="modal-card">
       <div class="modal-title" data-i18n="modeModal.title">¿Qué modo prefieres?</div>

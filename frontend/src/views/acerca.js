@@ -23,10 +23,58 @@ async function loadVersion() {
     const version = parseProp(text, 'version').replace(/-kherio$/i, '');
     const versionCode = parseProp(text, 'versionCode');
     el.textContent = version ? `${version} (code ${versionCode || '?'})` : t('acerca.versionUnavailable');
+    checkForUpdate(version);
     return { version, versionCode };
   } catch (e) {
     el.textContent = t('acerca.versionReadError');
     return null;
+  }
+}
+
+// Compares two "vX.Y.Z" strings numerically component-by-component -
+// deliberately NOT a plain string/alphabetical comparison, which would
+// wrongly call "v3.9.0" newer than "v3.10.0" (the "9" sorts after "1"
+// character-by-character). Returns true if $b is strictly newer than
+// $a. Malformed input (missing/non-numeric parts) is treated as 0 for
+// that component rather than throwing, so a version string this
+// doesn't fully understand just doesn't look newer - never a reason
+// to show a wrong or crashing "update available" banner.
+function isNewerVersion(a, b) {
+  const partsOf = (s) => (s || '').replace(/^v/i, '').split('.').map((n) => parseInt(n, 10) || 0);
+  const pa = partsOf(a), pb = partsOf(b);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const na = pa[i] || 0, nb = pb[i] || 0;
+    if (nb > na) return true;
+    if (nb < na) return false;
+  }
+  return false;
+}
+
+// Feature request: check GitHub for a newer release. Best-effort and
+// entirely silent on failure (no network, GitHub unreachable, rate
+// limited, this repo renamed/moved) - an update check is a courtesy,
+// never something that should show an error state or block anything
+// else on this screen. Uses the WebView's own fetch() directly rather
+// than a native/shell bridge (curl/wget aren't guaranteed to exist in
+// every device's root shell, and GitHub's public releases API already
+// sends permissive CORS headers) - one check per visit to this tab,
+// not on a timer, so this never becomes a recurring background cost.
+async function checkForUpdate(installedVersion) {
+  if (!installedVersion) return;
+  const badge = document.getElementById('a-update-available');
+  try {
+    const res = await fetch('https://api.github.com/repos/kherio/PowerSentinel/releases/latest');
+    if (!res.ok) return;
+    const data = await res.json();
+    const latest = data.tag_name;
+    if (latest && isNewerVersion(installedVersion, latest) && data.html_url) {
+      const link = document.getElementById('a-update-link');
+      link.href = data.html_url;
+      link.textContent = t('acerca.updateAvailable', { version: latest });
+      badge.style.display = 'block';
+    }
+  } catch (e) {
+    // Silent - see the function-level comment above.
   }
 }
 

@@ -72,6 +72,49 @@ function chooseMode(advanced) {
   } catch (e) {}
   closeModeModal();
   applyMode();
+  maybeOpenScheduleWizardStep();
+}
+
+// Setup wizard, step 2 (feature request): only ever runs for a
+// genuinely fresh install (model.blocks.length === 0, i.e. the config
+// has no event blocks at all yet) - deliberately NEVER for a returning
+// person whose localStorage happened to get cleared (a cache wipe, a
+// new KernelSU manager install, switching WebView) while their actual
+// PowerSentinel.json already has real, customized events in it. That
+// distinction matters: showing this modal again is harmless (just an
+// extra tap), but this step ends by WRITING a config - if it ever ran
+// for someone with existing customization, "Guardar y empezar" or
+// even "usar el valor por defecto" would silently replace their whole
+// setup with buildRecommendedModel()'s baseline. Checked here, right
+// before showing the step, rather than trusting the mode-choice modal
+// already having made that call - two independent triggers into the
+// same modal-choice localStorage state shouldn't have to agree on
+// this by construction.
+async function maybeOpenScheduleWizardStep() {
+  let currentModel;
+  try {
+    currentModel = parseConfig(await readConfig());
+  } catch (e) {
+    return; // unreadable/corrupt config - never guess, never touch it here
+  }
+  if (currentModel.blocks && currentModel.blocks.length > 0) return;
+  document.getElementById('wizard-schedule-modal-overlay').style.display = 'flex';
+}
+
+async function finishScheduleWizardStep(nightStart, nightEnd) {
+  document.getElementById('wizard-schedule-modal-overlay').style.display = 'none';
+  const recommended = buildRecommendedModel();
+  const nightBlock = recommended.blocks.find((b) => b.name === 'night');
+  if (nightBlock && nightStart && nightEnd) {
+    nightBlock.fields.night_start = nightStart;
+    nightBlock.fields.night_end = nightEnd;
+  }
+  try {
+    await writeConfig(serializeConfig(recommended));
+    toast(t('wizard.applied'), 'success');
+  } catch (e) {
+    toast(t('wizard.applyError', { msg: e.message }), 'error');
+  }
 }
 
 function openModeModal() {
@@ -1034,6 +1077,13 @@ export function initConfig() {
     try { localStorage.setItem(MODE_CHOSEN_KEY, 'true'); } catch (err) {}
     closeModeModal();
   });
+  document.getElementById('wizard-schedule-save').addEventListener('click', () => {
+    finishScheduleWizardStep(
+      document.getElementById('wizard-night-start').value || '23:00',
+      document.getElementById('wizard-night-end').value || '07:00'
+    );
+  });
+  document.getElementById('wizard-schedule-skip').addEventListener('click', () => finishScheduleWizardStep());
 
   applyMode();
   if (!hasChosenMode()) openModeModal();

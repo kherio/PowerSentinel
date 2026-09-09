@@ -7,6 +7,7 @@ import { initConfig, activateConfig, deactivateConfig, confirmLeaveConfig, initA
 import { initLog, activateLog, deactivateLog, refreshLog, refreshJournal } from './views/log.js';
 import { initPerfiles, activatePerfiles, deactivatePerfiles } from './views/perfiles.js';
 import { initAcerca, activateAcerca, deactivateAcerca } from './views/acerca.js';
+import { initDiagnose, openDiagnosticsModal } from './views/diagnose.js';
 
 // Orden de navegación: Inicio / Análisis / Automatización / Apps -
 // las 4 acciones principales, siempre visibles en la barra inferior -
@@ -89,6 +90,7 @@ function initMoreSheet() {
   const close = () => { overlay.style.display = 'none'; };
 
   document.getElementById('bn-icon-more').innerHTML = ICONS.more;
+  document.getElementById('more-icon-diagnose').innerHTML = ICONS.gauge;
   document.getElementById('more-icon-perfiles').innerHTML = NAV_ICONS.perfiles;
   document.getElementById('more-icon-acerca').innerHTML = NAV_ICONS.acerca;
   document.getElementById('more-icon-details').innerHTML = ICONS.settings;
@@ -97,7 +99,16 @@ function initMoreSheet() {
   document.getElementById('more-sheet-cancel').addEventListener('click', close);
   overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
 
-  overlay.querySelectorAll('.more-sheet-item').forEach((item) => {
+  // Diagnóstico deliberately doesn't navigate to a tab like the other
+  // items - it's a one-shot check-and-show-results panel, not a place
+  // someone lives/edits things, so a modal (openDiagnosticsModal(),
+  // estado.js) fits its "run it, read it, close it" nature better than
+  // a full swipeable view would.
+  document.getElementById('more-item-diagnose').addEventListener('click', () => {
+    close();
+    openDiagnosticsModal();
+  });
+  overlay.querySelectorAll('.more-sheet-item[data-view]').forEach((item) => {
     item.addEventListener('click', () => {
       close();
       const index = VIEWS.indexOf(item.dataset.view);
@@ -212,6 +223,7 @@ applyStaticI18n();
 initViewportFix();
 initTabButtons();
 initMoreSheet();
+initDiagnose();
 initProgrammaticNav();
 initSwipeNav();
 

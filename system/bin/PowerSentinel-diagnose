@@ -1,0 +1,123 @@
+#!/system/bin/bash
+# PowerSentinel-diagnose - one-shot, on-demand health check for the
+# WebUI's "Diagnóstico" panel (feature request).
+#
+# Every check here exists because of a REAL bug found and fixed during
+# development, not a hypothetical: is_device's screen/charging
+# validity (the exact class of bug behind the "night never activates"
+# report - PowerSentineld's is_valid_bool_reading), the daemon actually
+# running (silent death from an OEM battery manager is a known,
+# common real-world failure mode for background daemons), the control
+# file's ownership/permissions (the TOCTOU defense - PowerSentineld's
+# ensure_ctl_file), charge_limit_node's scope (restricted to
+# /sys/class/power_supply/* after the security audit), and the config
+# file actually being valid JSON (a corrupt config silently breaks
+# everything downstream). The whole POINT of this panel is to surface
+# exactly the kind of "fails completely silently" problem this project
+# has repeatedly had to reverse-engineer from a vague symptom report -
+# so every check below reports a plain pass/fail/warn with a short,
+# concrete reason, never just a raw error dump.
+#
+# Standalone, on-demand script (same pattern as PowerSentinel-cpurank/
+# -usagerank/-suggestnight) - nothing here belongs on the daemon's own
+# hot loop, this only ever runs when the person opens the panel.
+
+JQ="$(dirname "$0")/jq"
+DATA_DIR="/data/local/tmp/PowerSentinel"
+pid_file="$DATA_DIR/PowerSentineld.pid"
+ctl_file="$DATA_DIR/powersentinel"
+status_file="$DATA_DIR/PowerSentinel.status"
+conf_file="$DATA_DIR/PowerSentinel.json"
+
+results=()
+add_result() {
+  # $1=id $2=status(pass|warn|fail) $3=message
+  results+=("$("$JQ" -cn --arg id "$1" --arg status "$2" --arg message "$3" '{id:$id,status:$status,message:$message}')")
+}
+
+# --- 1. Daemon actually running ---
+if [ -s "$pid_file" ] && kill -0 "$(cat "$pid_file" 2>/dev/null)" 2>/dev/null; then
+  add_result "daemon" "pass" "El demonio está corriendo (PID $(cat "$pid_file" 2>/dev/null))."
+else
+  add_result "daemon" "fail" "El demonio no parece estar corriendo. Prueba a reiniciar el módulo o el dispositivo."
+fi
+
+# --- 2. Status file being refreshed (daemon alive AND actually looping) ---
+if [ -s "$status_file" ]; then
+  ts="$(grep -m1 '^Timestamp:' "$status_file" 2>/dev/null | sed 's/^Timestamp:[[:space:]]*//')"
+  now="$(date +%s)"
+  if [ -n "$ts" ] && [ "$ts" -gt 0 ] 2>/dev/null && [ $(( now - ts )) -le 30 ]; then
+    add_result "status_fresh" "pass" "Los datos de estado se están actualizando con normalidad."
+  else
+    add_result "status_fresh" "warn" "Los datos de estado llevan más de 30s sin actualizarse - el demonio podría estar bloqueado o en pausa."
+  fi
+else
+  add_result "status_fresh" "fail" "No existe ningún fichero de estado todavía."
+fi
+
+# --- 3. Config file is valid JSON ---
+if [ -s "$conf_file" ] && "$JQ" -e . "$conf_file" >/dev/null 2>&1; then
+  add_result "config_valid" "pass" "La configuración es un JSON válido."
+else
+  add_result "config_valid" "fail" "La configuración no existe o no es un JSON válido - PowerSentinel usará valores por defecto."
+fi
+
+# --- 4. is_device screen returns a real true/false (the exact bug class
+#     behind "night never activates") ---
+screen_raw="$(dumpsys deviceidle get screen 2>/dev/null | tr -d '[:space:]')"
+case "$screen_raw" in
+  true|false) add_result "screen_detect" "pass" "La detección de pantalla encendida/apagada funciona (dumpsys deviceidle)." ;;
+  *) add_result "screen_detect" "fail" "dumpsys deviceidle no devuelve un valor reconocible para la pantalla - los perfiles automáticos basados en pantalla/hora podrían no activarse. PowerSentinel ya se protege de esto, pero indica un problema real en este dispositivo." ;;
+esac
+
+# --- 5. is_device charging ---
+charging_raw="$(dumpsys deviceidle get charging 2>/dev/null | tr -d '[:space:]')"
+case "$charging_raw" in
+  true|false) add_result "charging_detect" "pass" "La detección de carga funciona (dumpsys deviceidle)." ;;
+  *) add_result "charging_detect" "warn" "dumpsys deviceidle no devuelve un valor reconocible para la carga - el evento 'Carga' podría no activarse correctamente." ;;
+esac
+
+# --- 6. Control file ownership/permissions (TOCTOU defense already in
+#     place - this just reports its current state) ---
+if [ -e "$ctl_file" ]; then
+  owner_uid="$(stat -c '%u' "$ctl_file" 2>/dev/null)"
+  if [ "$owner_uid" = "0" ]; then
+    add_result "ctl_file" "pass" "El fichero de control pertenece a root, como se espera."
+  else
+    add_result "ctl_file" "warn" "El fichero de control no pertenece a root (uid=$owner_uid) - el demonio lo recreará en el próximo arranque."
+  fi
+else
+  add_result "ctl_file" "warn" "El fichero de control todavía no existe - se creará la próxima vez que arranque el demonio."
+fi
+
+# --- 7. charge_limit_node, only if configured (restricted to
+#     /sys/class/power_supply/* after the security audit) ---
+node="$("$JQ" -r '.global.charge_limit_node // empty' "$conf_file" 2>/dev/null)"
+if [ -n "$node" ]; then
+  case "$node" in
+    /sys/class/power_supply/*)
+      if [ -w "$node" ]; then
+        add_result "charge_limit_node" "pass" "La ruta del límite de carga es válida y se puede escribir."
+      else
+        add_result "charge_limit_node" "fail" "La ruta del límite de carga no se puede escribir - la función no hará nada."
+      fi
+      ;;
+    *) add_result "charge_limit_node" "fail" "La ruta configurada está fuera de /sys/class/power_supply/ y PowerSentinel la ignora por seguridad." ;;
+  esac
+fi
+
+# --- 8. jq itself (everything upstream depends on this working) ---
+if "$JQ" -e -n 'true' >/dev/null 2>&1; then
+  add_result "jq" "pass" "jq funciona correctamente."
+else
+  add_result "jq" "fail" "jq no funciona - esto rompería prácticamente toda la funcionalidad del módulo."
+fi
+
+printf '['
+first=1
+for r in "${results[@]}"; do
+  [ "$first" -eq 1 ] || printf ','
+  printf '%s' "$r"
+  first=0
+done
+printf ']\n'
