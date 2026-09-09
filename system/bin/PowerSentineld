@@ -12,6 +12,7 @@ conf="/data/local/tmp/PowerSentinel/PowerSentinel.conf"
 . "$(dirname "$0")/PowerSentinel-appwatch.sh"
 . "$(dirname "$0")/PowerSentinel-screenwake.sh"
 . "$(dirname "$0")/PowerSentinel-todaystats.sh"
+. "$(dirname "$0")/PowerSentinel-chargehealth.sh"
 . "$(dirname "$0")/PowerSentinel-state.sh"
 . "$(dirname "$0")/PowerSentinel-events.sh"
 declare -a active_events
@@ -132,6 +133,48 @@ check_charge_limit() {
     fi
   elif [ "$was_charge_paused" = "true" ] && { [ "$charging" != "true" ] || [ "$level" -le "$((charge_limit - 5))" ]; }; then
     echo 1 > "$charge_limit_node" 2>/dev/null && was_charge_paused="false" && log_msg 2 "Resuming charging (${level}%)"
+  fi
+}
+
+# Feature request: a one-tap "Máximo rendimiento durante 1h" - forces
+# manual mode (the existing event, unchanged) with a self-expiring
+# timer, so the person doesn't have to remember to switch it back off
+# themselves (e.g. after a call or a gaming session). The WebUI writes
+# an expiry epoch to $manual_expiry_file when it starts manual mode
+# this way; a plain manual start (no timer) never creates this file,
+# and this check is a no-op for it. Checked once per $delay cycle -
+# same cadence as check_charge_limit() above, no need for the tighter
+# screen-poll cadence since a minute or so of drift on when it expires
+# doesn't matter the way a missed screen wake would.
+: "${manual_expiry_file:=/data/local/tmp/PowerSentinel/PowerSentinel.manualexpiry}"
+check_manual_expiry() {
+  [ -s "$manual_expiry_file" ] || return
+  # BUG-AVOIDANCE (thought through before shipping, not found after the
+  # fact): if manual mode gets stopped by any OTHER means before the
+  # timer runs out (the normal stop button, a reload, a crash-recovery
+  # reconcile), this file would otherwise sit there and could later
+  # auto-stop a completely different, UNTIMED manual session that
+  # happens to start again before the old timestamp passes. Cleaned up
+  # immediately whenever manual isn't currently active, not only when
+  # its own timestamp is reached - so a stale file from an already-
+  # ended session can never reach forward and affect a later one.
+  local is_active="false" i
+  for i in "${!active_events[@]}"; do
+    [ "${active_events[$i]}" = "manual" ] && is_active="true" && break
+  done
+  if [ "$is_active" != "true" ]; then
+    rm -f "$manual_expiry_file"
+    return
+  fi
+  local expiry
+  expiry="$(cat "$manual_expiry_file" 2>/dev/null)"
+  case "$expiry" in
+    ''|*[!0-9]*) rm -f "$manual_expiry_file"; return ;;
+  esac
+  if [ "$(date +%s)" -ge "$expiry" ]; then
+    log_msg 2 "Temporary performance mode expired - stopping manual event"
+    handle_event manual 0
+    rm -f "$manual_expiry_file"
   fi
 }
 
@@ -416,6 +459,17 @@ update_status() {
   # "Hoy" card: screen time today + time since last charge - see
   # PowerSentinel-todaystats.sh.
   echo "TodayStats: $(todaystats_summary)" >> "$status_file"
+
+  # Temporary performance mode's own expiry (feature request), so the
+  # WebUI can show a real countdown instead of just "manual mode is
+  # on" - empty when there's no timed session running, exactly
+  # mirroring what check_manual_expiry() itself already checks.
+  [ -s "$manual_expiry_file" ] && echo "ManualExpiry: $(cat "$manual_expiry_file" 2>/dev/null)" >> "$status_file"
+
+  # Battery-health nudge (feature request): only worth reporting
+  # alongside whether charge_limit is already set - the WebUI never
+  # repeats a suggestion for something the person has already acted on.
+  echo "ChargeHealth: $("$JQ" -cn --argjson summary "$(chargehealth_summary)" --arg configured "$([ "$(getconf charge_limit 0)" -gt 0 ] 2>/dev/null && echo true || echo false)" '$summary + {charge_limit_configured: ($configured == "true")}')" >> "$status_file"
 
   # Atomic handoff: nothing reading $real_status_file ever sees a
   # partial write - it either gets the complete previous version or
@@ -806,6 +860,8 @@ while true; do
   fi
 
   check_charge_limit
+  check_manual_expiry
+  chargehealth_check
 
   # CRITICAL FIX: update_status() was only ever invoked from
   # enable_pwr_save()/disable_pwr_save() - i.e. exclusively when an

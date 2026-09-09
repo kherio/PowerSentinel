@@ -1,0 +1,29 @@
+#!/system/bin/bash
+# PowerSentinel-suggestnight - one-shot, on-demand: suggest a
+# night-window start/end from the person's own real screen-wake
+# history (PowerSentinel-screenwake.sh's own file), rather than them
+# having to guess it.
+#
+# Deliberately NOT computed inside the always-running daemon's
+# update_status() (every ~2-3s since the screen-poll cadence fix) -
+# unlike screenwake_summary() (a plain filter over already-bounded
+# data), this sorts/groups the WHOLE wake history and shells out to
+# jq per matching night, real work that has no business running on a
+# multi-second hot loop for a feature only looked at occasionally.
+# Standalone script, run only when the person actually asks for a
+# suggestion (see suggestNightWindow() in the WebUI's backend bridge)
+# - the exact same "one-shot, on-demand" pattern already used by
+# PowerSentinel-cpurank and PowerSentinel-usagerank for their own
+# occasionally-needed, non-trivial computations.
+
+JQ="$(dirname "$0")/jq"
+screenwake_file="/data/local/tmp/PowerSentinel/PowerSentinel.screenwake"
+
+# Reuses screenwake_suggest_night_window() as-is (PowerSentinel-
+# screenwake.sh) rather than a second copy of the same algorithm -
+# sourcing does pull in a few other functions/defaults from that file
+# too, all harmless no-ops here (nothing else in it runs anything on
+# its own just by being sourced).
+. "$(dirname "$0")/PowerSentinel-screenwake.sh"
+
+screenwake_suggest_night_window

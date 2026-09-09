@@ -1,5 +1,5 @@
 import { ICONS } from '../icons.js';
-import { listProfiles, readProfile, saveProfile, deleteProfile, readConfig, writeConfig } from '../api.js';
+import { listProfiles, readProfile, saveProfile, deleteProfile, exportProfile, readConfig, writeConfig } from '../api.js';
 import { toast } from '../helpers.js';
 import { t } from '../i18n.js';
 
@@ -39,6 +39,25 @@ async function renderList() {
         }
       });
       row.appendChild(loadBtn);
+
+      // Export: reuses the exact same /sdcard/Download/ pattern
+      // exportLog() already relies on in this WebView - the point is
+      // a real file the person can actually share (send it, upload
+      // it, hand it to a friend with the same phone model), not just
+      // switching between local profiles on this one device.
+      const exportBtn = document.createElement('button');
+      exportBtn.className = 'btn ghost';
+      exportBtn.innerHTML = ICONS.download;
+      exportBtn.title = t('perfiles.exportTitle');
+      exportBtn.addEventListener('click', async () => {
+        try {
+          const dest = await exportProfile(name);
+          toast(t('perfiles.exported', { path: dest }), 'success');
+        } catch (e) {
+          toast(t('perfiles.exportError', { msg: e.message }), 'error');
+        }
+      });
+      row.appendChild(exportBtn);
 
       const delBtn = document.createElement('button');
       delBtn.className = 'btn ghost';
@@ -81,6 +100,34 @@ export function initPerfiles() {
       renderList();
     } catch (e) {
       toast(t('perfiles.saveError', { msg: e.message }), 'error');
+    }
+  });
+
+  // Import: deliberately reads the picked file's content via the
+  // browser's own File/FileReader API rather than asking the shell to
+  // `cp` from a native picker's path - Android's picker commonly hands
+  // back an opaque content:// URI a root shell can't read directly.
+  // The already-existing saveProfile() takes it from here exactly like
+  // any other profile save.
+  const fileInput = document.getElementById('p-import-file');
+  document.getElementById('p-import-btn').addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', async () => {
+    const file = fileInput.files && fileInput.files[0];
+    if (!file) return;
+    const nameInput = document.getElementById('p-import-name-input');
+    const name = nameInput.value.trim().replace(/[^a-zA-Z0-9_-]/g, '') || file.name.replace(/\.json$/i, '').replace(/[^a-zA-Z0-9_-]/g, '');
+    if (!name) { toast(t('perfiles.invalidName'), 'error'); fileInput.value = ''; return; }
+    try {
+      const content = await file.text();
+      JSON.parse(content); // reject anything that isn't valid JSON before it ever reaches saveProfile
+      await saveProfile(name, content);
+      nameInput.value = '';
+      fileInput.value = '';
+      toast(t('perfiles.imported', { name }), 'success');
+      renderList();
+    } catch (e) {
+      fileInput.value = '';
+      toast(t('perfiles.importError', { msg: e.message }), 'error');
     }
   });
 }

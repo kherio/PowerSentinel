@@ -702,6 +702,44 @@ main {
   min-height: 1px;
 }
 .dashboard-why:empty { display: none; }
+/* Temporary performance mode (feature request): a compact row rather
+   than its own card, given how many top-level cards Inicio already
+   has - this lives inside the hero card since it's a quick action
+   directly tied to "what's happening right now", the same reasoning
+   already applied to the profile checklist and the pressure bar. */
+.perfmode-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding-top: 10px;
+  margin-top: 4px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+}
+.perfmode-label { color: var(--muted); margin-right: 2px; }
+.perfmode-btn {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: none;
+  color: var(--text);
+  cursor: pointer;
+}
+.perfmode-btn:active { background: var(--surface-2); }
+.perfmode-active {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 10px;
+  margin-top: 4px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--accent);
+}
+.perfmode-active #e-perfmode-cancel { color: var(--muted); padding: 0; }
 /* Profile checklist: all classic profile types at a glance, active in
    green with a check (same visual language as "Hardware detectado"'s
    hw-cap-yes/hw-cap-no - reused deliberately, not a new pattern), the
@@ -895,6 +933,7 @@ main {
 }
 .nightwake-compare .up { color: var(--warn); font-weight: 700; }
 .nightwake-compare .down { color: var(--accent); font-weight: 700; }
+.nightwake-suggest-btn { font-size: 12px; padding: 0 0 8px; }
 .nightwake-detail-toggle {
   width: 100%;
   display: flex;
@@ -1548,6 +1587,20 @@ main {
   margin: 4px 0 0;
 }
 
+/* Battery-health nudge (feature request): reuses the same
+   informational, accent-colored (not alarming) tone already
+   established for the flagged-apps alert - a suggestion worth
+   knowing about, not an error. */
+.chargehealth-hint {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.chargehealth-hint .link-btn { color: var(--accent); font-weight: 700; }
+
 .cpu-summary-row {
   padding: 10px 4px;
   font-size: 13px;
@@ -1587,6 +1640,21 @@ main {
   width: 100%;
   border-color: var(--warn);
   color: var(--warn);
+}
+/* Flagged-app alert reuses the same banner shape as the stale-data
+   warning (padding, radius, layout) but in a calmer, accent-colored
+   tone rather than the warning-yellow used for "something's actually
+   wrong" - a flagged app is an informational suggestion to look at,
+   not an error state. */
+.flagged-alert {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.flagged-alert #e-flagged-alert-btn {
+  width: 100%;
+  border-color: var(--accent);
+  color: var(--accent);
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 

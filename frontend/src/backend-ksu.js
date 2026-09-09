@@ -183,6 +183,15 @@ export async function readCpuRanking() {
   return run(`PowerSentinel-cpurank 2 2>/dev/null || echo '[]'`);
 }
 
+// Feature request: suggest a night-window start/end from the person's
+// OWN real screen-wake history. One-shot/on-demand (see the script's
+// own header for why this isn't computed inside the always-running
+// daemon) - only ever called when the person actually taps the
+// suggestion button, never automatically or on a timer.
+export async function readSuggestedNightWindow() {
+  return run(`PowerSentinel-suggestnight 2>/dev/null || echo '{}'`);
+}
+
 // Reads the entire per-app policy map at once (package -> level 0-3),
 // for a screen that lists every installed app rather than looking one
 // up at a time.
@@ -230,6 +239,22 @@ export async function stopEvent(name) {
   await run(`PowerSentinelctl stop ${name}`);
 }
 
+// Feature request: a one-tap "Máximo rendimiento durante 1h" that
+// reverts itself, instead of manual mode staying on until the person
+// remembers to turn it back off. The daemon's own check_manual_expiry()
+// (PowerSentineld) is what actually enforces this - this just starts
+// manual mode exactly like startEvent('manual') already does, then
+// writes the expiry epoch to a file the daemon already knows to look
+// for. A plain, untimed "start manual" (the existing button elsewhere)
+// never touches this file at all, and the daemon cleans it up itself
+// the moment manual mode ends by any other means - nothing here needs
+// to also call stopEvent up front "just in case".
+const MANUAL_EXPIRY_FILE = `${DATA_DIR}/PowerSentinel.manualexpiry`;
+export async function startManualTimed(durationSeconds) {
+  const expiry = Math.floor(Date.now() / 1000) + Math.max(1, Math.floor(durationSeconds));
+  await run(`PowerSentinelctl start manual; echo ${expiry} > '${MANUAL_EXPIRY_FILE}'; chmod 600 '${MANUAL_EXPIRY_FILE}' 2>/dev/null`);
+}
+
 // ---------- Saved profiles ----------
 
 const PROFILES_DIR = `${DATA_DIR}/profiles`;
@@ -261,6 +286,30 @@ export async function deleteProfile(name) {
   const clean = sanitizeProfileName(name);
   await run(`rm -f '${PROFILES_DIR}/${clean}.conf'`);
 }
+
+// Export as an actual file (feature request: "compartir tu
+// configuración... como fichero", not just switch between local
+// profiles on this one device). Same /sdcard/Download/ destination
+// pattern already used by exportLog() - proven to work in this
+// exact WebView/KernelSU environment already, rather than a new,
+// unverified browser-download mechanism (Blob/anchor-click) that
+// nothing else in this app has ever relied on.
+export async function exportProfile(name) {
+  const clean = sanitizeProfileName(name);
+  const dest = `/sdcard/Download/PowerSentinel-profile-${clean}-${Date.now()}.json`;
+  await run(`cp '${PROFILES_DIR}/${clean}.conf' '${dest}'`);
+  return dest;
+}
+
+// Import deliberately does NOT go through a native file picker asking
+// the shell to `cp` from whatever path it returns - Android's picker
+// commonly hands back an opaque content:// URI with no filesystem path
+// a root shell can read directly. Instead the caller reads the picked
+// file's TEXT via the browser's own File/FileReader API (works in any
+// WebView, no native bridge needed) and passes that content straight
+// to the ALREADY-EXISTING saveProfile() - no new native surface at
+// all, just the standard web platform doing what it already does for
+// every <input type="file"> anywhere.
 
 // ---------- Installed module info ----------
 

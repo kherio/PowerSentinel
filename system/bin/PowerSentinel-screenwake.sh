@@ -279,3 +279,94 @@ screenwake_summary() {
     }
   ' "$screenwake_file" 2>/dev/null
 }
+
+# Feature request: suggest a night-window start/end from the person's
+# OWN real history, instead of them having to guess it - the exact
+# data needed (every recorded wake, with its real timestamp) already
+# exists for the wake counter above; this is a different read of the
+# same file, nothing new to collect.
+#
+# Approach: find every gap between two consecutive wakes that's at
+# least $SCREENWAKE_QUIET_GAP_MIN_S long (4h by default) - a long
+# stretch with no recorded wake is what a real sleep period looks like
+# in this data, whatever time of day it happens to fall at. The wake
+# right BEFORE such a gap is a real "went quiet at HH:MM" sample; the
+# one right AFTER is a real "woke up at HH:MM" sample. Needs at least
+# $SCREENWAKE_QUIET_MIN_NIGHTS such gaps before suggesting anything -
+# one lucky quiet afternoon isn't a sleep schedule.
+#
+# The median (not average) of those samples is what gets suggested,
+# taken with the calendar day re-anchored at NOON instead of midnight
+# first - averaging clock times naively breaks across the midnight
+# boundary (23:50 and 00:10 are 20 minutes apart, but naively average
+# to noon), and almost nobody's real sleep window straddles noon
+# itself, so shifting the reference point there avoids the wrap
+# instead of needing circular statistics to handle it properly.
+SCREENWAKE_QUIET_GAP_MIN_S=14400
+SCREENWAKE_QUIET_MIN_NIGHTS=3
+
+_screenwake_to_noon_min() {
+  # $1 = "HH:MM" -> minutes-since-midnight, re-anchored so 0 = noon
+  # instead of 0 = midnight (see the function-level comment above).
+  local hhmm="$1" h m raw
+  h=${hhmm%%:*}; m=${hhmm##*:}
+  raw=$(( 10#$h * 60 + 10#$m ))
+  echo $(( (raw - 720 + 1440) % 1440 ))
+}
+
+_screenwake_from_noon_min() {
+  # Inverse of the above: noon-anchored minutes -> real "HH:MM".
+  local noon_min="$1" real_min
+  real_min=$(( (noon_min + 720) % 1440 ))
+  printf '%02d:%02d' "$(( real_min / 60 ))" "$(( real_min % 60 ))"
+}
+
+screenwake_suggest_night_window() {
+  [ -s "$screenwake_file" ] || { echo '{}'; return; }
+  local gaps starts=() ends=() line s e n
+  # BUG FIX (found while testing against synthetic multi-gap-per-day
+  # data): the first version of this collected EVERY gap over the
+  # threshold, with no limit per day - a day with several separate
+  # multi-hour lulls (e.g. sparse daytime phone use) could contribute
+  # more than one "candidate" gap, diluting or even outnumbering the
+  # real nightly sleep gap in the sample the median is taken from.
+  # Grouping by which calendar day each gap's MIDPOINT falls in, and
+  # keeping only the single longest gap per day BEFORE applying the
+  # duration threshold, guarantees at most one candidate per day - and
+  # it's naturally the one most likely to actually be sleep, since it's
+  # the longest quiet stretch that day had.
+  gaps="$("$JQ" -c --argjson gap "$SCREENWAKE_QUIET_GAP_MIN_S" '
+    (.wakes // []) | sort_by(.ts) as $w |
+    [range(0; ($w | length) - 1) |
+      ($w[.+1].ts - $w[.].ts) as $d |
+      {start: $w[.].time, end: $w[.+1].time, dur: $d, day: (($w[.].ts + ($d/2)) / 86400 | floor)}
+    ] as $allgaps |
+    ($allgaps | group_by(.day) | map(max_by(.dur))) as $daily_max |
+    [$daily_max[] | select(.dur >= $gap) | {start, end}][]
+  ' "$screenwake_file" 2>/dev/null)"
+  [ -n "$gaps" ] || { echo '{}'; return; }
+
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    s="$("$JQ" -r '.start' <<<"$line" 2>/dev/null)"
+    e="$("$JQ" -r '.end' <<<"$line" 2>/dev/null)"
+    [ -n "$s" ] && [ -n "$e" ] || continue
+    starts+=("$(_screenwake_to_noon_min "$s")")
+    ends+=("$(_screenwake_to_noon_min "$e")")
+  done <<< "$gaps"
+
+  n="${#starts[@]}"
+  [ "$n" -ge "$SCREENWAKE_QUIET_MIN_NIGHTS" ] || { echo '{}'; return; }
+
+  local sorted_starts sorted_ends median_start median_end mid
+  sorted_starts=($(printf '%s\n' "${starts[@]}" | sort -n))
+  sorted_ends=($(printf '%s\n' "${ends[@]}" | sort -n))
+  mid=$(( n / 2 ))
+  median_start="${sorted_starts[$mid]}"
+  median_end="${sorted_ends[$mid]}"
+
+  "$JQ" -cn --arg start "$(_screenwake_from_noon_min "$median_start")" \
+    --arg end "$(_screenwake_from_noon_min "$median_end")" \
+    --argjson n "$n" \
+    '{suggested_start: $start, suggested_end: $end, nights_analyzed: $n}'
+}

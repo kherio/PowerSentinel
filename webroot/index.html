@@ -4,8 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PowerSentinel</title>
-  <script type="module" crossorigin src="./assets/index-B4Y2VjMd.js"></script>
-  <link rel="stylesheet" crossorigin href="./assets/index-C1kfqyNl.css">
+  <script type="module" crossorigin src="./assets/index-7HGEZb91.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-C9XYmqNJ.css">
 </head>
 <body class="app-shell">
   <header class="app-header">
@@ -28,6 +28,11 @@
         <div class="stale-data-warning" id="e-stale-warning" style="display:none;">
           <p id="e-stale-warning-text"></p>
           <button class="btn ghost" id="e-restart-daemon-btn"></button>
+        </div>
+
+        <div class="stale-data-warning flagged-alert" id="e-flagged-alert" style="display:none;">
+          <p id="e-flagged-alert-text"></p>
+          <button class="btn ghost" id="e-flagged-alert-btn"></button>
         </div>
 
         <div class="card dashboard-card" style="margin-bottom:14px;">
@@ -67,6 +72,17 @@
 
           <div class="dashboard-why" id="e-dashboard-why"></div>
 
+          <div class="perfmode-row" id="e-perfmode-row">
+            <span class="perfmode-label" data-i18n="dashboard.perfModeLabel">Rendimiento temporal:</span>
+            <button class="perfmode-btn" data-mins="30">30 min</button>
+            <button class="perfmode-btn" data-mins="60">1 h</button>
+            <button class="perfmode-btn" data-mins="120">2 h</button>
+          </div>
+          <div class="perfmode-active" id="e-perfmode-active" style="display:none;">
+            <span id="e-perfmode-active-text"></span>
+            <button class="link-btn" id="e-perfmode-cancel" data-i18n="dashboard.perfModeCancel">Cancelar</button>
+          </div>
+
           <button class="dashboard-detail-toggle" id="e-dashboard-detail-toggle" type="button" style="display:none;">
             <span data-i18n="dashboard.details">Detalles</span><span class="aggression-detail-caret">›</span>
           </button>
@@ -104,6 +120,7 @@
             </div>
             <div class="nightwake-count" id="e-nightwake-count">–</div>
             <div class="nightwake-compare" id="e-nightwake-compare"></div>
+            <button class="link-btn nightwake-suggest-btn" id="e-nightwake-suggest-btn" type="button" data-i18n="dashboard.nightWakeSuggest">💡 Sugerir según mi historial</button>
             <button class="nightwake-detail-toggle" id="e-nightwake-toggle" type="button" style="display:none;">
               <span data-i18n="dashboard.nightWakeViewDetail">Ver detalle</span><span class="aggression-detail-caret">›</span>
             </button>
@@ -126,6 +143,10 @@
           <svg class="battery-sparkline" id="e-battery-sparkline" viewBox="0 0 300 40" preserveAspectRatio="none"></svg>
           <div class="battery-sparkline-caption" id="e-battery-sparkline-caption"></div>
           <div class="savings-bar" id="e-savings-bar"></div>
+          <div class="chargehealth-hint" id="e-chargehealth-hint" style="display:none;">
+            <span id="e-chargehealth-hint-text"></span>
+            <button class="link-btn" id="e-chargehealth-hint-link" type="button" data-i18n="dashboard.chargeHealthAction">Ver ajuste de límite de carga</button>
+          </div>
         </div>
 
         <div class="card" style="margin-bottom:14px;">
@@ -397,6 +418,15 @@
             <button class="btn primary" id="p-save-btn" data-i18n="common.save">Guardar</button>
           </div>
           <div style="font-size:12px;color:var(--muted);margin-top:8px;" data-i18n="perfiles.saveHint" data-i18n-html>Guarda una copia de tu <code>PowerSentinel.json</code> actual con ese nombre, para poder recuperarla más tarde.</div>
+        </div>
+        <div class="card" style="margin-bottom:14px;">
+          <div style="font-size:13px;font-weight:500;margin-bottom:8px;" data-i18n="perfiles.importTitle">Importar un perfil compartido</div>
+          <div class="add-event-row">
+            <input class="filter" id="p-import-name-input" type="text" data-i18n-placeholder="perfiles.namePlaceholder" placeholder="nombre_del_perfil" style="flex:1;">
+            <button class="btn ghost" id="p-import-btn" data-i18n="perfiles.importButton">Elegir fichero…</button>
+          </div>
+          <input type="file" id="p-import-file" accept=".json,application/json" style="display:none;">
+          <div style="font-size:12px;color:var(--muted);margin-top:8px;" data-i18n="perfiles.importHint">Importa un fichero .json que te haya compartido otra persona (o exportado desde otro de tus dispositivos) como un nuevo perfil local.</div>
         </div>
         <div class="section-title" style="margin-top:0;" data-i18n="perfiles.savedTitle">Perfiles guardados</div>
         <div id="p-list"></div>

@@ -1,5 +1,5 @@
 import { ICONS } from '../icons.js';
-import { readStatus, readCpuRanking, readJournal, readEnergyLog, restartDaemon, readConfig, writeConfig } from '../api.js';
+import { readStatus, readCpuRanking, readJournal, readEnergyLog, restartDaemon, readConfig, writeConfig, readFlaggedApps, startManualTimed, stopEvent, readSuggestedNightWindow } from '../api.js';
 import { toast, escapeHtml } from '../helpers.js';
 import { t } from '../i18n.js';
 import { parseJournalLines, renderTimelineEntry, parseEnergyLines, computeRecentRate } from './log.js';
@@ -302,6 +302,66 @@ function renderDashboard(sys) {
   ).join('');
 }
 
+// Temporary performance mode (feature request: a one-tap "Máximo
+// rendimiento durante 1h" that reverts itself). The daemon's own
+// check_manual_expiry() (PowerSentineld) is what actually enforces
+// the timer - this only ever starts it (startManualTimed(), api.js)
+// and shows a countdown read straight from what the daemon reports
+// (ManualExpiry in the status file) rather than tracking time locally
+// in the browser, which would drift from what's actually happening
+// the moment this tab isn't the one in front of the person (screen
+// off, app backgrounded, etc.).
+let perfModeBusy = false;
+function renderPerfMode(sys) {
+  const row = document.getElementById('e-perfmode-row');
+  const activeBox = document.getElementById('e-perfmode-active');
+  const isManualActive = !!(sys.activeEvents && sys.activeEvents.includes('manual'));
+  const expiry = sys.manualExpiry;
+
+  if (isManualActive && typeof expiry === 'number' && expiry > Math.floor(Date.now() / 1000)) {
+    row.style.display = 'none';
+    activeBox.style.display = 'flex';
+    const remainingMin = Math.max(1, Math.round((expiry - Date.now() / 1000) / 60));
+    document.getElementById('e-perfmode-active-text').textContent =
+      t('dashboard.perfModeActive', { min: remainingMin });
+  } else {
+    row.style.display = perfModeBusy ? 'none' : 'flex';
+    activeBox.style.display = 'none';
+  }
+
+  if (!row.dataset.bound) {
+    row.dataset.bound = '1';
+    row.querySelectorAll('.perfmode-btn').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const mins = parseInt(btn.dataset.mins, 10);
+        if (!mins) return;
+        perfModeBusy = true;
+        row.style.display = 'none';
+        try {
+          await startManualTimed(mins * 60);
+          toast(t('dashboard.perfModeStarted', { min: mins }), 'success');
+        } catch (e) {
+          toast(t('dashboard.perfModeError', { msg: e.message }), 'error');
+        } finally {
+          perfModeBusy = false;
+        }
+      });
+    });
+  }
+  const cancelBtn = document.getElementById('e-perfmode-cancel');
+  if (!cancelBtn.dataset.bound) {
+    cancelBtn.dataset.bound = '1';
+    cancelBtn.addEventListener('click', async () => {
+      try {
+        await stopEvent('manual');
+        toast(t('dashboard.perfModeCancelled'), 'success');
+      } catch (e) {
+        toast(t('dashboard.perfModeError', { msg: e.message }), 'error');
+      }
+    });
+  }
+}
+
 // Profile checklist ("qué está pasando y por qué" at a glance): every
 // CLASSIC profile type, active ones in green with a check, the rest
 // muted - same visual language as "Hardware detectado"'s hw-cap-yes/
@@ -473,6 +533,41 @@ function renderNightWake(nw) {
     endInput.addEventListener('change', () => { if (endInput.value) saveNightwakeWindow('nightwake_end', endInput.value); });
   }
 
+  const suggestBtn = document.getElementById('e-nightwake-suggest-btn');
+  if (!suggestBtn.dataset.bound) {
+    suggestBtn.dataset.bound = '1';
+    suggestBtn.addEventListener('click', async () => {
+      suggestBtn.disabled = true;
+      try {
+        const text = await readSuggestedNightWindow();
+        const suggestion = JSON.parse(text || '{}');
+        if (!suggestion.suggested_start || !suggestion.suggested_end) {
+          toast(t('dashboard.nightWakeSuggestNoData'), 'error');
+          return;
+        }
+        // Sequential, not parallel - each save is its own full
+        // read-modify-write of the config (saveNightwakeWindow), so
+        // awaiting the first before starting the second avoids two
+        // concurrent writes racing each other over the same file.
+        // Updates the inputs' own displayed value immediately too,
+        // rather than waiting for the next status poll to reflect it
+        // (saveNightwakeWindow itself only persists the config - it
+        // doesn't touch what's currently shown, since its normal
+        // caller is the input's own native `change` event, which the
+        // browser has already applied to .value by the time it fires).
+        startInput.value = suggestion.suggested_start;
+        await saveNightwakeWindow('nightwake_start', suggestion.suggested_start);
+        endInput.value = suggestion.suggested_end;
+        await saveNightwakeWindow('nightwake_end', suggestion.suggested_end);
+        toast(t('dashboard.nightWakeSuggestApplied', { start: suggestion.suggested_start, end: suggestion.suggested_end }), 'success');
+      } catch (e) {
+        toast(t('dashboard.nightWakeSuggestError', { msg: e.message }), 'error');
+      } finally {
+        suggestBtn.disabled = false;
+      }
+    });
+  }
+
   document.getElementById('e-nightwake-count').textContent = nw.count;
 
   const compareEl = document.getElementById('e-nightwake-compare');
@@ -614,6 +709,40 @@ export async function renderTodayInterventions() {
     el.textContent = t('dashboard.todayInterventions', { count });
   } catch (e) {
     el.textContent = t('dashboard.todayInterventions', { count: 0 });
+  }
+}
+
+// Flagged-apps alert (feature request: make the existing "app flagged
+// for high background CPU" mechanism - PowerSentinel-appwatch.sh, its
+// dismiss/limit actions already built into Automatización's Básico
+// mode - actually visible without having to go looking for it there).
+// Fetched once per tab activation, same cadence/reasoning as
+// renderTodayInterventions() above: this is a daily-scale signal, not
+// something that needs re-checking on every 3s poll. Never invents or
+// duplicates appwatch's own detection - purely a louder megaphone for
+// a decision the daemon already made.
+export async function renderFlaggedAppsAlert() {
+  const el = document.getElementById('e-flagged-alert');
+  if (!el) return;
+  try {
+    const text = await readFlaggedApps();
+    const apps = JSON.parse(text || '[]');
+    if (!Array.isArray(apps) || !apps.length) { el.style.display = 'none'; return; }
+    el.style.display = 'block';
+    document.getElementById('e-flagged-alert-text').textContent =
+      apps.length === 1
+        ? t('dashboard.flaggedAppSingle', { app: apps[0] })
+        : t('dashboard.flaggedAppMulti', { count: apps.length });
+    const btn = document.getElementById('e-flagged-alert-btn');
+    btn.textContent = t('dashboard.flaggedAppAction');
+    if (!btn.dataset.bound) {
+      btn.dataset.bound = '1';
+      btn.addEventListener('click', () => {
+        document.dispatchEvent(new CustomEvent('powersentinel:navigate', { detail: { view: 'conf' } }));
+      });
+    }
+  } catch (e) {
+    el.style.display = 'none';
   }
 }
 
@@ -796,6 +925,32 @@ function renderBattery(batt) {
   renderBatterySparkline();
 }
 
+// Battery-health nudge (feature request): only ever shown when it's
+// actually informative - a real, measured pattern of frequent 100%
+// charges (PowerSentinel-chargehealth.sh, never assumed the same for
+// everyone) AND charge_limit not already configured. Never repeats a
+// suggestion for something the person has already acted on, and never
+// claims a specific battery-lifespan number - only "this happens
+// often on your device", which is the one part actually measured.
+const CHARGEHEALTH_THRESHOLD = 20; // out of the last 30 days
+function renderChargeHealth(ch) {
+  const el = document.getElementById('e-chargehealth-hint');
+  if (!ch || ch.charge_limit_configured || (ch.count_30d || 0) < CHARGEHEALTH_THRESHOLD) {
+    el.style.display = 'none';
+    return;
+  }
+  el.style.display = 'block';
+  document.getElementById('e-chargehealth-hint-text').textContent =
+    t('dashboard.chargeHealthHint', { count: ch.count_30d });
+  const link = document.getElementById('e-chargehealth-hint-link');
+  if (!link.dataset.bound) {
+    link.dataset.bound = '1';
+    link.addEventListener('click', () => {
+      document.dispatchEvent(new CustomEvent('powersentinel:navigate', { detail: { view: 'conf' } }));
+    });
+  }
+}
+
 // Mini gráfico de las últimas horas de batería, con el MISMO
 // battHistory ya recogido para estimateRemainingHours()/
 // computeBattDrainRate() - no una fuente de datos nueva.
@@ -871,6 +1026,10 @@ function render(text) {
       try { sys.nightWake = JSON.parse(m[1]); } catch (e) { /* ignore */ }
     } else if ((m = line.match(/^todaystats:\s*(\{.*\})/i))) {
       try { sys.todayStats = JSON.parse(m[1]); } catch (e) { /* ignore */ }
+    } else if ((m = line.match(/^manualexpiry:\s*(\d+)/i))) {
+      sys.manualExpiry = parseInt(m[1], 10);
+    } else if ((m = line.match(/^chargehealth:\s*(\{.*\})/i))) {
+      try { sys.chargeHealth = JSON.parse(m[1]); } catch (e) { /* ignore */ }
     } else if ((m = line.match(/^capabilities:\s*(.*)$/i))) {
       sys.capabilities = {};
       m[1].trim().split(/\s+/).forEach((pair) => {
@@ -885,8 +1044,10 @@ function render(text) {
   });
 
   renderBattery(sys.battery);
+  renderChargeHealth(sys.chargeHealth);
   renderSystemHealth(sys.capabilities);
   renderDashboard(sys);
+  renderPerfMode(sys);
   renderActiveNow(sys);
   renderNightWake(sys.nightWake);
   renderTodayCard(sys.todayStats);
@@ -1164,6 +1325,7 @@ export function activateEstado() {
   renderRecentActivity();
   renderSavingsBar();
   renderTodayInterventions();
+  renderFlaggedAppsAlert();
   if (!pollTimer) pollTimer = setInterval(() => loadStatus(true), 3000);
 }
 
@@ -1178,5 +1340,6 @@ export function refreshEstado() {
   renderRecentActivity();
   renderSavingsBar();
   renderTodayInterventions();
+  renderFlaggedAppsAlert();
   return loadStatus(false);
 }

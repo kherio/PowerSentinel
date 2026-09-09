@@ -5,11 +5,11 @@
 export {
   readStatus, readConfig, writeConfig, readLog, exportLog, readJournal, readEnergyLog,
   listPackages, readAppListFile, writeAppListFile,
-  startEvent, stopEvent,
-  listProfiles, readProfile, saveProfile, deleteProfile,
+  startEvent, stopEvent, startManualTimed,
+  listProfiles, readProfile, saveProfile, deleteProfile, exportProfile,
   readModuleInfo, listRunningPackages,
   enterSafeMode, exitSafeMode, restartDaemon,
-  readFlaggedApps, dismissFlaggedApp, setAppPolicy, readCpuRanking,
+  readFlaggedApps, dismissFlaggedApp, setAppPolicy, readCpuRanking, readSuggestedNightWindow,
   readAppPolicies, readUsageBuckets
 } from './backend-ksu.js';
 
