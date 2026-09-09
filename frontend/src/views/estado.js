@@ -216,7 +216,6 @@ function renderDashboard(sys) {
   badge.className = 'dashboard-protection-badge' + (active ? ' active' : ' inactive');
 
   const modeNameEl = document.getElementById('e-dashboard-mode-name');
-  const interventionEl = document.getElementById('e-intervention-level');
   const subtitleEl = document.getElementById('e-dashboard-subtitle');
   const pressureWrap = document.getElementById('e-pressure-wrap');
   const toggle = document.getElementById('e-dashboard-detail-toggle');
@@ -226,8 +225,11 @@ function renderDashboard(sys) {
     const tier = pressureScoreTier(sys.pressureScore, sys.pressureThresholds);
     const modeNames = [t('dashboard.modeNormal'), t('dashboard.modeLight'), t('dashboard.modeModerate'), t('dashboard.modeExtreme')];
     modeNameEl.textContent = modeNames[tier];
-    interventionEl.style.display = 'block';
-    interventionEl.textContent = t('dashboard.interventionLevel', { score: sys.pressureScore });
+    // "Nivel de intervención · X/100" removed per maintainer feedback -
+    // it just repeated the exact same number the gauge itself already
+    // shows (e-gauge-percent), one line below it, with no new
+    // information. The gauge's own percentage stays as the single
+    // place that number is shown.
     setGauge(sys.pressureScore);
 
     subtitleEl.textContent = tier > 0 ? t('dashboard.subtitleActive') : t('dashboard.subtitleIdle');
@@ -262,7 +264,6 @@ function renderDashboard(sys) {
     pressureWrap.style.display = 'none';
     toggle.style.display = 'none';
     detailBody.style.display = 'none';
-    interventionEl.style.display = 'none';
     modeNameEl.textContent = active
       ? sys.activeEvents.map(eventDisplayName).join(', ')
       : t('dashboard.modeIdle');

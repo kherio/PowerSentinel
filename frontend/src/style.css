@@ -687,11 +687,6 @@ main {
   text-align: center;
   letter-spacing: -0.1px;
 }
-.dashboard-intervention-level {
-  font-size: 10px;
-  color: var(--muted);
-  text-align: center;
-}
 .dashboard-subtitle {
   font-size: 13px;
   color: var(--muted);
