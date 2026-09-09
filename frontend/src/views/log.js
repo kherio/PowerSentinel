@@ -6,12 +6,21 @@ import { eventDisplayName, eventIcon } from './estado.js';
 
 let rawLog = '';
 let rawJournal = '';
-let activeSubView = 'log';
+// BUG FIX (reported: "desde Actividad no permite ir a Registro
+// técnico, no hace nada al pinchar"): this stayed at 'log' after
+// v3.69.0 reordered the sub-tabs so 'journal' (Actividad) is the one
+// actually shown by default in the HTML now - switchLogSubTab()'s own
+// early-return guard ("if (view === activeSubView) return") compared
+// against this STALE value, so the very first tap on "Registro
+// técnico" ('log') matched the leftover 'log' here and silently did
+// nothing; a second tap (after tapping back to Actividad, which
+// updated this variable for real) would have worked, which is exactly
+// the "only sometimes" shape this kind of state-drift bug takes.
+let activeSubView = 'journal';
 let pollTimer = null;
 
 const LEVEL_KEY = 'powersentinel-log-level';
 const SCROLL_KEY = 'powersentinel-log-autoscroll';
-const SEVERITY_KEY = 'powersentinel-journal-severity';
 
 // ---------- Log (free-text) sub-view ----------
 
@@ -160,8 +169,6 @@ export function renderTimelineEntry(entry) {
 
 function renderJournal() {
   const wrap = document.getElementById('j-journal-wrap');
-  const severityFilter = document.getElementById('j-severity-filter');
-  const filter = severityFilter.value;
   const entries = parseJournalLines(rawJournal);
 
   if (!entries.length) {
@@ -170,29 +177,17 @@ function renderJournal() {
     return;
   }
 
-  let shownCount = 0;
-  // Most recent first - a running history reads more naturally newest-
-  // on-top, unlike the free-text log (which the daemon already appends
-  // oldest-first and autoscroll follows to the bottom for).
-  wrap.innerHTML = entries.slice().reverse().map((entry) => {
-    const matchesFilter = filter === 'ALL' || entry.severity === filter;
-    if (matchesFilter) shownCount++;
-    const html = renderTimelineEntry(entry);
-    // BUG FIX (found in a general dead-code sweep): renderTimelineEntry()
-    // has produced ONLY `<div class="timeline-entry...` since the v3.45
-    // timeline redesign unified every entry type (started/ended/warning/
-    // fallback) into the same rail+body structure - the second
-    // `.replace('<div class="log-line ', ...)` here was for the OLD,
-    // pre-redesign fallback markup and has been unreachable dead code
-    // ever since (harmless - String.replace on a non-match just returns
-    // the string unchanged - filtering already worked correctly via the
-    // first replace alone). Removed rather than left as confusing,
-    // never-true branch logic.
-    return matchesFilter ? html : html.replace('<div class="timeline-entry', '<div class="hidden timeline-entry');
-  }).join('');
+  // BUG FIX (feature request: "Actividad" - the friendly view,
+  // renamed from "Historial" in v3.69.0 - shouldn't have a technical
+  // severity filter at all, matching Inicio's own "Actividad
+  // reciente" which just lists everything). No filtering here anymore
+  // - every entry always shows, most recent first (a running history
+  // reads more naturally newest-on-top, unlike the free-text log,
+  // which the daemon already appends oldest-first and autoscroll
+  // follows to the bottom for).
+  wrap.innerHTML = entries.slice().reverse().map((entry) => renderTimelineEntry(entry)).join('');
 
-  document.getElementById('j-journal-count').textContent = filter === 'ALL' ?
-    t('log.linesCount', { n: entries.length }) : t('log.linesFiltered', { shown: shownCount, total: entries.length, level: filter });
+  document.getElementById('j-journal-count').textContent = t('log.linesCount', { n: entries.length });
 }
 
 async function loadJournal(showToast) {
@@ -427,15 +422,12 @@ function switchLogSubTab(view) {
 export function initLog() {
   const levelFilter = document.getElementById('l-level-filter');
   const autoscroll = document.getElementById('l-autoscroll');
-  const severityFilter = document.getElementById('j-severity-filter');
 
   try {
     const savedLevel = localStorage.getItem(LEVEL_KEY);
     if (savedLevel) levelFilter.value = savedLevel;
     const savedScroll = localStorage.getItem(SCROLL_KEY);
     if (savedScroll !== null) autoscroll.checked = savedScroll === 'true';
-    const savedSeverity = localStorage.getItem(SEVERITY_KEY);
-    if (savedSeverity) severityFilter.value = savedSeverity;
   } catch (e) { /* localStorage may be unavailable/cleared - fall back to defaults */ }
 
   document.getElementById('l-refresh-btn').innerHTML = ICONS.reload;
@@ -454,10 +446,6 @@ export function initLog() {
       const logWrap = document.getElementById('l-log-wrap');
       logWrap.scrollTop = logWrap.scrollHeight;
     }
-  });
-  severityFilter.addEventListener('change', () => {
-    try { localStorage.setItem(SEVERITY_KEY, severityFilter.value); } catch (e) {}
-    renderJournal();
   });
 
   document.getElementById('l-refresh-btn').addEventListener('click', () => loadLog(true));
