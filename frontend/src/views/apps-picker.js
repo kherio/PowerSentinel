@@ -47,7 +47,8 @@ export function mountAppsPicker(container, fields, onDirty) {
   const box = document.createElement('div');
   box.className = 'card';
   box.style.marginTop = '4px';
-  box.innerHTML = `<div style="font-size:13px;font-weight:500;margin-bottom:8px;">${t('apps.chooseApps')}</div>
+  box.innerHTML = `<div style="font-size:13px;font-weight:500;margin-bottom:4px;">${t('apps.chooseApps')}</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:8px;">${t('apps.chooseAppsHint')}</div>
     <div id="ap-status" style="font-size:12px;color:var(--muted);">${t('apps.loading')}</div>`;
   container.appendChild(box);
 

@@ -362,6 +362,7 @@ const DICT = {
     'config.summaryNone': 'Sin ajustes activos',
 
     'apps.chooseApps': 'Elegir apps',
+    'apps.chooseAppsHint': '<b>Permitir</b>: esta app nunca se verá afectada por este evento. <b>Restringir</b>: se le aplicará la acción del evento aunque normalmente no le tocaría (por ejemplo, una app del sistema).',
     'apps.loading': 'Cargando apps instaladas…',
     'apps.listError': 'No se pudo listar las apps instaladas: {msg}',
     'apps.searchPlaceholder': 'Buscar app…',
@@ -899,6 +900,7 @@ const DICT = {
     'config.summaryNone': 'No active settings',
 
     'apps.chooseApps': 'Choose apps',
+    'apps.chooseAppsHint': "<b>Allow</b>: this app will never be affected by this event. <b>Restrict</b>: this event's action will apply to it even where it normally wouldn't (a system app, for instance).",
     'apps.loading': 'Loading installed apps…',
     'apps.listError': 'Could not list installed apps: {msg}',
     'apps.searchPlaceholder': 'Search apps…',

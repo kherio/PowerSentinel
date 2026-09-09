@@ -1769,6 +1769,28 @@ input.filter {
 }
 input.filter::placeholder { color: var(--muted); opacity: 0.8; }
 
+/* Search field with an X to clear it (feature request) - wraps
+   whichever .filter input needs one; the input keeps its normal
+   width/padding, the button just overlays its right edge. */
+.search-with-clear { position: relative; }
+.search-with-clear input.filter { width: 100%; padding-right: 34px; }
+.search-clear-btn {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: 50%;
+}
+.search-clear-btn:active { background: var(--surface); }
+
 label.switch {
   display: inline-flex;
   align-items: center;
@@ -1850,6 +1872,13 @@ label.switch input { accent-color: var(--accent); }
   color: var(--accent); display: flex; align-items: center; justify-content: center; flex: none; }
 .event-card .event-icon svg { width: 16px; height: 16px; }
 .event-card .event-name { font-weight: 600; font-size: 16px; flex: 1; min-width: 80px; }
+.event-name-raw {
+  display: block;
+  font-weight: 400;
+  font-size: 11px;
+  color: var(--muted);
+  font-family: var(--mono);
+}
 .event-card .event-name.custom-input { background: transparent; border: none; color: var(--text);
   font-weight: 600; font-size: 16px; width: 100%; outline: none; border-bottom: 1px dashed var(--border); }
 .event-card .event-chevron { flex: none; width: 20px; height: 20px; color: var(--muted);

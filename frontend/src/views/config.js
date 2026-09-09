@@ -5,6 +5,7 @@ import {
   readAppPolicies, readUsageBuckets, listPackages
 } from '../api.js';
 import { toast, escapeHtml } from '../helpers.js';
+import { eventDisplayName } from './estado.js';
 import { t } from '../i18n.js';
 import { mountAppsPicker, persistAppsPicker } from './apps-picker.js';
 import {
@@ -645,6 +646,7 @@ function renderEvents() {
 
   model.blocks.forEach((block, idx) => {
     const card = document.createElement('div');
+    card.dataset.eventName = block.name;
     const isActiveNow = activeEventNames.has(block.name);
     card.className = 'event-card' + (block.__expanded ? ' expanded' : '') + (isActiveNow ? ' is-active-now' : '');
 
@@ -664,9 +666,26 @@ function renderEvents() {
     const isPredefined = PREDEFINED_EVENTS.indexOf(block.name) !== -1;
     let nameEl;
     if (isPredefined) {
+      // BUG FIX (feature request: "adaptive_tier1... cambiar el nombre
+      // para que sea mas claro"): this used to show the raw internal
+      // event name literally for EVERY predefined event, not just the
+      // adaptive tiers - "screen_off", "night", "adaptive_tier1" and
+      // so on, even though a friendly, already-translated label for
+      // every single one of them (eventDisplayName(), estado.js) has
+      // existed since the dashboard redesign and was already used on
+      // Inicio. Renaming the actual event keys themselves was
+      // deliberately ruled out - they're literal keys in every
+      // existing user's saved PowerSentinel.json, and this is a
+      // display-only fix that doesn't touch any of that. The raw name
+      // stays visible too (a small muted subtitle), for anyone who
+      // needs the exact technical identifier - editing raw config,
+      // reading a log line, following documentation.
       nameEl = document.createElement('div');
       nameEl.className = 'event-name';
-      nameEl.textContent = block.name;
+      const friendly = eventDisplayName(block.name);
+      nameEl.innerHTML = friendly !== block.name
+        ? `${escapeHtml(friendly)}<span class="event-name-raw">${escapeHtml(block.name)}</span>`
+        : escapeHtml(block.name);
     } else {
       nameEl = document.createElement('input');
       nameEl.className = 'event-name custom-input';
@@ -1056,10 +1075,40 @@ function refreshLiveStatus() {
     });
     if (cores.length) coreList = cores.sort((a, b) => a - b);
     activeEventNames = new Set(activeEvents);
+    updateActiveIndicators();
     if (loaded) renderVersionView();
   }).catch(() => {});
 }
 
+// BUG FIX (feature request: make the existing "is this event active
+// right now" dot actually feel live): activeEventNames only ever got
+// refreshed once, when the tab was first opened (refreshLiveStatus(),
+// called from activateConfig()) - the dot itself (the small pulsing
+// mark added on .event-icon for .is-active-now, style.css) was real
+// and already worked, but never updated again while the person kept
+// looking at the screen, even though charging/night/thermal can all
+// change state while Automatización stays open. Deliberately does NOT
+// call the full renderEvents() on a timer - that rebuilds every card
+// from scratch (destroying expanded/collapsed state, any in-progress
+// edit) just to update a dot. Only ever toggles the one class (and
+// title) on cards that already exist, matched by the event name set
+// when each card was built (card.dataset.eventName, added alongside
+// this fix) - a no-op if renderEvents() hasn't run yet.
+function updateActiveIndicators() {
+  document.querySelectorAll('.event-card').forEach((card) => {
+    const isActive = activeEventNames.has(card.dataset.eventName);
+    card.classList.toggle('is-active-now', isActive);
+    const iconEl = card.querySelector('.event-icon');
+    if (iconEl) iconEl.title = isActive ? t('config.activeNowTitle') : '';
+  });
+}
+
+// Live-updates the same dot on a slower cadence than Estado's own 3s
+// poll (10s - this is a secondary, at-a-glance indicator on a screen
+// people are usually editing, not watching for real-time changes)
+// while Automatización is the visible tab; stopped the moment they
+// leave it, same reasoning as Estado's own pollTimer teardown.
+let liveStatusTimer = null;
 export function activateConfig() {
   // BUG FIX (found during a second security/robustness audit): this
   // used to only ever load PowerSentinel.json once per app session
@@ -1087,9 +1136,12 @@ export function activateConfig() {
   // whenever the user switches into this tab - safe to re-render at this
   // moment since nothing here has input focus yet.
   refreshLiveStatus();
+  if (!liveStatusTimer) liveStatusTimer = setInterval(refreshLiveStatus, 10000);
 }
 
-export function deactivateConfig() {}
+export function deactivateConfig() {
+  if (liveStatusTimer) { clearInterval(liveStatusTimer); liveStatusTimer = null; }
+}
 
 // Used by the tab-switch / swipe-nav guard in main.js: returns true if
 // it's fine to leave (no changes, or the user confirmed discarding them).
@@ -1111,9 +1163,19 @@ export function initAppsView() {
   renderAppPolicyLegend();
   document.getElementById('ap-usage-btn').textContent = t('apppolicy.usageButton');
   document.getElementById('ap-usage-btn').addEventListener('click', loadUsageBuckets);
-  document.getElementById('ap-policy-search').addEventListener('input', (e) => {
+  const searchInput = document.getElementById('ap-policy-search');
+  const clearBtn = document.getElementById('ap-policy-search-clear');
+  searchInput.addEventListener('input', (e) => {
     appPolicyState.filter = e.target.value;
+    clearBtn.style.display = e.target.value ? 'block' : 'none';
     drawAppPolicyList();
+  });
+  clearBtn.addEventListener('click', () => {
+    searchInput.value = '';
+    appPolicyState.filter = '';
+    clearBtn.style.display = 'none';
+    drawAppPolicyList();
+    searchInput.focus();
   });
 }
 
