@@ -1821,9 +1821,6 @@ label.switch input { accent-color: var(--accent); }
 .log-line.lvl-VERBOSE { color: var(--muted); }
 .log-line.lvl-DEBUG { color: var(--warn); }
 .log-line.hidden { display: none; }
-.log-line.journal-critical { color: var(--danger); font-weight: 600; }
-.log-line.journal-info { color: var(--text); }
-.journal-time { color: var(--muted); margin-right: 6px; }
 .journal-badge {
   display: inline-block;
   font-size: 10px;
@@ -1895,9 +1892,6 @@ label.switch input { accent-color: var(--accent); }
 .timeline-dot.dot-start { background: var(--accent); }
 .timeline-dot.dot-end { background: var(--muted); }
 .timeline-dot.dot-warn { background: var(--warn); }
-.timeline-warning .timeline-main {
-  color: var(--warn);
-}
 
 /* Toasts */
 #toast-container {
@@ -1938,17 +1932,6 @@ label.switch input { accent-color: var(--accent); }
 }
 .toast.success .t-dot { background: var(--accent); }
 .toast.error .t-dot { background: var(--danger); }
-
-.skeleton {
-  background: linear-gradient(90deg, var(--surface) 25%, var(--surface-2) 37%, var(--surface) 63%);
-  background-size: 400% 100%;
-  animation: shimmer 1.4s ease infinite;
-  border-radius: var(--radius-sm);
-}
-@keyframes shimmer {
-  0% { background-position: 100% 50%; }
-  100% { background-position: 0 50%; }
-}
 
 /* --- Perfiles: saved-profile list --- */
 .profile-item {

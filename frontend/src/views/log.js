@@ -178,7 +178,17 @@ function renderJournal() {
     const matchesFilter = filter === 'ALL' || entry.severity === filter;
     if (matchesFilter) shownCount++;
     const html = renderTimelineEntry(entry);
-    return matchesFilter ? html : html.replace('<div class="timeline-entry', '<div class="hidden timeline-entry').replace('<div class="log-line ', '<div class="hidden log-line ');
+    // BUG FIX (found in a general dead-code sweep): renderTimelineEntry()
+    // has produced ONLY `<div class="timeline-entry...` since the v3.45
+    // timeline redesign unified every entry type (started/ended/warning/
+    // fallback) into the same rail+body structure - the second
+    // `.replace('<div class="log-line ', ...)` here was for the OLD,
+    // pre-redesign fallback markup and has been unreachable dead code
+    // ever since (harmless - String.replace on a non-match just returns
+    // the string unchanged - filtering already worked correctly via the
+    // first replace alone). Removed rather than left as confusing,
+    // never-true branch logic.
+    return matchesFilter ? html : html.replace('<div class="timeline-entry', '<div class="hidden timeline-entry');
   }).join('');
 
   document.getElementById('j-journal-count').textContent = filter === 'ALL' ?
