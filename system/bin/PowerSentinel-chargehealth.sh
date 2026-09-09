@@ -71,7 +71,7 @@ chargehealth_summary() {
   [ -s "$chargehealth_file" ] || { echo '{"count_30d":0}'; return; }
   local cutoff
   cutoff=$(( $(date +%s) - 30*86400 ))
-  "$JQ" --argjson cutoff "$cutoff" '
+  "$JQ" -c --argjson cutoff "$cutoff" '
     { count_30d: ((.full_charges // []) | map(select(. >= $cutoff)) | length) }
   ' "$chargehealth_file" 2>/dev/null
 }

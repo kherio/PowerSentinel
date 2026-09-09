@@ -137,7 +137,27 @@ todaystats_summary() {
     since_s=$(( now_epoch - since ))
     [ "$since_s" -ge 0 ] || since_s=0
   fi
-  "$JQ" --argjson sincharg "$since_s" '{
+  # BUG FIX (found while investigating "la tarjeta Hoy no aparece"):
+  # this was missing the -c (compact) flag jq needs whenever its output
+  # is about to be embedded in a single `echo "Label: $(...)" >> status_file`
+  # line (every other JSON-producing summary function in this project
+  # already has it - screenwake_summary, active_mechanisms_snapshot,
+  # etc.). Without it, jq pretty-prints across many lines by default,
+  # so the resulting status file had "TodayStats: {" on its own line
+  # with the actual fields several lines further down - the WebUI
+  # parses the status file ONE LINE AT A TIME with a regex expecting
+  # the whole `{...}` object on that single line
+  # (/^todaystats:\s*(\{.*\})/i), which a bare "TodayStats: {" can
+  # never match. sys.todayStats stayed undefined forever, and since
+  # v3.62.0 the whole "Hoy" card's shared visibility check treats
+  # missing todayStats as one of two signals (alongside night-wake
+  # data) - so this was silently hiding the card even when a person's
+  # AND their night-wake data alone couldn't keep it visible on its
+  # own (or hiding today's own numbers whenever night-wake data was
+  # ALSO absent). Confirmed by reproducing the exact multi-line output
+  # this produced before the fix, then confirming a single, fully
+  # matchable line after it.
+  "$JQ" -c --argjson sincharg "$since_s" '{
     screen_on_seconds: .screen_on_seconds,
     hourly: .hourly,
     seconds_since_charge: $sincharg
