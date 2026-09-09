@@ -384,8 +384,8 @@ const DICT = {
     'toggle.disabled': 'Desactivado',
 
     'log.allLevels': 'Todos los niveles',
-    'log.tabLog': 'Actividad',
-    'log.tabJournal': 'Historial',
+    'log.tabLog': 'Registro técnico',
+    'log.tabJournal': 'Actividad',
     'log.tabEnergy': 'Energía',
     'energy.title': 'Batería y temperatura en el tiempo',
     'energy.hint': 'Solo se registra un punto cuando el nivel de batería o la temperatura cambian de verdad - no es un muestreo continuo.',
@@ -936,8 +936,8 @@ const DICT = {
     'toggle.disabled': 'Disabled',
 
     'log.allLevels': 'All levels',
-    'log.tabLog': 'Activity',
-    'log.tabJournal': 'History',
+    'log.tabLog': 'Technical log',
+    'log.tabJournal': 'Activity',
     'log.tabEnergy': 'Energy',
     'energy.title': 'Battery and temperature over time',
     'energy.hint': "A point is only recorded when the battery level or temperature actually change - not a continuous sample.",

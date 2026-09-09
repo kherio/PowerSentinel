@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PowerSentinel</title>
-  <script type="module" crossorigin src="./assets/index-CkkJGcm4.js"></script>
+  <script type="module" crossorigin src="./assets/index-_KqGZ7Vm.js"></script>
   <link rel="stylesheet" crossorigin href="./assets/index-ClOJXm7h.css">
 </head>
 <body class="app-shell">
@@ -336,12 +336,12 @@
     <!-- ================= LOG ================= -->
     <section class="view" id="view-log">
       <div class="subtabs">
-        <button id="l-tab-log" class="active" data-i18n="log.tabLog">Actividad</button>
-        <button id="l-tab-journal" data-i18n="log.tabJournal">Historial</button>
+        <button id="l-tab-journal" class="active" data-i18n="log.tabJournal">Actividad</button>
+        <button id="l-tab-log" data-i18n="log.tabLog">Registro técnico</button>
         <button id="l-tab-energy" data-i18n="log.tabEnergy">Energía</button>
       </div>
 
-      <div id="l-view-log">
+      <div id="l-view-log" style="display:none;">
         <div class="toolbar">
           <select class="filter" id="l-level-filter">
             <option value="ALL" data-i18n="log.allLevels">Todos los niveles</option>
@@ -364,7 +364,7 @@
         </div>
       </div>
 
-      <div id="l-view-journal" style="display:none;">
+      <div id="l-view-journal">
         <div class="toolbar">
           <select class="filter" id="j-severity-filter">
             <option value="ALL" data-i18n="log.allSeverities">Todas</option>
