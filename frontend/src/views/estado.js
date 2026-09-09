@@ -435,6 +435,19 @@ function renderWakeRemediationHint(entries) {
 
 function renderNightWake(nw) {
   const card = document.getElementById('e-nightwake-card');
+  // BUG FIX: reported as "the card disappeared entirely" after the
+  // Hoy/Encendidos-nocturnos consolidation. Root cause: this section
+  // is now nested inside e-today-card, but renderTodayCard() was still
+  // independently setting e-today-card's own display based ONLY on
+  // whether today's stats had data - if that ever came back empty while
+  // THIS data was genuinely available, the nested section stayed
+  // invisible no matter what it set its OWN display to, since a
+  // display:none ancestor hides everything inside it regardless. This
+  // function no longer touches (or assumes anything about) the outer
+  // card - see updateTodayCardVisibility() below, called once after
+  // both this and renderTodayCard() run, which is the only place that
+  // now decides the shared container's visibility, from BOTH data
+  // sources at once.
   if (!nw || typeof nw.count !== 'number') { card.style.display = 'none'; return; }
   card.style.display = 'block';
 
@@ -508,6 +521,20 @@ function formatHoursMins(totalSeconds) {
   return { h, m };
 }
 
+// BUG FIX (reported: "the night-wake card disappeared entirely" after
+// consolidating it into "Hoy"): the shared outer card (e-today-card)
+// must show whenever EITHER today's stats OR night-wake data is
+// available - not only today's stats, which is what it was tied to
+// right after the two cards were merged. Called once after both
+// renderNightWake()/renderTodayCard() have already set their own
+// inner section's visibility - this only ever decides the shared
+// wrapper, never touches either inner section itself.
+function updateTodayCardVisibility(todayStats, nightWake) {
+  const card = document.getElementById('e-today-card');
+  const hasNightWake = !!(nightWake && typeof nightWake.count === 'number');
+  card.style.display = (todayStats || hasNightWake) ? 'block' : 'none';
+}
+
 // "Hoy" card: screen time + time-since-charge come from
 // PowerSentinel-todaystats.sh (TodayStats, refreshed every poll like
 // the rest of the dashboard); night wakes reuses the SAME
@@ -515,13 +542,14 @@ function formatHoursMins(totalSeconds) {
 // a second source of truth for the same number. Interventions today
 // is filled in separately by renderTodayInterventions() (journal-
 // based, fetched once per tab activation - see that function).
-// Hidden entirely until there's at least a day of data to show
-// (todayStats undefined on a fresh install before the first poll
-// cycle has run).
+// Only manages its OWN body's visibility (e-today-body) - see
+// updateTodayCardVisibility() for why the shared outer card
+// (e-today-card, since the redesign that nested "Encendidos
+// nocturnos" inside it) is no longer decided from here alone.
 function renderTodayCard(todayStats) {
-  const card = document.getElementById('e-today-card');
-  if (!todayStats) { card.style.display = 'none'; return; }
-  card.style.display = 'block';
+  const body = document.getElementById('e-today-body');
+  if (!todayStats) { body.style.display = 'none'; return; }
+  body.style.display = 'block';
 
   const chargeEl = document.getElementById('e-today-charge');
   if (typeof todayStats.seconds_since_charge === 'number') {
@@ -861,6 +889,7 @@ function render(text) {
   renderActiveNow(sys);
   renderNightWake(sys.nightWake);
   renderTodayCard(sys.todayStats);
+  updateTodayCardVisibility(sys.todayStats, sys.nightWake);
 
   if (sys.error) {
     setGauge(0);
