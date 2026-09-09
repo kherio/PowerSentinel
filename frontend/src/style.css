@@ -820,8 +820,20 @@ main {
 }
 .dashboard-detail-body { margin-top: 10px; }
 
-/* --- "Encendidos nocturnos" mini-card (dashboard redesign) --- */
-.nightwake-card { padding: 16px; }
+/* --- "Encendidos nocturnos": nested section inside the "Hoy" card
+   (previously its own separate top-level card - consolidated per the
+   original design intent: "encaja PERFECTO aquí [en Hoy]" - reducing
+   the dashboard's card count and putting the daily summary and its
+   night-specific detail in one coherent place instead of two adjacent
+   boxes repeating the same wake count). A top border stands in for
+   the separate card's own background/padding - same visual language
+   already used for "Detalles técnicos" splitting off from its parent
+   card elsewhere on this screen. */
+.nightwake-section {
+  padding-top: 14px;
+  margin-top: 14px;
+  border-top: 1px solid var(--border);
+}
 .nightwake-header {
   display: flex;
   align-items: center;
@@ -1392,10 +1404,13 @@ main {
 /* --- gentle fade-in for the whole status content once loaded ---
    Updated to the card classes actually in use after the dashboard
    redesign (hero-card no longer exists as a class name - dashboard-
-   card replaced it) - also extended to today-card/nightwake-card,
-   whose own DOM nodes are updated in place every poll (only their
-   child elements' text/style change) so animating them doesn't risk
-   re-triggering on a routine refresh.
+   card replaced it) - also extended to today-card, whose own DOM node
+   is updated in place every poll (only its child elements' text/style
+   change) so animating it doesn't risk re-triggering on a routine
+   refresh. nightwake-card was removed from this list entirely - it's
+   no longer a standalone card (consolidated as a nested section
+   inside today-card), so it already fades in as part of that parent
+   animation rather than needing its own.
    BUG FIX: .active-now-card was ALSO added here in the same round,
    but that one is wrong to include - renderActiveNow() fully rebuilds
    it via innerHTML on every 3s poll (loadStatus's pollTimer), whether
@@ -1409,7 +1424,6 @@ main {
    CSS animation bug fix. */
 .scroll-area.loaded .dashboard-card,
 .scroll-area.loaded .today-card,
-.scroll-area.loaded .nightwake-card,
 .scroll-area.loaded .core-tiles,
 .scroll-area.loaded .grid {
   animation: fade-up 0.4s ease;

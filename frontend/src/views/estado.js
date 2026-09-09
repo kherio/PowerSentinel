@@ -518,7 +518,7 @@ function formatHoursMins(totalSeconds) {
 // Hidden entirely until there's at least a day of data to show
 // (todayStats undefined on a fresh install before the first poll
 // cycle has run).
-function renderTodayCard(todayStats, nightWake) {
+function renderTodayCard(todayStats) {
   const card = document.getElementById('e-today-card');
   if (!todayStats) { card.style.display = 'none'; return; }
   card.style.display = 'block';
@@ -535,9 +535,11 @@ function renderTodayCard(todayStats, nightWake) {
   const { h: sh, m: sm } = formatHoursMins(todayStats.screen_on_seconds || 0);
   screenEl.textContent = t('dashboard.todayScreenTime', { h: sh, m: sm });
 
-  const wakesEl = document.getElementById('e-today-wakes');
-  wakesEl.textContent = t('dashboard.todayNightWakes', { count: (nightWake && typeof nightWake.count === 'number') ? nightWake.count : 0 });
-
+  // Night-wake count row removed: the "Encendidos nocturnos" section is
+  // now nested directly inside this same card (see renderNightWake()
+  // below), showing its own count prominently - repeating it a second
+  // time just above would be the exact duplication consolidating the
+  // two cards was meant to remove.
   renderTodayChart(todayStats.hourly);
 }
 
@@ -858,7 +860,7 @@ function render(text) {
   renderDashboard(sys);
   renderActiveNow(sys);
   renderNightWake(sys.nightWake);
-  renderTodayCard(sys.todayStats, sys.nightWake);
+  renderTodayCard(sys.todayStats);
 
   if (sys.error) {
     setGauge(0);
