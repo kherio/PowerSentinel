@@ -151,6 +151,52 @@ body.app-shell {
   height: auto;
 }
 
+/* BUG FIX (reported: Análisis's "Actividad"/"Registro técnico" content
+   "stops partway down the screen, the rest is empty"): same root
+   cause as #c-view-advanced just above - #l-view-log/#l-view-journal
+   are each a plain wrapper div holding a .fill-area (the actual
+   scrollable log/timeline), making that .fill-area a GRANDCHILD of
+   .view.active rather than a direct child, so
+   ".view.active > .fill-area { flex: 1; ... }" never matched it. The
+   wrapper itself, having no flex sizing of its own as a plain
+   .view.active child, sized to its own content instead of stretching
+   - reproduced directly (a bordered .view-viewport clearly taller
+   than the content it held) and confirmed fixed by giving these
+   wrappers the identical transparent flex-passthrough #c-view-advanced
+   already gets. #l-view-energy is NOT included here - it already has
+   .scroll-area applied directly to itself (a genuine direct child
+   with that class already targeted above), confirmed separately
+   (a bordered #l-view-energy matching its .view-viewport parent's
+   full height) to already stretch correctly on its own. */
+.view.active > #l-view-log,
+.view.active > #l-view-journal {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+/* ...and one level deeper still: #l-view-log/#l-view-journal's own
+   .fill-area child needs the exact same treatment #c-view-advanced's
+   own .fill-area gets above - without this, the wrapper now correctly
+   stretches, but its .fill-area child (the actual scrolling log/
+   timeline) would just size to its own content INSIDE that now-taller
+   wrapper, moving the same "content stops, rest is empty" symptom
+   down one level rather than fixing it. */
+.view.active > #l-view-log > .fill-area,
+.view.active > #l-view-journal > .fill-area {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+.view.active > #l-view-log > .fill-area .log-wrap,
+.view.active > #l-view-journal > .fill-area .log-wrap {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+}
+
 header.app-header {
   position: sticky;
   top: 0;
