@@ -28,6 +28,7 @@ pid_file="$DATA_DIR/PowerSentineld.pid"
 ctl_file="$DATA_DIR/powersentinel"
 status_file="$DATA_DIR/PowerSentinel.status"
 conf_file="$DATA_DIR/PowerSentinel.json"
+journal_file="$DATA_DIR/PowerSentinel.journal"
 
 results=()
 add_result() {
@@ -40,6 +41,32 @@ if [ -s "$pid_file" ] && kill -0 "$(cat "$pid_file" 2>/dev/null)" 2>/dev/null; t
   add_result "daemon" "pass" "El demonio está corriendo (PID $(cat "$pid_file" 2>/dev/null))."
 else
   add_result "daemon" "fail" "El demonio no parece estar corriendo. Prueba a reiniciar el módulo o el dispositivo."
+fi
+
+# --- 1b. Daemon restarting repeatedly (reported symptom: "Arranque"
+#     flickering in and out of Actividad) - each restart looks like a
+#     brief "boot ended"/"boot started" pair in the journal (state_
+#     reconcile() undoing the crashed run's stale boot, then a fresh
+#     one for the relaunch), which is otherwise easy to mistake for a
+#     mode that keeps toggling rather than what it actually is: the
+#     watchdog (service.sh) catching and relaunching a daemon that's
+#     dying on its own every ~60s or so. Counts "boot started" entries
+#     in the last 2 hours - 1 is completely normal (a real boot, or a
+#     single manual restart), several is the actual signal something
+#     is repeatedly crashing.
+if [ -s "$journal_file" ]; then
+  cutoff=$(( $(date +%s) - 7200 ))
+  boot_count="$("$JQ" -s --argjson cutoff "$cutoff" '[.[] | select(.event=="boot" and .message=="boot started" and .ts >= $cutoff)] | length' "$journal_file" 2>/dev/null)"
+  case "$boot_count" in
+    ''|*[!0-9]*) boot_count=0 ;;
+  esac
+  if [ "$boot_count" -ge 3 ]; then
+    add_result "daemon_restarts" "fail" "El demonio se ha reiniciado $boot_count veces en las últimas 2 horas - probablemente se está cayendo solo y el vigilante lo está relanzando. Esto es lo que hace que 'Arranque' parezca entrar y salir en Actividad."
+  elif [ "$boot_count" -eq 2 ]; then
+    add_result "daemon_restarts" "warn" "El demonio se ha reiniciado 2 veces en las últimas 2 horas - puede ser normal (un reinicio manual) o el principio de un problema. Si sigue subiendo, revisa logcat para 'PowerSentineld'."
+  else
+    add_result "daemon_restarts" "pass" "El demonio no se ha reiniciado de forma inesperada en las últimas 2 horas."
+  fi
 fi
 
 # --- 2. Status file being refreshed (daemon alive AND actually looping) ---

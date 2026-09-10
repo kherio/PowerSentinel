@@ -2,7 +2,7 @@ import { ICONS } from '../icons.js';
 import { readStatus, readCpuRanking, readJournal, readEnergyLog, restartDaemon, readConfig, writeConfig, readFlaggedApps, startManualTimed, stopEvent, readSuggestedNightWindow, readDrainComparison } from '../api.js';
 import { toast, escapeHtml } from '../helpers.js';
 import { t } from '../i18n.js';
-import { parseJournalLines, renderTimelineEntry, parseEnergyLines, computeRecentRate } from './log.js';
+import { parseJournalLines, filterBootRestartNoise, renderTimelineEntry, parseEnergyLines, computeRecentRate } from './log.js';
 import { parseConfig, serializeConfig } from '../config-form.js';
 
 const GAUGE_C = 2 * Math.PI * 52;
@@ -702,7 +702,7 @@ export async function renderTodayInterventions() {
   if (!el) return;
   try {
     const text = await readJournal();
-    const entries = parseJournalLines(text);
+    const entries = filterBootRestartNoise(parseJournalLines(text));
     const now = new Date();
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() / 1000;
     const count = entries.filter((e) => e.ts >= todayStart && /started$/.test(e.message)).length;
@@ -843,7 +843,7 @@ async function renderRecentActivity() {
   const el = document.getElementById('e-recent-activity');
   try {
     const text = await readJournal();
-    const entries = parseJournalLines(text).slice(-3).reverse();
+    const entries = filterBootRestartNoise(parseJournalLines(text)).slice(-3).reverse();
     if (!entries.length) {
       el.innerHTML = `<p class="hint">${escapeHtml(t('estado.recentActivityEmpty'))}</p>`;
       return;

@@ -92,6 +92,43 @@ export function parseJournalLines(text) {
   }).filter(Boolean);
 }
 
+// BUG FIX (reported: "Arranque" entrando y saliendo continuamente en
+// Actividad, sin forma de saber en qué modo está de verdad de fondo).
+// Root cause isn't in the event logic itself - "boot" only ever
+// activates once, in init_v2() at daemon startup, and state_reconcile()
+// (PowerSentinel-state.sh) correctly undoes whatever the PREVIOUS run
+// left active before that. Chained together, those are exactly right -
+// but if the daemon itself is dying and getting relaunched repeatedly
+// (a crash, an OOM kill - service.sh's own watchdog checks every 60s
+// and relaunches it whenever this happens), EVERY relaunch produces
+// this exact "boot ended" (state_reconcile undoing the crashed run's
+// stale boot) immediately followed by a fresh "boot started" - daemon-
+// internal bookkeeping noise from an invisible restart, not a
+// meaningful mode change a person asked to see. Filters out any
+// "boot ended" immediately followed by a "boot started" within 15
+// real seconds - generous enough to catch a relaunch (which happens
+// within a second or two) while never touching a genuine, deliberately
+// re-triggered boot event, which wouldn't happen anywhere near that
+// fast. Applied once here so every view built from journal entries
+// (Actividad, Inicio's own recent-activity list, today's intervention
+// count) is consistent - none of them should show or count restart
+// noise as if it were something that happened.
+export function filterBootRestartNoise(entries) {
+  const result = [];
+  for (let i = 0; i < entries.length; i++) {
+    const cur = entries[i];
+    const next = entries[i + 1];
+    if (cur.event === 'boot' && cur.message === 'boot ended' &&
+        next && next.event === 'boot' && next.message === 'boot started' &&
+        (next.ts - cur.ts) <= 15) {
+      i++; // skip both - a daemon restart, not a real transition
+      continue;
+    }
+    result.push(cur);
+  }
+  return result;
+}
+
 function formatJournalTime(ts) {
   const d = new Date(ts * 1000);
   return d.toLocaleString(undefined, { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -169,7 +206,7 @@ export function renderTimelineEntry(entry) {
 
 function renderJournal() {
   const wrap = document.getElementById('j-journal-wrap');
-  const entries = parseJournalLines(rawJournal);
+  const entries = filterBootRestartNoise(parseJournalLines(rawJournal));
 
   if (!entries.length) {
     wrap.innerHTML = `<div class="log-empty">${t('log.noEntries')}</div>`;
