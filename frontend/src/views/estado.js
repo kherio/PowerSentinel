@@ -1112,15 +1112,30 @@ function render(text) {
     }
   });
 
-  renderBattery(sys.battery);
-  renderChargeHealth(sys.chargeHealth);
-  renderSystemHealth(sys.capabilities);
-  renderDashboard(sys);
-  renderPerfMode(sys);
-  renderActiveNow(sys);
-  renderNightWake(sys.nightWake);
-  renderTodayCard(sys.todayStats);
-  updateTodayCardVisibility(sys.todayStats, sys.nightWake);
+  // BUG FIX (reported: dashboard mode name stuck on "Normal" even when
+  // something is genuinely active): these used to run as one plain,
+  // unguarded sequence - an exception thrown by ANY of them (a
+  // malformed/unexpected value in this device's own battery, charge
+  // health, or capabilities data - something this project has no way
+  // to reproduce or test against every real device's exact output)
+  // would abort the WHOLE render() call right there, meaning
+  // renderDashboard() (the one that sets the mode name) would never
+  // even run for that poll - and if the same condition holds on every
+  // subsequent poll, the mode name stays frozen at whatever it last
+  // showed, indefinitely. Isolating each call means one renderer
+  // failing can never block any of the others from updating normally.
+  const safeRender = (fn, label) => {
+    try { fn(); } catch (e) { console.error(`[PowerSentinel] ${label} failed:`, e); }
+  };
+  safeRender(() => renderBattery(sys.battery), 'renderBattery');
+  safeRender(() => renderChargeHealth(sys.chargeHealth), 'renderChargeHealth');
+  safeRender(() => renderSystemHealth(sys.capabilities), 'renderSystemHealth');
+  safeRender(() => renderDashboard(sys), 'renderDashboard');
+  safeRender(() => renderPerfMode(sys), 'renderPerfMode');
+  safeRender(() => renderActiveNow(sys), 'renderActiveNow');
+  safeRender(() => renderNightWake(sys.nightWake), 'renderNightWake');
+  safeRender(() => renderTodayCard(sys.todayStats), 'renderTodayCard');
+  safeRender(() => updateTodayCardVisibility(sys.todayStats, sys.nightWake), 'updateTodayCardVisibility');
 
   if (sys.error) {
     setGauge(0);
@@ -1134,6 +1149,7 @@ function render(text) {
   const coreMap = document.getElementById('e-core-map');
   const CORE_META = coreMeta();
 
+  try {
   if (sys.error) {
     coreGrid.innerHTML = `<div class="stat-card"><div class="label">${ICONS.cpu} ${t('estado.daemonLabel')}</div>${badgeHtml('off', t('estado.daemonUnavailable'))}</div>`;
     coreCounts.textContent = '';
@@ -1178,6 +1194,7 @@ function render(text) {
     coreCounts.textContent = '';
     coreMap.innerHTML = '';
   }
+  } catch (e) { console.error('[PowerSentinel] core grid render failed:', e); }
 
   const freqSectionTitle = document.getElementById('e-freq-section-title');
   const freqMetrics = document.getElementById('e-freq-metrics');
