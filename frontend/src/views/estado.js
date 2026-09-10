@@ -143,11 +143,25 @@ function formatSinceTime(ts) {
 // directamente el score real (0-100), esto solo bucketiza contra los
 // umbrales REALMENTE configurados (que difieren entre los perfiles
 // Bajo/Medio/Alto), nunca un valor fijo adivinado.
-function pressureScoreTier(score, thresholds) {
-  const [t1, t2, t3] = thresholds || [20, 45, 70];
-  if (score >= t3) return 3;
-  if (score >= t2) return 2;
-  if (score >= t1) return 1;
+function activeAdaptiveTier(sys) {
+  // BUG FIX (reported: mode name flickering, related to "Ahorro suave"
+  // entrando y saliendo continuamente): this used to recompute the tier
+  // independently from the raw score via pressureScoreTier() (a plain,
+  // no-hysteresis threshold comparison) - completely separate from
+  // the daemon's own actual decision (PowerSentinel-policy.sh's
+  // pressure_tier_for_score(), now hysteresis-protected). Even after
+  // fixing the real flapping on the backend, this would have kept
+  // recomputing its own possibly-different answer from the raw score
+  // every poll, capable of showing a mode name that disagreed with
+  // what Actividad's own timeline said was actually active. Reads the
+  // real, authoritative state instead - sys.activeEvents IS the
+  // daemon's own active_events array, the exact same data driving the
+  // journal - so the name shown here can never say something different
+  // from what genuinely happened.
+  if (!sys.activeEvents) return 0;
+  if (sys.activeEvents.includes('adaptive_tier3')) return 3;
+  if (sys.activeEvents.includes('adaptive_tier2')) return 2;
+  if (sys.activeEvents.includes('adaptive_tier1')) return 1;
   return 0;
 }
 
@@ -222,7 +236,7 @@ function renderDashboard(sys) {
   const detailBody = document.getElementById('e-dashboard-detail-body');
 
   if (typeof sys.pressureScore === 'number') {
-    const tier = pressureScoreTier(sys.pressureScore, sys.pressureThresholds);
+    const tier = activeAdaptiveTier(sys);
     const modeNames = [t('dashboard.modeNormal'), t('dashboard.modeLight'), t('dashboard.modeModerate'), t('dashboard.modeExtreme')];
     modeNameEl.textContent = modeNames[tier];
     // "Nivel de intervención · X/100" removed per maintainer feedback -

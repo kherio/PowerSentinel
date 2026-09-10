@@ -855,7 +855,7 @@ while true; do
     # like the classic checks above only escalate/de-escalate on a
     # real transition.
     adaptive_score="$(compute_pressure_score)"
-    adaptive_tier="$(pressure_tier_for_score "$adaptive_score")"
+    adaptive_tier="$(pressure_tier_for_score "$adaptive_score" "$was_adaptive_tier")"
     if [ "$adaptive_tier" != "$was_adaptive_tier" ]; then
       log_msg 2 "Adaptive tier changed: $was_adaptive_tier -> $adaptive_tier (score=$adaptive_score)"
       [ "$was_adaptive_tier" -gt 0 ] && handle_event "adaptive_tier${was_adaptive_tier}" 0

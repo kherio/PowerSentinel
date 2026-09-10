@@ -170,17 +170,57 @@ compute_pressure_score() {
 # user-configurable thresholds so advanced users can tune sensitivity
 # without touching the scoring formula itself.
 #
-# BUG FIX (security/robustness audit): thresholds now go through
-# _adaptive_tier_thresholds() below instead of reading getconf directly
-# - see that function for why (ordering validation, and being the one
-# place both the real decision and the WebUI's own display draw from).
+# BUG FIX (reported: "Ahorro suave" entrando y saliendo continuamente
+# en Actividad): this had no hysteresis at all - a straight threshold
+# comparison, recomputed from scratch every cycle. compute_pressure_
+# score() above is sensitive to genuinely noisy inputs moment to
+# moment - $DETECT_LOAD1 alone swings the score by 10-20 points
+# crossing its own 1.0/2.0 breakpoints, and a screen on/off toggle
+# swings it by 15 - so a score sitting near a threshold (tier1's
+# default of 20 is the easiest one to sit near, hence it being the
+# tier actually reported flapping) could cross back and forth every
+# single cycle from completely ordinary fluctuation, with each
+# crossing firing a real handle_event transition.
+#
+# Fixed with a standard sticky-threshold/hysteresis margin: escalating
+# to a HIGHER tier still happens immediately (reacting fast to
+# genuinely worsening conditions is the safe direction to be quick
+# about) - only de-escalating requires the score to drop meaningfully
+# below the tier's own entry threshold (by $ADAPTIVE_HYSTERESIS_MARGIN
+# points), not merely dip a fraction under it. $previous_tier is
+# optional - omitted (as at daemon boot, the very first evaluation
+# ever) simply skips hysteresis, since there's nothing yet to be
+# sticky relative to.
+ADAPTIVE_HYSTERESIS_MARGIN=5
+
 pressure_tier_for_score() {
-  local score="$1" t1 t2 t3
+  local score="$1" previous_tier="${2:-}" t1 t2 t3 raw_tier prev_threshold
   read -r t1 t2 t3 <<< "$(_adaptive_tier_thresholds)"
-  if [ "$score" -ge "$t3" ]; then echo 3
-  elif [ "$score" -ge "$t2" ]; then echo 2
-  elif [ "$score" -ge "$t1" ]; then echo 1
-  else echo 0
+
+  if [ "$score" -ge "$t3" ]; then raw_tier=3
+  elif [ "$score" -ge "$t2" ]; then raw_tier=2
+  elif [ "$score" -ge "$t1" ]; then raw_tier=1
+  else raw_tier=0
+  fi
+
+  case "$previous_tier" in
+    ''|*[!0-9]*) echo "$raw_tier"; return ;;
+  esac
+  if [ "$raw_tier" -ge "$previous_tier" ]; then
+    echo "$raw_tier"
+    return
+  fi
+
+  case "$previous_tier" in
+    3) prev_threshold="$t3" ;;
+    2) prev_threshold="$t2" ;;
+    1) prev_threshold="$t1" ;;
+    *) echo "$raw_tier"; return ;;  # previous_tier=0 - nothing below it to be sticky about
+  esac
+  if [ "$score" -lt "$((prev_threshold - ADAPTIVE_HYSTERESIS_MARGIN))" ]; then
+    echo "$raw_tier"
+  else
+    echo "$previous_tier"
   fi
 }
 
