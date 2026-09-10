@@ -13,6 +13,12 @@
 # fixed along the way (see action_cores_apply below) - otherwise no
 # logic changes, only where the code lives and how it's split.
 
+# Tracks the PID of the currently-running background process-monitor
+# loop (action_proc_apply below), one per event name - declared here,
+# at file scope, so it persists correctly across every call for the
+# life of the daemon process rather than being reset each time.
+declare -gA _proc_monitor_pids=()
+
 : "${low_ram_orig_file:=/data/local/tmp/PowerSentinel/PowerSentinel.lowram_orig}"
 : "${proc_orig_file:=/data/local/tmp/PowerSentinel/PowerSentinel.procorig}"
 
@@ -409,21 +415,43 @@ action_gms_undo() {
 
 action_proc_apply() {
   [ "$handle_proc" = "true" ] || return
-  # BUG FIX: this used to loop "while [ "$lock" = "1" ]" - but nothing
-  # in the v2 code path ever set $lock to anything (it was only ever
-  # set inside enable_pwr_save's now-removed v1-only branches), so this
-  # background monitor has silently never actually looped for any v2
-  # user - it ran its body once, checked an always-empty $lock, and
-  # exited immediately. Also, since this whole block backgrounds itself
-  # (the trailing &), it forks a subshell with its own copy of any
-  # bash variable - even a correctly-set $active_events in the parent
-  # daemon process would never be visible here as it changes. The
-  # state file (PowerSentinel-state.sh) is an actual file on disk, so
-  # it's the one thing a backgrounded subshell can reliably observe
-  # changing in the parent process: keep monitoring while this
-  # specific event is still listed as active there.
+  # BUG FIX (found while investigating "que no deje el móvil
+  # impracticable" - this turned out to be a functional bug, not a
+  # usability-risk one): $state_file's real, documented format
+  # (state_save(), PowerSentinel-state.sh) is an OBJECT keyed by event
+  # name - {"night": 1700000000, ...} - not an array of event name
+  # strings. "any(.[]?; . == $e)" iterates an object's VALUES (the
+  # timestamps), never its keys, so this check compared a timestamp
+  # number against an event name string and was FALSE unconditionally,
+  # for every real state file this daemon has ever written. The
+  # monitor loop's own while-condition failed on its very first check,
+  # every single time - meaning this whole feature has likely never
+  # actually monitored or reniced anything, for any v2 user, since it
+  # was written. Fixed to check the key directly (has($e)), matching
+  # what active_events actually looks like on disk.
+  #
+  # BUG FIX (found immediately after fixing the above): once the loop
+  # actually runs and persists for as long as this event stays active
+  # (as it was always meant to), it becomes exposed to a second, real
+  # problem this condition-check bug had been silently masking:
+  # reassert_active_events() (events.sh) calls enable_pwr_save() - and
+  # therefore this function - for EVERY still-active event whenever ANY
+  # event ends, with no check here for whether a monitor for THIS event
+  # is already running. Once the condition-check fix above made these
+  # loops actually persist, that would have become a genuine,
+  # ever-accumulating resource leak - one more redundant background
+  # monitor loop spawned per reassert, for the entire time multiple
+  # events with handle_proc=true stay simultaneously active, each
+  # polling every $delay seconds indefinitely. Guarded by tracking the
+  # PID of the most recently spawned monitor per event name and
+  # refusing to start another while that PID is still alive.
   local proc_event="$event"
-  while "$JQ" -e --arg e "$proc_event" 'any(.[]?; . == $e)' "$state_file" >/dev/null 2>&1; do
+  local existing_pid="${_proc_monitor_pids[$proc_event]:-}"
+  if [ -n "$existing_pid" ] && kill -0 "$existing_pid" 2>/dev/null; then
+    return
+  fi
+
+  while "$JQ" -e --arg e "$proc_event" 'has($e)' "$state_file" >/dev/null 2>&1; do
     # BUG FIX (found while fixing the ownership issue below, unrelated
     # to it): `IFS= read -r proc nice` - setting IFS to EMPTY disables
     # field splitting entirely, so the WHOLE line ("myprocess 10") went
@@ -473,12 +501,13 @@ action_proc_apply() {
               && chmod 600 "$tmp" 2>/dev/null && mv "$tmp" "$proc_orig_file" || rm -f "$tmp"
           fi
           log_msg 3 "Renicing $proc ($pid) to $nice"
-          renice -n "$nice" "$pid"
+          renice -n "$nice" "$pid" &>/dev/null
         fi
       done
     done < "$proc_file"
     sleep "$delay"
   done &
+  _proc_monitor_pids[$proc_event]=$!
 }
 
 action_proc_undo() {

@@ -291,6 +291,19 @@ detect_critical_apps() {
 # allowlist check.
 is_critical_app() {
   local app="$1" c
+  # Static, always-protected regardless of role/whitelist detection -
+  # found while reviewing everything that can force-stop/suspend an app
+  # for a way a user-edited denylist entry (the ONE path that can name
+  # a system package at all; the normal scan is pm list packages -3,
+  # third-party only) could reach something this catastrophic. Stopping
+  # SystemUI doesn't hang the device outright (Android restarts it
+  # automatically), but it's a visible crash/flicker of the entire UI
+  # shell for something that should never have been a valid target in
+  # the first place - cheap and safe to just always refuse regardless
+  # of what ends up in a denylist, without needing another shell call.
+  case "$app" in
+    com.android.systemui|android) return 0 ;;
+  esac
   for c in "${DETECT_CRITICAL_APPS[@]}"; do
     [ "$c" = "$app" ] && return 0
   done

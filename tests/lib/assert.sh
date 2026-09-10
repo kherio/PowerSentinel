@@ -132,14 +132,16 @@ run_test_file() {
   # sourced file with a syntax error) is the only thing that reaches
   # the `|| { ... }` below.
   result="$(
-    TESTS_RUN=0
-    TESTS_FAILED=0
-    # shellcheck disable=SC1090
-    source "$file"
-    run_tests
-    echo "__COUNTS__ $TESTS_RUN $TESTS_FAILED"
+    timeout 30 bash -c '
+      TESTS_RUN=0
+      TESTS_FAILED=0
+      source "$1"
+      source "$2"
+      run_tests
+      echo "__COUNTS__ $TESTS_RUN $TESTS_FAILED"
+    ' -- "$file" "$SCRIPT_DIR/lib/assert.sh"
     exit 0
-  )" || { printf '  \033[31mERROR\033[0m: %s aborto (fallo real del script, no una aserción)\n' "$name"; TESTS_FAILED=$((TESTS_FAILED + 1)); TESTS_RUN=$((TESTS_RUN + 1)); return; }
+  )" || { printf '  \033[31mERROR\033[0m: %s aborto o excedió el tiempo límite (30s) - fallo real, no una aserción\n' "$name"; TESTS_FAILED=$((TESTS_FAILED + 1)); TESTS_RUN=$((TESTS_RUN + 1)); return; }
   echo "$result" | grep -v '^__COUNTS__'
   local counts file_run file_failed
   counts="$(echo "$result" | grep '^__COUNTS__')"
