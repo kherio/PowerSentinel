@@ -63,6 +63,36 @@ function commitToIndex(newIndex) {
   setTabActive(currentIndex);
   LIFECYCLE[VIEWS[oldIndex]].deactivate();
   LIFECYCLE[VIEWS[currentIndex]].activate();
+  playSlideInAnimation(VIEWS[currentIndex], newIndex > oldIndex ? 'forward' : 'back');
+}
+
+// Feature request: "que se note el swipe" - a genuinely felt slide,
+// but deliberately NOT the live-dragging, finger-following carousel
+// this project already tried and abandoned once (see initSwipeNav()'s
+// own comment above: three separate fix attempts - including a
+// percentage-based one, not just pixel measurement - all rendering
+// wider than the screen on-device, a class of bug impossible to
+// verify without a real browser in this dev environment). That
+// approach needed JS to track the live pane width during a drag; this
+// one doesn't touch width/position math at all - it plays a single,
+// one-shot CSS @keyframes animation on ONLY the incoming view (the
+// outgoing one still just disappears instantly via .view's existing
+// display:none, exactly as before), sliding and fading in from the
+// direction of travel. No absolute positioning, no two views visible
+// at once, nothing for a stale inline style to get stuck in - the
+// animation is removed the moment it finishes so a later, unrelated
+// display toggle of that same view can never accidentally replay it.
+function playSlideInAnimation(viewName, direction) {
+  const el = document.getElementById(`view-${viewName}`);
+  if (!el) return;
+  const cls = direction === 'forward' ? 'slide-in-from-right' : 'slide-in-from-left';
+  el.classList.remove('slide-in-from-right', 'slide-in-from-left');
+  // Force a reflow so re-adding the same class after removing it (a
+  // rapid back-and-forth swipe) restarts the animation instead of the
+  // browser treating it as a no-op class list change.
+  void el.offsetWidth;
+  el.classList.add(cls);
+  el.addEventListener('animationend', () => el.classList.remove(cls), { once: true });
 }
 
 function initTabButtons() {

@@ -93,6 +93,28 @@ body.app-shell {
   flex-direction: column;
   overflow: hidden;
 }
+/* Feature request: felt swipe/tab-switch motion. Plays once on
+   whichever view just became active, then removes itself
+   (main.js's playSlideInAnimation) - a plain @keyframes animation on
+   a single element, not a live-dragging dual-pane carousel (see
+   main.js's own comment on why that approach was deliberately not
+   revisited). translateX here is relative to the element's own
+   width, resolved natively by the browser - nothing here needs or
+   computes a pixel/percentage width in JS. */
+@keyframes slideInFromRight {
+  from { transform: translateX(28px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+@keyframes slideInFromLeft {
+  from { transform: translateX(-28px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+.view.active.slide-in-from-right { animation: slideInFromRight 220ms ease; }
+.view.active.slide-in-from-left { animation: slideInFromLeft 220ms ease; }
+@media (prefers-reduced-motion: reduce) {
+  .view.active.slide-in-from-right,
+  .view.active.slide-in-from-left { animation: none; }
+}
 .view.active > .toolbar,
 .view.active > .subtabs { flex: 0 0 auto; }
 .view.active > .scroll-area {
