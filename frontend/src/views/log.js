@@ -447,9 +447,23 @@ function formatEnergyTime(ts) {
 function switchLogSubTab(view) {
   if (view === activeSubView) return;
   activeSubView = view;
-  document.getElementById('l-view-log').style.display = view === 'log' ? 'block' : 'none';
-  document.getElementById('l-view-journal').style.display = view === 'journal' ? 'block' : 'none';
-  document.getElementById('l-view-energy').style.display = view === 'energy' ? 'block' : 'none';
+  // BUG FIX (reported: "Registro técnico" content stops partway down
+  // the screen, same symptom already fixed once for Actividad):
+  // setting style.display = 'block' here is an INLINE style, which
+  // always wins over any stylesheet rule regardless of specificity -
+  // including the "display: flex" v3.70.0 gave #l-view-log/
+  // #l-view-journal precisely so their .fill-area child could stretch
+  // to fill the screen. Actividad only ever looked fixed because it's
+  // the tab visible by default straight from the static HTML (no
+  // "display:none" to begin with) - switchLogSubTab() never touches it
+  // unless the person navigates away and back, which reintroduces the
+  // exact same bug there too. Clearing the property (”) instead of
+  // forcing 'block' lets the stylesheet's own display:flex rule take
+  // over for whichever view is visible - 'none' for hiding is
+  // unaffected (there's no competing "should be visible" rule to fight).
+  document.getElementById('l-view-log').style.display = view === 'log' ? '' : 'none';
+  document.getElementById('l-view-journal').style.display = view === 'journal' ? '' : 'none';
+  document.getElementById('l-view-energy').style.display = view === 'energy' ? '' : 'none';
   document.getElementById('l-tab-log').classList.toggle('active', view === 'log');
   document.getElementById('l-tab-journal').classList.toggle('active', view === 'journal');
   document.getElementById('l-tab-energy').classList.toggle('active', view === 'energy');
