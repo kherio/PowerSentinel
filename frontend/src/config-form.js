@@ -65,8 +65,9 @@ var FIELD_DEFS = [
     key: 'max_cpu_freq', label: t('field.maxCpuFreq.label'), type: 'select', def: 'false', group: 'cpu',
     options: [
       { value: 'false', label: t('field.maxCpuFreq.optFalse') },
-      { value: '70', label: t('field.maxCpuFreq.optModerate') },
-      { value: '50', label: t('field.maxCpuFreq.optAggressive') }
+      { value: '80', label: t('field.maxCpuFreq.optLight') },
+      { value: '50', label: t('field.maxCpuFreq.optModerate') },
+      { value: '30', label: t('field.maxCpuFreq.optAggressive') }
     ],
     help: t('field.maxCpuFreq.help')
   },

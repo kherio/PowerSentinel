@@ -660,6 +660,32 @@ _core_is_online() {
   [ "$(cat "$cpu_base_path/$1/online" 2>/dev/null)" = "1" ]
 }
 
+# BUG FIX (found while reviewing CPU-related mechanisms for anything
+# that could leave the device "prácticamente inutilizable" - a much
+# more severe failure than "slow"): action_cores_apply()'s
+# disable_cores loops below had no check at all for "would disabling
+# this core leave ZERO cores online system-wide". On a big.LITTLE SoC
+# this can't actually happen - hp_cpus/lp_cpus are always disjoint, so
+# disable_cores=auto only ever targets the performance cluster while
+# the efficiency cluster stays online - but on a SYMMETRIC CPU (every
+# core sharing the same max frequency, no big.LITTLE split at all),
+# auto_map_cores() classifies EVERY core as "high power" (there's
+# nothing to distinguish them by), so disable_cores=auto would attempt
+# to take every single core offline - a fully hung device requiring a
+# hard reboot, not just a slow one. Most kernels refuse to ever take
+# the last online core offline on their own, but that's an assumption
+# about kernel behavior this project has no business relying on rather
+# than just guaranteeing directly. Counts real online cores fresh each
+# time (never a stale cached count) and refuses to disable the last one
+# standing, for both the auto and manual selection modes.
+_count_online_cores() {
+  local n=0 c
+  for c in $(ls "$cpu_base_path/" 2>/dev/null | grep '^cpu[0-9]'); do
+    _core_is_online "$c" && n=$((n + 1))
+  done
+  echo "$n"
+}
+
 # Records that core $1 was online before PowerSentinel is about to take
 # it offline - only the first time (an already-tracked core keeps its
 # real original, not PowerSentinel's own "0"). $2 is the JSON file to
@@ -721,6 +747,7 @@ action_cores_apply() {
     if capability_has cores_online; then
       for cpu in ${hp_cpus[@]}; do
         _core_is_online "$cpu" || continue
+        [ "$(_count_online_cores)" -gt 1 ] || { log_msg 1 "Refusing to disable $cpu: it's the last online core"; break; }
         _core_capture_online_orig "$cpu" "$cores_online_file"
         log_msg 3 "Disabling $cpu"
         echo "0" > "$cpu_base_path/$cpu/online"
@@ -735,6 +762,7 @@ action_cores_apply() {
       for core in $disable_cores; do
         if [ -d "$cpu_base_path/$core" ]; then
           _core_is_online "$core" || continue
+          [ "$(_count_online_cores)" -gt 1 ] || { log_msg 1 "Refusing to disable $core: it's the last online core"; break; }
           _core_capture_online_orig "$core" "$cores_online_file"
           log_msg 3 "Disabling $core"
           echo "0" > "$cpu_base_path/$core/online"
@@ -896,7 +924,25 @@ action_cpufreq_apply() {
   case "$max_cpu_freq" in
     ''|false|*[!0-9]*) return ;;
   esac
+  # BUG FIX (reported: the "Moderado"/"Agresivo" labels were backwards
+  # - a HIGHER allowed-percentage is actually the MILDER limit, not the
+  # stronger one - and there was no floor at all against an extreme
+  # hand-edited config value). $max_cpu_freq is still "% of max
+  # ALLOWED" internally (the natural unit for the Hz computation below)
+  # - the WebUI's own preset values/labels were the ones that needed to
+  # correctly increase in restrictiveness (config-form.js), not this
+  # function's semantics. This floor is the actual safety net: no
+  # matter what ends up in the config - a UI preset, a hand-edited
+  # raw JSON, a future preset this project adds later - the CPU can
+  # never be capped below 30% of its real max on any core. Below that,
+  # even efficiency cores start to make ordinary UI interaction feel
+  # broken rather than just slower, which is a categorically worse
+  # outcome than under-saving battery by picking a less aggressive cap.
   [ "$max_cpu_freq" -ge 10 ] && [ "$max_cpu_freq" -le 100 ] 2>/dev/null || return
+  if [ "$max_cpu_freq" -lt 30 ]; then
+    log_msg 1 "max_cpu_freq=$max_cpu_freq is below the 30% safety floor - using 30% instead"
+    max_cpu_freq=30
+  fi
 
   local cpu max_hz target_hz closest best capped_any="false"
   for cpu in $(ls "$cpu_base_path/" 2>/dev/null | grep '^cpu[0-9]'); do
