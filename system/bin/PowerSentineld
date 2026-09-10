@@ -590,6 +590,7 @@ if [ "$adaptive_mode" != "true" ]; then
   was_thermal="$thermal_now"
 else
   was_adaptive_tier=0
+  _update_screen_off_duration
   adaptive_score="$(compute_pressure_score)"
   adaptive_tier="$(pressure_tier_for_score "$adaptive_score")"
   log_msg 2 "Adaptive mode enabled - initial score=$adaptive_score tier=$adaptive_tier"
@@ -597,6 +598,7 @@ else
     handle_event "adaptive_tier${adaptive_tier}" 1
   fi
   was_adaptive_tier="$adaptive_tier"
+  adaptive_tier_entered_at="$(date +%s)"
 fi
 
 # BUG FIX (concrete finding, see the call site's own comment further
@@ -854,12 +856,40 @@ while true; do
     # (not every unchanged score) triggers a handle_event call, exactly
     # like the classic checks above only escalate/de-escalate on a
     # real transition.
+    #
+    # BUG FIX (reported: "Ahorro suave" still flickering in/out every
+    # 30-100 seconds even after v4.6.0's score-based hysteresis): that
+    # fix only guards against the score slowly HOVERING a few points
+    # around a threshold - it does nothing for a single input that
+    # jumps by MORE than the hysteresis margin in one step.
+    # compute_pressure_score()'s own "screen off: flat +15" term is
+    # exactly that - a phone being checked and locked again every
+    # minute or two (completely ordinary use) swings the score by 15
+    # points on every toggle, comfortably clearing a 5-point margin in
+    # either direction every single time. No amount of score-based
+    # hysteresis alone can fix a discrete jump larger than the margin
+    # itself. Added a genuine time-based floor on top: a tier can still
+    # ESCALATE the instant conditions get worse (unchanged - reacting
+    # fast to worsening conditions is the direction it's safe to be
+    # quick about), but it can't DE-escalate again until it's actually
+    # been in the current tier for a minimum stretch, regardless of
+    # what the score does in between. Both layers now have to agree a
+    # downgrade is real: the score has to have genuinely dropped AND
+    # enough time has to have passed.
+    _update_screen_off_duration
     adaptive_score="$(compute_pressure_score)"
-    adaptive_tier="$(pressure_tier_for_score "$adaptive_score" "$was_adaptive_tier")"
+    adaptive_proposed_tier="$(pressure_tier_for_score "$adaptive_score" "$was_adaptive_tier")"
+    if [ "$adaptive_proposed_tier" -lt "$was_adaptive_tier" ] && \
+       [ "$(( $(date +%s) - adaptive_tier_entered_at ))" -lt "$ADAPTIVE_MIN_DWELL_SECONDS" ]; then
+      adaptive_tier="$was_adaptive_tier"
+    else
+      adaptive_tier="$adaptive_proposed_tier"
+    fi
     if [ "$adaptive_tier" != "$was_adaptive_tier" ]; then
       log_msg 2 "Adaptive tier changed: $was_adaptive_tier -> $adaptive_tier (score=$adaptive_score)"
       [ "$was_adaptive_tier" -gt 0 ] && handle_event "adaptive_tier${was_adaptive_tier}" 0
       [ "$adaptive_tier" -gt 0 ] && handle_event "adaptive_tier${adaptive_tier}" 1
+      adaptive_tier_entered_at="$(date +%s)"
     fi
     was_adaptive_tier="$adaptive_tier"
   fi

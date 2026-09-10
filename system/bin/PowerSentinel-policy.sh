@@ -124,21 +124,69 @@ is_thermal_now() {
 #   - Battery level: linear, an empty battery contributes up to +40
 #   - Temperature: starts contributing above 30C, capped at +30 by 40C+
 #   - Charging: flat -40 (charging relieves pressure - no urgency)
-#   - Screen off: flat +15 (headroom to act without the user noticing)
+#   - Screen off: flat +15, but only once it's been continuously off
+#     for at least $ADAPTIVE_SCREEN_OFF_MIN_SECONDS (see BUG FIX below
+#     for why)
 #   - Night hours (if configured on the night event): flat +10
 #   - CPU load (1-min average, whole-number part only - bash has no
 #     float comparison): high load holds pressure back (-10 to -20),
 #     since a busy device is the one time aggressive action would
 #     actually be felt
+
+# BUG FIX (reported: "Ahorro suave" still flickering every 30-100s even
+# after adding score hysteresis and a minimum-dwell-time floor to
+# pressure_tier_for_score() below - neither fully fixed it): the real
+# root cause traces back further than either of those, to this scoring
+# function itself. The screen-off term used to read is_device's
+# INSTANTANEOUS state and give the full +15 the moment it read "false"
+# - completely ordinary phone use (checking it, locking it again every
+# minute or two) toggles that flag constantly, jumping the score by 15
+# points on every single toggle, comfortably larger than any reasonable
+# hysteresis margin. Fixed at the source instead of trying to dampen
+# the symptom further downstream: the screen has to have been
+# continuously off for a real stretch before this term contributes
+# anything at all, so a brief check-and-lock never moves the score in
+# the first place.
+: "${_pressure_screen_state:=}"
+: "${_pressure_screen_state_since:=0}"
+ADAPTIVE_SCREEN_OFF_MIN_SECONDS=45
+
+# BUG FIX (found immediately while testing the fix above): compute_
+# pressure_score() is always called as `x="$(compute_pressure_score)"`
+# (its caller needs to capture the numeric result) - command
+# substitution runs the WHOLE function in a subshell, so any global
+# variable it tries to update internally (_pressure_screen_state and
+# friends) is silently thrown away the instant the subshell exits,
+# never reaching the calling shell at all. No amount of restructuring
+# calls INSIDE compute_pressure_score() can fix this - the subshell
+# boundary is set by the $(...) wrapping the function call itself, one
+# level up. The actual fix: split the state UPDATE into its own
+# function and have the caller (PowerSentineld) invoke it as a plain
+# statement (no $(...)) immediately before compute_pressure_score() -
+# a plain call shares the caller's real shell, so the update genuinely
+# persists; compute_pressure_score() itself then only ever READS these
+# globals, which needs no escape from anywhere.
+_update_screen_off_duration() {
+  local screen_on now
+  screen_on="$(is_device screen)"
+  now="$(date +%s)"
+  if [ "$screen_on" != "$_pressure_screen_state" ]; then
+    _pressure_screen_state="$screen_on"
+    _pressure_screen_state_since="$now"
+  fi
+}
+
 compute_pressure_score() {
   local level temp_c charging_flag score
-  local screen_on load_int night_now over
+  local load_int night_now over now screen_off_for
 
   level="$DETECT_BATTERY_LEVEL"
   temp_c="$(detect_battery_temp_c)"
   charging_flag="$DETECT_BATTERY_CHARGING"
 
-  screen_on="$(is_device screen)"
+  now="$(date +%s)"
+  screen_off_for=$(( now - _pressure_screen_state_since ))
+
   get_night_times
   night_now="$(is_night_now)"
 
@@ -150,7 +198,9 @@ compute_pressure_score() {
     score=$(( score + over * 3 ))
   fi
   [ "$charging_flag" = "true" ] && score=$(( score - 40 ))
-  [ "$screen_on" = "false" ] && score=$(( score + 15 ))
+  if [ "$_pressure_screen_state" = "false" ] && [ "$screen_off_for" -ge "$ADAPTIVE_SCREEN_OFF_MIN_SECONDS" ]; then
+    score=$(( score + 15 ))
+  fi
   [ "$night_now" = "true" ] && score=$(( score + 10 ))
 
   load_int="${DETECT_LOAD1%%.*}"
@@ -192,6 +242,15 @@ compute_pressure_score() {
 # ever) simply skips hysteresis, since there's nothing yet to be
 # sticky relative to.
 ADAPTIVE_HYSTERESIS_MARGIN=5
+
+# Second, independent layer against flapping - see the main loop's own
+# comment (PowerSentineld) for why score-based hysteresis alone isn't
+# enough against a single input (screen off: +15) that can jump by
+# more than the margin above in one step. A tier must have been held
+# for at least this long before a downgrade is allowed, regardless of
+# what the score does in between - tuned against a real reported case
+# of re-entries as little as 30-100s apart.
+ADAPTIVE_MIN_DWELL_SECONDS=120
 
 pressure_tier_for_score() {
   local score="$1" previous_tier="${2:-}" t1 t2 t3 raw_tier prev_threshold
