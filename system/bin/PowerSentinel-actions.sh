@@ -854,3 +854,158 @@ action_cores_undo() {
     done
   fi
 }
+
+# ---------- CPU max frequency cap (feature request: "que se note un
+# ahorro de batería real") ----------
+#
+# Deliberately separate from handle_cores' own "powersave governor"
+# mechanism above - that changes which ALGORITHM the kernel uses to
+# pick a frequency (favors low ones, but still allows bursts up to the
+# hardware max under real load); this is a hard CEILING the CPU can
+# never exceed regardless of governor or load, a more aggressive and
+# fully complementary lever - both can be active on the same core at
+# once perfectly sensibly.
+#
+# $max_cpu_freq is a PERCENTAGE (10-100) of the core's own real
+# hardware max (cpuinfo_max_freq, read-only) - never a raw Hz value,
+# which would require knowing this specific device's frequency table
+# up front. The actual frequency written is the closest AVAILABLE
+# step at or below that target (scaling_available_frequencies) when
+# the device reports one; falls back to the raw computed value
+# otherwise; a device where scaling_max_freq isn't writable at all
+# just doesn't get capped, with a warning emitted rather than a hard
+# failure.
+: "${cpufreq_orig_file:=/data/local/tmp/PowerSentinel/PowerSentinel.cpufreqorig}"
+
+_cpufreq_capture_orig() {
+  local cpu="$1" file="$2" existing
+  existing="$("$JQ" -r --arg c "$cpu" '.[$c] // empty' "$file" 2>/dev/null)"
+  [ -n "$existing" ] && return
+  local cur
+  cur="$(cat "$cpu_base_path/$cpu/cpufreq/scaling_max_freq" 2>/dev/null)"
+  [ -n "$cur" ] || return
+  mkdir -p "$(dirname "$file")" 2>/dev/null
+  [ -s "$file" ] || echo '{}' > "$file"
+  local tmp
+  tmp="$(mktemp "$(dirname "$file")/.cpufreqorig.XXXXXX")" || return
+  "$JQ" --arg c "$cpu" --arg v "$cur" '.[$c] = $v' "$file" > "$tmp" 2>/dev/null \
+    && [ -s "$tmp" ] && chmod 600 "$tmp" 2>/dev/null && mv "$tmp" "$file" || rm -f "$tmp"
+}
+
+action_cpufreq_apply() {
+  case "$max_cpu_freq" in
+    ''|false|*[!0-9]*) return ;;
+  esac
+  [ "$max_cpu_freq" -ge 10 ] && [ "$max_cpu_freq" -le 100 ] 2>/dev/null || return
+
+  local cpu max_hz target_hz closest best capped_any="false"
+  for cpu in $(ls "$cpu_base_path/" 2>/dev/null | grep '^cpu[0-9]'); do
+    [ -w "$cpu_base_path/$cpu/cpufreq/scaling_max_freq" ] || continue
+    max_hz="$(cat "$cpu_base_path/$cpu/cpufreq/cpuinfo_max_freq" 2>/dev/null)"
+    case "$max_hz" in ''|*[!0-9]*) continue ;; esac
+    target_hz=$(( max_hz * max_cpu_freq / 100 ))
+    closest="$target_hz"
+    if [ -r "$cpu_base_path/$cpu/cpufreq/scaling_available_frequencies" ]; then
+      best="$(tr ' ' '\n' < "$cpu_base_path/$cpu/cpufreq/scaling_available_frequencies" 2>/dev/null \
+        | awk -v t="$target_hz" '$1 ~ /^[0-9]+$/ && $1 <= t { if ($1+0 > best+0) best = $1 } END { if (best) print best }')"
+      [ -n "$best" ] && closest="$best"
+    fi
+    _cpufreq_capture_orig "$cpu" "$cpufreq_orig_file"
+    log_msg 3 "Capping $cpu to ${closest}kHz (~${max_cpu_freq}% of ${max_hz}kHz)"
+    echo "$closest" > "$cpu_base_path/$cpu/cpufreq/scaling_max_freq" 2>/dev/null && capped_any="true"
+  done
+  if [ "$capped_any" != "true" ]; then
+    log_msg 1 "Cannot cap CPU frequency: no writable scaling_max_freq found on this device"
+    emit capabilities warning "El límite de frecuencia de CPU no se pudo aplicar: no soportado en este dispositivo"
+  fi
+}
+
+action_cpufreq_undo() {
+  [ -s "$cpufreq_orig_file" ] || return
+  # Same "don't undo out from under a sibling event" composition check
+  # already used for GMS/WiFi/etc - if another currently-active event
+  # ALSO wants a frequency cap, leave the current cap in place rather
+  # than releasing it just because THIS event ended.
+  local ev val
+  for ev in "${active_events[@]}"; do
+    [ -n "$ev" ] && [ "$ev" != "$event" ] || continue
+    val="$(config_get_event_raw "$ev" max_cpu_freq false)"
+    case "$val" in ''|false|*[!0-9]*) continue ;; esac
+    return
+  done
+  local cpu orig
+  for cpu in $("$JQ" -r 'keys[]' "$cpufreq_orig_file" 2>/dev/null); do
+    orig="$("$JQ" -r --arg c "$cpu" '.[$c] // empty' "$cpufreq_orig_file" 2>/dev/null)"
+    if [ -n "$orig" ] && [ -w "$cpu_base_path/$cpu/cpufreq/scaling_max_freq" ]; then
+      log_msg 3 "Restoring $cpu to ${orig}kHz"
+      echo "$orig" > "$cpu_base_path/$cpu/cpufreq/scaling_max_freq" 2>/dev/null
+    fi
+  done
+  rm -f "$cpufreq_orig_file"
+}
+
+# ---------- Screen refresh rate cap (feature request) ----------
+#
+# A device with a 90/120Hz panel spends real, well-documented extra
+# battery keeping it running that fast - something this project never
+# touched before, unlike the CPU/WiFi/GMS levers above. $max_refresh_rate
+# is a plain Hz number (e.g. 60); both peak_refresh_rate and
+# min_refresh_rate get set to it, which is the combination that
+# actually forces a fixed rate rather than just lowering the ceiling of
+# an adaptive range on the Android versions/OEM skins that respect
+# these settings - not universal across every device, same category of
+# honest hardware-dependence as charge_limit_node already has.
+: "${refresh_orig_file:=/data/local/tmp/PowerSentinel/PowerSentinel.refreshorig}"
+
+# `settings get` prints the literal string "null" for a setting that
+# was never explicitly set, not empty output - restoring THAT string
+# with `settings put` would leave a real, wrong value behind instead of
+# actually returning to "unset". Deletes the key instead whenever the
+# captured original was unset, so undo genuinely restores the
+# pre-PowerSentinel state rather than a plausible-looking approximation
+# of it.
+_restore_system_setting() {
+  local key="$1" val="$2"
+  if [ -z "$val" ] || [ "$val" = "null" ]; then
+    settings delete system "$key" 2>/dev/null
+  else
+    settings put system "$key" "$val" 2>/dev/null
+  fi
+}
+
+action_refresh_apply() {
+  case "$max_refresh_rate" in
+    ''|false|*[!0-9]*) return ;;
+  esac
+  if [ ! -s "$refresh_orig_file" ]; then
+    local orig_peak orig_min tmp dir
+    orig_peak="$(settings get system peak_refresh_rate 2>/dev/null)"
+    orig_min="$(settings get system min_refresh_rate 2>/dev/null)"
+    dir="$(dirname "$refresh_orig_file")"
+    mkdir -p "$dir" 2>/dev/null
+    tmp="$(mktemp "$dir/.refreshorig.XXXXXX")" || return
+    "$JQ" -cn --arg peak "$orig_peak" --arg min "$orig_min" '{peak:$peak, min:$min}' > "$tmp" 2>/dev/null \
+      && [ -s "$tmp" ] && chmod 600 "$tmp" 2>/dev/null && mv "$tmp" "$refresh_orig_file" || rm -f "$tmp"
+  fi
+  log_msg 3 "Capping refresh rate to ${max_refresh_rate}Hz"
+  settings put system peak_refresh_rate "$max_refresh_rate" 2>/dev/null
+  settings put system min_refresh_rate "$max_refresh_rate" 2>/dev/null
+}
+
+action_refresh_undo() {
+  [ -s "$refresh_orig_file" ] || return
+  local ev val
+  for ev in "${active_events[@]}"; do
+    [ -n "$ev" ] && [ "$ev" != "$event" ] || continue
+    val="$(config_get_event_raw "$ev" max_refresh_rate false)"
+    case "$val" in ''|false|*[!0-9]*) continue ;; esac
+    return
+  done
+  local orig_peak orig_min
+  orig_peak="$("$JQ" -r '.peak // empty' "$refresh_orig_file" 2>/dev/null)"
+  orig_min="$("$JQ" -r '.min // empty' "$refresh_orig_file" 2>/dev/null)"
+  log_msg 3 "Restoring refresh rate settings"
+  _restore_system_setting peak_refresh_rate "$orig_peak"
+  _restore_system_setting min_refresh_rate "$orig_min"
+  rm -f "$refresh_orig_file"
+}

@@ -191,6 +191,21 @@ export async function readDiagnostics() {
   return run(`PowerSentinel-diagnose 2>/dev/null || echo '[]'`);
 }
 
+// Feature request: "que el usuario sepa que realmente está funcionando
+// bien" - a real, measured drain-rate comparison (with vs without a
+// given event active), from this device's own energy log. One-shot/
+// on-demand, same reasoning as readDiagnostics()/
+// readSuggestedNightWindow() above. Event name is sanitized to the
+// same safe character set already used elsewhere for anything that
+// reaches a shell command (assertPackageName and friends) - it only
+// ever comes from PREDEFINED_EVENTS/a known event name in practice, but
+// there's no reason to trust that assumption over just enforcing it.
+export async function readDrainComparison(eventName) {
+  const clean = (eventName || '').replace(/[^a-zA-Z0-9_]/g, '');
+  if (!clean) return '{}';
+  return run(`PowerSentinel-comparedrain '${clean}' 2>/dev/null || echo '{}'`);
+}
+
 // Feature request: suggest a night-window start/end from the person's
 // OWN real screen-wake history. One-shot/on-demand (see the script's
 // own header for why this isn't computed inside the always-running

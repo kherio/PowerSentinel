@@ -62,6 +62,15 @@ var FIELD_DEFS = [
     warn: t('field.disableCores.warn'),
     warnIf: function () { return !!detectedManufacturer && detectedManufacturer.indexOf('samsung') !== -1; } },
   {
+    key: 'max_cpu_freq', label: t('field.maxCpuFreq.label'), type: 'select', def: 'false', group: 'cpu',
+    options: [
+      { value: 'false', label: t('field.maxCpuFreq.optFalse') },
+      { value: '70', label: t('field.maxCpuFreq.optModerate') },
+      { value: '50', label: t('field.maxCpuFreq.optAggressive') }
+    ],
+    help: t('field.maxCpuFreq.help')
+  },
+  {
     key: 'handle_gms', label: t('field.handleGms.label'), type: 'select', def: 'false', group: 'sistema',
     options: [
       { value: 'false', label: t('field.handleGms.optFalse') },
@@ -94,6 +103,16 @@ var FIELD_DEFS = [
   },
   { key: 'kill_wifi', label: t('field.killWifi.label'), type: 'toggle', def: 'false', group: 'sistema',
     warn: t('field.killWifi.warn') },
+  {
+    key: 'max_refresh_rate', label: t('field.maxRefreshRate.label'), type: 'select', def: 'false', group: 'sistema',
+    options: [
+      { value: 'false', label: t('field.maxRefreshRate.optFalse') },
+      { value: '60', label: t('field.maxRefreshRate.opt60') },
+      { value: '90', label: t('field.maxRefreshRate.opt90') }
+    ],
+    help: t('field.maxRefreshRate.help'),
+    warn: t('field.maxRefreshRate.warn')
+  },
   { key: 'keep_on_charge', label: t('field.keepOnCharge.label'), type: 'toggle', def: 'true', group: 'sistema',
     help: t('field.keepOnCharge.help') }
 ];

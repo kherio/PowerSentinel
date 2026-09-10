@@ -1,0 +1,23 @@
+#!/system/bin/bash
+# PowerSentinel-comparedrain - one-shot, on-demand: compare the real,
+# measured battery drain rate (%/h) while a given event was active
+# against while it wasn't, from this device's own history
+# (PowerSentinel-energylog.sh, which has been collecting exactly this -
+# battery level plus what was active at the time - since it was first
+# built for precisely this purpose).
+#
+# Usage: PowerSentinel-comparedrain <event_name>
+#
+# Deliberately NOT computed inside the always-running daemon - this
+# sorts/scans the whole energy log (up to ~5000 lines) to build the
+# comparison, real work with no business running on the daemon's hot
+# loop for a feature only looked at occasionally. Standalone script,
+# same "one-shot, on-demand" pattern already used by
+# PowerSentinel-cpurank/-usagerank/-suggestnight/-diagnose.
+
+JQ="$(dirname "$0")/jq"
+energylog_file="/data/local/tmp/PowerSentinel/PowerSentinel.energylog"
+
+. "$(dirname "$0")/PowerSentinel-energylog.sh"
+
+energylog_compare_event "$1"

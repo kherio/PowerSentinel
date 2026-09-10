@@ -1,5 +1,5 @@
 import { ICONS } from '../icons.js';
-import { readStatus, readCpuRanking, readJournal, readEnergyLog, restartDaemon, readConfig, writeConfig, readFlaggedApps, startManualTimed, stopEvent, readSuggestedNightWindow } from '../api.js';
+import { readStatus, readCpuRanking, readJournal, readEnergyLog, restartDaemon, readConfig, writeConfig, readFlaggedApps, startManualTimed, stopEvent, readSuggestedNightWindow, readDrainComparison } from '../api.js';
 import { toast, escapeHtml } from '../helpers.js';
 import { t } from '../i18n.js';
 import { parseJournalLines, renderTimelineEntry, parseEnergyLines, computeRecentRate } from './log.js';
@@ -765,6 +765,49 @@ function mechanismRows(mech) {
   return rows;
 }
 
+// Real, measured drain-rate comparison per active event (feature
+// request: "que el usuario sepa que realmente está funcionando bien").
+// Deliberately cached with a slow refresh (5 min) and fetched
+// separately from the normal 3s poll - readDrainComparison() scans the
+// whole energy log, real work with no business running that often, and
+// the underlying number itself only meaningfully changes over hours,
+// not seconds. Patches just the one element for whichever event
+// finished loading, rather than triggering a full renderActiveNow()
+// re-render - the same "surgical update, never rebuild the whole
+// card" reasoning already applied elsewhere on this dashboard.
+const drainComparisonCache = new Map();
+const DRAIN_COMPARISON_TTL_MS = 5 * 60 * 1000;
+
+function scheduleDrainComparisonFetch(eventName) {
+  const cached = drainComparisonCache.get(eventName);
+  if (cached && cached.fetching) return;
+  if (cached && (Date.now() - cached.fetchedAt) < DRAIN_COMPARISON_TTL_MS) return;
+  drainComparisonCache.set(eventName, { ...(cached || {}), fetching: true });
+  readDrainComparison(eventName).then((text) => {
+    let display = null;
+    try {
+      const data = JSON.parse(text || '{}');
+      if (data.with_seconds && data.without_seconds) {
+        display = {
+          withRate: data.with_drop_pct / (data.with_seconds / 3600),
+          withoutRate: data.without_drop_pct / (data.without_seconds / 3600)
+        };
+      }
+    } catch (e) { /* leave display as null - "not enough data yet" */ }
+    drainComparisonCache.set(eventName, { display, fetchedAt: Date.now(), fetching: false });
+    if (!display) return;
+    const el = document.getElementById(`active-now-drain-${eventName}`);
+    if (!el) return; // card for this event isn't on screen anymore
+    el.textContent = t('dashboard.drainComparison', {
+      with: display.withRate.toFixed(1),
+      without: display.withoutRate.toFixed(1)
+    });
+    el.style.display = 'block';
+  }).catch(() => {
+    drainComparisonCache.set(eventName, { display: null, fetchedAt: Date.now(), fetching: false });
+  });
+}
+
 function renderActiveNow(sys) {
   const wrap = document.getElementById('e-active-now-wrap');
   const mechanisms = sys.activeMechanisms || [];
@@ -776,11 +819,17 @@ function renderActiveNow(sys) {
     const rows = mechanismRows(mech).map((r) =>
       `<div class="mechanism-row"><span class="mechanism-cat">${escapeHtml(r.label)}</span><span class="mechanism-treatment">${escapeHtml(r.value)}</span></div>`
     ).join('');
+    const cached = drainComparisonCache.get(mech.event);
+    const drainText = cached && cached.display
+      ? t('dashboard.drainComparison', { with: cached.display.withRate.toFixed(1), without: cached.display.withoutRate.toFixed(1) })
+      : '';
+    scheduleDrainComparisonFetch(mech.event);
     return `<div class="card active-now-card" style="margin-bottom:14px;">
       <div class="active-now-header"><span class="active-now-icon">${eventIcon(mech.event)}</span><span class="active-now-title">${escapeHtml(eventDisplayName(mech.event))}</span></div>
       ${since ? `<div class="active-now-since">${escapeHtml(since)}</div>` : ''}
       <div class="active-now-mechanisms">${rows}</div>
       <p class="hint active-now-why">${escapeHtml(eventWhy(mech.event))}</p>
+      <p class="active-now-drain" id="active-now-drain-${escapeHtml(mech.event)}" style="${drainText ? '' : 'display:none;'}">${escapeHtml(drainText)}</p>
     </div>`;
   }).join('');
 }

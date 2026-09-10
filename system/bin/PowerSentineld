@@ -496,11 +496,15 @@ enable_pwr_save() {
   action_wifi_apply
   action_doze_apply
   action_cores_apply
+  action_cpufreq_apply
+  action_refresh_apply
 
   update_status
 }
 
 disable_pwr_save() {
+  action_refresh_undo
+  action_cpufreq_undo
   action_cores_undo
   action_doze_undo
   action_wifi_undo

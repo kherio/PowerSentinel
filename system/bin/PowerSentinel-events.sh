@@ -118,7 +118,7 @@ declare -gA _event_applied_fields=()
 
 _snapshot_event_fields() {
   local ev="$1"
-  _event_applied_fields[$ev]="$(declare -p handle_cores disable_cores handle_apps allowlist denylist handle_proc proc_file handle_gms low_ram doze kill_wifi 2>/dev/null)"
+  _event_applied_fields[$ev]="$(declare -p handle_cores disable_cores handle_apps allowlist denylist handle_proc proc_file handle_gms low_ram doze kill_wifi max_cpu_freq max_refresh_rate 2>/dev/null)"
 }
 
 _restore_event_snapshot() {
@@ -155,6 +155,8 @@ _resolve_event_fields() {
   low_ram=false
   doze=false
   kill_wifi=false
+  max_cpu_freq=false
+  max_refresh_rate=false
 
   val="$(config_get_event_raw "$ev" handle_cores false)"
   [ "$val" != "false" ] && handle_cores="$val"
@@ -178,6 +180,10 @@ _resolve_event_fields() {
   [ "$val" != "false" ] && doze="$val"
   val="$(config_get_event_raw "$ev" kill_wifi false)"
   [ "$val" = "true" ] && kill_wifi="true"
+  val="$(config_get_event_raw "$ev" max_cpu_freq false)"
+  case "$val" in ''|false|*[!0-9]*) ;; *) max_cpu_freq="$val" ;; esac
+  val="$(config_get_event_raw "$ev" max_refresh_rate false)"
+  case "$val" in ''|false|*[!0-9]*) ;; *) max_refresh_rate="$val" ;; esac
 
   if [ "$handle_apps" != "false" ] && [ "$allowlist" = "null" ] && [ "$denylist" = "null" ]; then
     handle_apps=false
@@ -272,6 +278,8 @@ handle_event() {
   low_ram=false
   doze=false
   kill_wifi=false
+  max_cpu_freq=false
+  max_refresh_rate=false
 
   log_msg 3 "Parsing the config for $event event"
 
@@ -326,6 +334,12 @@ handle_event() {
 
   val="$(config_get_event_raw "$event" kill_wifi false)"
   [ "$val" = "true" ] && kill_wifi="true"
+
+  val="$(config_get_event_raw "$event" max_cpu_freq false)"
+  case "$val" in ''|false|*[!0-9]*) ;; *) max_cpu_freq="$val" ;; esac
+
+  val="$(config_get_event_raw "$event" max_refresh_rate false)"
+  case "$val" in ''|false|*[!0-9]*) ;; *) max_refresh_rate="$val" ;; esac
 
   # perform sanity checks to prevent the user from killing themself
   if [ "$handle_apps" != "false" ] && [ "$allowlist" = "null" ] && [ "$denylist" = "null" ]; then

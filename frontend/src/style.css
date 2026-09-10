@@ -1107,6 +1107,15 @@ main {
 .active-now-why {
   margin: 0;
 }
+/* Real, measured drain-rate comparison (feature request) - a quiet,
+   accent-colored line, not a banner - this is evidence FOR something
+   already shown as active, not a separate alert needing its own
+   attention. */
+.active-now-drain {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--accent);
+}
 
 .link-btn {
   display: block;
