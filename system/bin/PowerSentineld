@@ -450,6 +450,7 @@ update_status() {
     echo "ActiveEventStartTimes: ${_ts_json:-\{\}}" >> "$status_file"
   fi
   echo "ActiveMechanisms: $(active_mechanisms_snapshot)" >> "$status_file"
+  notify_active_mode_update
 
   # Night-wake counter for the "Encendidos nocturnos" dashboard card -
   # see PowerSentinel-screenwake.sh. Only ever non-empty ('{}' otherwise)

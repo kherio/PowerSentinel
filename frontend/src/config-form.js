@@ -134,6 +134,8 @@ var GLOBAL_DEFS = [
   },
   { key: 'notify', label: t('global.notify.label'), type: 'toggle', def: 'true',
     help: t('global.notify.help') },
+  { key: 'notify_active_mode', label: t('global.notifyActiveMode.label'), type: 'toggle', def: 'false',
+    help: t('global.notifyActiveMode.help') },
   { key: 'charge_limit', label: t('global.chargeLimit.label'), type: 'number', def: '0',
     help: t('global.chargeLimit.help') },
   { key: 'charge_limit_node', label: t('global.chargeLimitNode.label'), type: 'text', def: '',
