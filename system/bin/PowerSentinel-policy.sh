@@ -128,6 +128,10 @@ is_thermal_now() {
 #     for at least $ADAPTIVE_SCREEN_OFF_MIN_SECONDS (see BUG FIX below
 #     for why)
 #   - Night hours (if configured on the night event): flat +10
+#   - Genuinely parked at night: an extra +45 once the screen has been
+#     off continuously for $ADAPTIVE_LONG_IDLE_SECONDS AND it's night -
+#     see the feature-request comment below for why this needs to be
+#     this large
 #   - CPU load (1-min average, whole-number part only - bash has no
 #     float comparison): high load holds pressure back (-10 to -20),
 #     since a busy device is the one time aggressive action would
@@ -152,6 +156,7 @@ is_thermal_now() {
 : "${_pressure_load_bucket:=0}"
 : "${_pressure_load_bucket_since:=0}"
 ADAPTIVE_SCREEN_OFF_MIN_SECONDS=45
+ADAPTIVE_LONG_IDLE_SECONDS=1800
 
 # BUG FIX (found immediately while testing the fix above): compute_
 # pressure_score() is always called as `x="$(compute_pressure_score)"`
@@ -237,6 +242,29 @@ compute_pressure_score() {
     score=$(( score + 15 ))
   fi
   [ "$night_now" = "true" ] && score=$(( score + 10 ))
+
+  # Feature request: "un móvil parado por la noche debería tener
+  # activado el modo Ahorro Extremo" - checked directly against the
+  # actual weights above and confirmed this was architecturally
+  # impossible before this fix: the maximum score achievable from
+  # battery+screen+night alone was 40+15+10=65, always short of
+  # tier3's default 70 threshold NO MATTER how low the battery got -
+  # tier3 could only ever be reached through the temperature term, i.e.
+  # only when the phone was also genuinely hot. A large, mostly
+  # battery-independent bonus once the screen has been off a GENUINELY
+  # long stretch (not just the short $ADAPTIVE_SCREEN_OFF_MIN_SECONDS
+  # debounce above, which only distinguishes "locked a moment ago" from
+  # "actually locked") while it's night: +45 guarantees crossing 70
+  # even at a full, undrained battery (0 + 15 + 10 + 45 = 70) - a
+  # parked phone at night reaches extreme savings close to
+  # unconditionally, exactly as asked, with charging as the one
+  # deliberate exception (its own -40 term can still pull the total
+  # back down - no reason to restrict apps on a phone that's plugged in
+  # peacefully overnight, which is the entire point that term already
+  # existed for).
+  if [ "$_pressure_screen_state" = "false" ] && [ "$night_now" = "true" ] && [ "$screen_off_for" -ge "$ADAPTIVE_LONG_IDLE_SECONDS" ]; then
+    score=$(( score + 45 ))
+  fi
 
   load_bucket_for=$(( now - _pressure_load_bucket_since ))
   if [ "$load_bucket_for" -ge "$ADAPTIVE_SCREEN_OFF_MIN_SECONDS" ]; then
@@ -395,6 +423,15 @@ pressure_breakdown() {
     screen_term=15
   fi
   [ "$night_now" = "true" ] && night_term=10
+  # Folded into the same "screen_off" line rather than a new named
+  # field - the breakdown's shape is fixed to what the WebUI already
+  # labels (dashboard.screenLabel, etc.), and this bonus is
+  # conceptually the same driver (how long the screen's really been
+  # off), just a much larger contribution once that stretch is long
+  # enough to mean "genuinely parked", not a separate cause.
+  if [ "$_pressure_screen_state" = "false" ] && [ "$night_now" = "true" ] && [ "$screen_off_for" -ge "$ADAPTIVE_LONG_IDLE_SECONDS" ]; then
+    screen_term=$(( screen_term + 45 ))
+  fi
 
   load_bucket_for=$(( $(date +%s) - _pressure_load_bucket_since ))
   if [ "$load_bucket_for" -ge "$ADAPTIVE_SCREEN_OFF_MIN_SECONDS" ]; then

@@ -188,7 +188,26 @@ function buildRecommendedModel() {
       { name: 'charging', fields: Object.assign({}, EVENT_PRESETS.balanced.fields) },
       { name: 'screen_off', fields: Object.assign({}, EVENT_PRESETS.balanced.fields) },
       { name: 'low_power', fields: Object.assign({}, EVENT_PRESETS.aggressive.fields) },
-      { name: 'night', fields: Object.assign({ night_start: '23:00', night_end: '07:00' }, EVENT_PRESETS.balanced.fields) }
+      { name: 'night', fields: Object.assign({ night_start: '23:00', night_end: '07:00' }, EVENT_PRESETS.balanced.fields) },
+      // Feature request: adaptive mode had NO recommended defaults at
+      // all for its own 3 tiers before this - enabling it left someone
+      // with three empty event blocks doing nothing until they built a
+      // config for each from scratch, the one part of "Restaurar
+      // valores recomendados" that never actually restored anything.
+      // Escalating mildest to harshest, matching what the tier names
+      // themselves promise: tier1 only nices background apps (nothing
+      // else touched - the level meant to be barely noticeable), tier2
+      // is the same balanced preset already used for night/screen_off,
+      // tier3 is "solo la app que hayas permitido explícitamente puede
+      // seguir funcionando" - handle_apps=suspend (freezes everything
+      // NOT on the allowlist, stronger than aggressive's own "kill",
+      // which a killed app's own restart-on-launch can undo) with an
+      // allowlist file the person still needs to actually create and
+      // populate - this only points at where it lives, it can't know
+      // which of someone's apps they'd want to keep working overnight.
+      { name: 'adaptive_tier1', fields: { handle_apps: 'nice' } },
+      { name: 'adaptive_tier2', fields: Object.assign({}, EVENT_PRESETS.balanced.fields) },
+      { name: 'adaptive_tier3', fields: Object.assign({}, EVENT_PRESETS.aggressive.fields, { handle_apps: 'suspend', allowlist: '/sdcard/PowerSentinel/apps.allow' }) }
     ]
   };
 }
