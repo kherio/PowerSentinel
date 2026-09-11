@@ -119,6 +119,27 @@ var FIELD_DEFS = [
 ];
 
 var GLOBAL_DEFS = [
+  // Feature request (found while investigating "no veo el interruptor
+  // de modo adaptativo en ajustes globales"): the toggle was there and
+  // working correctly, just positioned 8th of 11 fields in a plain
+  // scrolling list, after several much lower-stakes settings (poll
+  // delay, log file/level, notification toggles, charge limit) - easy
+  // to miss without scrolling all the way down for a setting this
+  // consequential (it fully replaces every classic automatic event).
+  // Moved to the top, with its own tier-threshold fields (showIf-gated
+  // on it, unchanged) kept immediately after it so the whole adaptive-
+  // mode group stays together instead of splitting across the list.
+  { key: 'adaptive_mode', label: t('global.adaptiveMode.label'), type: 'toggle', def: 'false',
+    help: t('global.adaptiveMode.help') },
+  { key: 'adaptive_tier1_threshold', label: t('global.adaptiveTier1.label'), type: 'number', def: '20',
+    help: t('global.adaptiveTier1.help'),
+    showIf: function (f) { return f.adaptive_mode === 'true'; } },
+  { key: 'adaptive_tier2_threshold', label: t('global.adaptiveTier2.label'), type: 'number', def: '45',
+    help: t('global.adaptiveTier2.help'),
+    showIf: function (f) { return f.adaptive_mode === 'true'; } },
+  { key: 'adaptive_tier3_threshold', label: t('global.adaptiveTier3.label'), type: 'number', def: '70',
+    help: t('global.adaptiveTier3.help'),
+    showIf: function (f) { return f.adaptive_mode === 'true'; } },
   { key: 'delay', label: t('global.delay.label'), type: 'number', def: '3',
     help: t('global.delay.help') },
   { key: 'log_file', label: t('global.logFile.label'), type: 'text', def: '/sdcard/PowerSentinel.log',
@@ -141,18 +162,7 @@ var GLOBAL_DEFS = [
   { key: 'charge_limit_node', label: t('global.chargeLimitNode.label'), type: 'text', def: '',
     placeholder: '/sys/class/power_supply/battery/charging_enabled',
     help: t('global.chargeLimitNode.help'),
-    warn: t('global.chargeLimitNode.warn') },
-  { key: 'adaptive_mode', label: t('global.adaptiveMode.label'), type: 'toggle', def: 'false',
-    help: t('global.adaptiveMode.help') },
-  { key: 'adaptive_tier1_threshold', label: t('global.adaptiveTier1.label'), type: 'number', def: '20',
-    help: t('global.adaptiveTier1.help'),
-    showIf: function (f) { return f.adaptive_mode === 'true'; } },
-  { key: 'adaptive_tier2_threshold', label: t('global.adaptiveTier2.label'), type: 'number', def: '45',
-    help: t('global.adaptiveTier2.help'),
-    showIf: function (f) { return f.adaptive_mode === 'true'; } },
-  { key: 'adaptive_tier3_threshold', label: t('global.adaptiveTier3.label'), type: 'number', def: '70',
-    help: t('global.adaptiveTier3.help'),
-    showIf: function (f) { return f.adaptive_mode === 'true'; } }
+    warn: t('global.chargeLimitNode.warn') }
 ];
 
 // Quick-start templates a user can apply to any event, instead of having

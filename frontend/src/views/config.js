@@ -1126,7 +1126,24 @@ function refreshLiveStatus() {
     if (cores.length) coreList = cores.sort((a, b) => a - b);
     activeEventNames = new Set(activeEvents);
     updateActiveIndicators();
-    if (loaded) renderVersionView();
+    // BUG FIX (reported: searching for an event/app in Automatización
+    // was "impossible" - the list kept flickering every few seconds
+    // and whatever had just been typed/filtered would disappear).
+    // renderVersionView() calls renderGlobalFields() + renderEvents()
+    // + renderBasicMode() - the first two do a blanket `innerHTML = ''`
+    // full rebuild, discarding exactly the kind of in-progress state
+    // (a search filter, focus, an unsaved edit mid-typing) this
+    // function's OWN neighbor, updateActiveIndicators() below, was
+    // deliberately built to avoid destroying on this same 10s timer -
+    // its comment says so directly ("does NOT call the full
+    // renderEvents() on a timer"), but this call was left calling the
+    // full rebuild right alongside it anyway, quietly defeating that
+    // fix. renderBasicMode() alone is the only piece of
+    // renderVersionView() actually needed live here - it only ever
+    // sets specific properties (checked/textContent/display) on
+    // elements that already exist, never a blanket rebuild, so it can't
+    // lose anything the person is in the middle of doing.
+    if (loaded) renderBasicMode();
   }).catch(() => {});
 }
 
