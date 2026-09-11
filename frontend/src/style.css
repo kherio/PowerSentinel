@@ -883,6 +883,10 @@ main {
   color: var(--text);
   font-size: 13px;
 }
+.dashboard-gauge-caption {
+  font-size: 12px;
+  color: var(--muted);
+}
 .dashboard-pressure-segments {
   display: flex;
   gap: 4px;
@@ -967,6 +971,11 @@ main {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 6px;
+}
+.nightwake-scope-note {
+  font-size: 11px;
+  color: var(--muted);
+  margin: 0 0 8px;
 }
 .nightwake-title {
   font-size: 13px;
@@ -1646,8 +1655,14 @@ main {
 .savings-bar-label {
   font-size: 11px;
   color: var(--muted);
-  width: 46px;
+  width: 74px;
   flex: none;
+}
+.savings-bar-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 8px;
 }
 .savings-bar-track {
   flex: 1;

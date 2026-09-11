@@ -149,6 +149,8 @@ is_thermal_now() {
 # the first place.
 : "${_pressure_screen_state:=}"
 : "${_pressure_screen_state_since:=0}"
+: "${_pressure_load_bucket:=0}"
+: "${_pressure_load_bucket_since:=0}"
 ADAPTIVE_SCREEN_OFF_MIN_SECONDS=45
 
 # BUG FIX (found immediately while testing the fix above): compute_
@@ -174,11 +176,44 @@ _update_screen_off_duration() {
     _pressure_screen_state="$screen_on"
     _pressure_screen_state_since="$now"
   fi
+
+  # BUG FIX (reported directly, again, after a week: "Ahorro suave"
+  # STILL flickering even after the screen-off debounce above and the
+  # tier-level hysteresis/dwell-time). Found by re-reading every term
+  # in compute_pressure_score() from scratch rather than assuming the
+  # screen fix was the whole story: the CPU load term has the EXACT
+  # same shape of bug the screen-off term had - $DETECT_LOAD1 (a 1-
+  # minute trailing average, so it drifts continuously rather than
+  # jumping) crossing the whole-number boundary at 1.0 or 2.0 changes
+  # the score by 10-20 points INSTANTLY, comfortably larger than the
+  # 5-point hysteresis margin - and on a phone sitting idle overnight
+  # (exactly when "Noche"/tier1 is active), intermittent background
+  # activity (sync jobs, notification checks) can easily make the
+  # 1-minute average hover right around 1.0, crossing it repeatedly.
+  # Same fix as the screen: track how long the load has sat in its
+  # CURRENT bucket, debounced the same $ADAPTIVE_SCREEN_OFF_MIN_SECONDS
+  # amount, so it takes a real sustained change before it moves the
+  # score - not a momentary background blip. Folded into this same
+  # function (not a second one) specifically so there's only one call
+  # site to remember, rather than risking a future round forgetting to
+  # wire up a second debounce function the same careful way the first
+  # one needed.
+  local load_int bucket
+  load_int="${DETECT_LOAD1%%.*}"
+  case "$load_int" in ''|*[!0-9]*) load_int=0 ;; esac
+  if [ "$load_int" -ge 2 ]; then bucket=2
+  elif [ "$load_int" -ge 1 ]; then bucket=1
+  else bucket=0
+  fi
+  if [ "$bucket" != "$_pressure_load_bucket" ]; then
+    _pressure_load_bucket="$bucket"
+    _pressure_load_bucket_since="$now"
+  fi
 }
 
 compute_pressure_score() {
   local level temp_c charging_flag score
-  local load_int night_now over now screen_off_for
+  local night_now over now screen_off_for load_bucket_for
 
   level="$DETECT_BATTERY_LEVEL"
   temp_c="$(detect_battery_temp_c)"
@@ -203,12 +238,13 @@ compute_pressure_score() {
   fi
   [ "$night_now" = "true" ] && score=$(( score + 10 ))
 
-  load_int="${DETECT_LOAD1%%.*}"
-  case "$load_int" in ''|*[!0-9]*) load_int=0 ;; esac
-  if [ "$load_int" -ge 2 ]; then
-    score=$(( score - 20 ))
-  elif [ "$load_int" -ge 1 ]; then
-    score=$(( score - 10 ))
+  load_bucket_for=$(( now - _pressure_load_bucket_since ))
+  if [ "$load_bucket_for" -ge "$ADAPTIVE_SCREEN_OFF_MIN_SECONDS" ]; then
+    if [ "$_pressure_load_bucket" = "2" ]; then
+      score=$(( score - 20 ))
+    elif [ "$_pressure_load_bucket" = "1" ]; then
+      score=$(( score - 10 ))
+    fi
   fi
 
   [ "$score" -lt 0 ] && score=0
@@ -326,13 +362,12 @@ _adaptive_tier_thresholds() {
 # score is reported separately, from the real function, alongside it.
 pressure_breakdown() {
   local level temp_c charging_flag
-  local screen_on load_int night_now over
+  local night_now over screen_off_for load_bucket_for
   local batt_term=0 temp_term=0 charge_term=0 screen_term=0 night_term=0 load_term=0
 
   level="$DETECT_BATTERY_LEVEL"
   temp_c="$(detect_battery_temp_c)"
   charging_flag="$DETECT_BATTERY_CHARGING"
-  screen_on="$(is_device screen)"
   get_night_times
   night_now="$(is_night_now)"
 
@@ -343,15 +378,31 @@ pressure_breakdown() {
     temp_term=$(( over * 3 ))
   fi
   [ "$charging_flag" = "true" ] && charge_term=-40
-  [ "$screen_on" = "false" ] && screen_term=15
+
+  # BUG FIX (consistency found while re-reviewing the whole adaptive
+  # engine after a real, still-unresolved flapping report): this used
+  # to recompute screen/load state directly and instantly, completely
+  # bypassing the debounce compute_pressure_score() itself now applies
+  # (_update_screen_off_duration - screen and CPU load both fixed) -
+  # meaning the breakdown a person expands to understand their score
+  # could show "+15 pantalla" during the exact 45s grace window the
+  # REAL score isn't counting it in yet, disagreeing with the number
+  # shown right next to it. Reads the same already-debounced globals
+  # instead, so this can never show a different story than the score
+  # it's meant to explain.
+  screen_off_for=$(( $(date +%s) - _pressure_screen_state_since ))
+  if [ "$_pressure_screen_state" = "false" ] && [ "$screen_off_for" -ge "$ADAPTIVE_SCREEN_OFF_MIN_SECONDS" ]; then
+    screen_term=15
+  fi
   [ "$night_now" = "true" ] && night_term=10
 
-  load_int="${DETECT_LOAD1%%.*}"
-  case "$load_int" in ''|*[!0-9]*) load_int=0 ;; esac
-  if [ "$load_int" -ge 2 ]; then
-    load_term=-20
-  elif [ "$load_int" -ge 1 ]; then
-    load_term=-10
+  load_bucket_for=$(( $(date +%s) - _pressure_load_bucket_since ))
+  if [ "$load_bucket_for" -ge "$ADAPTIVE_SCREEN_OFF_MIN_SECONDS" ]; then
+    if [ "$_pressure_load_bucket" = "2" ]; then
+      load_term=-20
+    elif [ "$_pressure_load_bucket" = "1" ]; then
+      load_term=-10
+    fi
   fi
 
   "$JQ" -cn --argjson batt "$batt_term" --argjson temp "$temp_term" --argjson charge "$charge_term" \

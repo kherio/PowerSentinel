@@ -232,6 +232,7 @@ function renderDashboard(sys) {
   const modeNameEl = document.getElementById('e-dashboard-mode-name');
   const subtitleEl = document.getElementById('e-dashboard-subtitle');
   const pressureWrap = document.getElementById('e-pressure-wrap');
+  const gaugeCaptionEl = document.getElementById('e-gauge-caption');
   const toggle = document.getElementById('e-dashboard-detail-toggle');
   const detailBody = document.getElementById('e-dashboard-detail-body');
 
@@ -249,6 +250,7 @@ function renderDashboard(sys) {
     subtitleEl.textContent = tier > 0 ? t('dashboard.subtitleActive') : t('dashboard.subtitleIdle');
     pressureWrap.style.display = 'block';
     renderPressureSegments(sys.pressureScore, tier);
+    gaugeCaptionEl.style.display = 'none';
 
     toggle.style.display = 'flex';
     if (!toggle.dataset.bound) {
@@ -286,6 +288,17 @@ function renderDashboard(sys) {
     // ahorro activos (núcleos/wifi/doze) - se fija más abajo en
     // render(), una vez se conocen los núcleos, ya que aquí todavía no
     // están disponibles.
+    //
+    // Feature request (revisión del dashboard): unlike adaptive mode
+    // (which labels its own percentage clearly - "Presión energética:
+    // X/100" right next to it), classic mode's gauge percentage had no
+    // label explaining what it meant at all - just a bare number next
+    // to a mode name, easy to mistake for something like "battery %"
+    // or a generic progress bar. This clarifies it for whichever mode
+    // is actually shown here (classic mode is the default most people
+    // are on, not adaptive).
+    gaugeCaptionEl.textContent = t('dashboard.classicGaugeCaption');
+    gaugeCaptionEl.style.display = 'block';
   }
 
   const whyEl = document.getElementById('e-dashboard-why');
@@ -510,19 +523,13 @@ function renderWakeRemediationHint(entries) {
 
 function renderNightWake(nw) {
   const card = document.getElementById('e-nightwake-card');
-  // BUG FIX: reported as "the card disappeared entirely" after the
-  // Hoy/Encendidos-nocturnos consolidation. Root cause: this section
-  // is now nested inside e-today-card, but renderTodayCard() was still
-  // independently setting e-today-card's own display based ONLY on
-  // whether today's stats had data - if that ever came back empty while
-  // THIS data was genuinely available, the nested section stayed
-  // invisible no matter what it set its OWN display to, since a
-  // display:none ancestor hides everything inside it regardless. This
-  // function no longer touches (or assumes anything about) the outer
-  // card - see updateTodayCardVisibility() below, called once after
-  // both this and renderTodayCard() run, which is the only place that
-  // now decides the shared container's visibility, from BOTH data
-  // sources at once.
+  // Feature request (sacar "Encendidos nocturnos" de dentro de "Hoy" -
+  // it's about last night, not today, so nesting it inside a card
+  // titled "Hoy" never quite made sense conceptually): now its own
+  // standalone card, shown/hidden purely from its own data - no shared
+  // visibility coordination with renderTodayCard() needed anymore
+  // (that coordination, and the bug it fixed, only existed because the
+  // two used to share one outer card).
   if (!nw || typeof nw.count !== 'number') { card.style.display = 'none'; return; }
   card.style.display = 'block';
 
@@ -631,20 +638,6 @@ function formatHoursMins(totalSeconds) {
   return { h, m };
 }
 
-// BUG FIX (reported: "the night-wake card disappeared entirely" after
-// consolidating it into "Hoy"): the shared outer card (e-today-card)
-// must show whenever EITHER today's stats OR night-wake data is
-// available - not only today's stats, which is what it was tied to
-// right after the two cards were merged. Called once after both
-// renderNightWake()/renderTodayCard() have already set their own
-// inner section's visibility - this only ever decides the shared
-// wrapper, never touches either inner section itself.
-function updateTodayCardVisibility(todayStats, nightWake) {
-  const card = document.getElementById('e-today-card');
-  const hasNightWake = !!(nightWake && typeof nightWake.count === 'number');
-  card.style.display = (todayStats || hasNightWake) ? 'block' : 'none';
-}
-
 // "Hoy" card: screen time + time-since-charge come from
 // PowerSentinel-todaystats.sh (TodayStats, refreshed every poll like
 // the rest of the dashboard); night wakes reuses the SAME
@@ -652,14 +645,13 @@ function updateTodayCardVisibility(todayStats, nightWake) {
 // a second source of truth for the same number. Interventions today
 // is filled in separately by renderTodayInterventions() (journal-
 // based, fetched once per tab activation - see that function).
-// Only manages its OWN body's visibility (e-today-body) - see
-// updateTodayCardVisibility() for why the shared outer card
-// (e-today-card, since the redesign that nested "Encendidos
-// nocturnos" inside it) is no longer decided from here alone.
+// Feature request: "Encendidos nocturnos" moved out into its own card
+// (renderNightWake() above) - this now only ever manages its own
+// card's visibility, no shared coordination needed anymore.
 function renderTodayCard(todayStats) {
-  const body = document.getElementById('e-today-body');
-  if (!todayStats) { body.style.display = 'none'; return; }
-  body.style.display = 'block';
+  const card = document.getElementById('e-today-card');
+  if (!todayStats) { card.style.display = 'none'; return; }
+  card.style.display = 'block';
 
   const chargeEl = document.getElementById('e-today-charge');
   if (typeof todayStats.seconds_since_charge === 'number') {
@@ -955,6 +947,7 @@ async function renderSavingsBar() {
     const diffPct = Math.round(Math.abs((recentRate - baselineRate) / baselineRate) * 100);
 
     el.innerHTML =
+      `<div class="savings-bar-title">${escapeHtml(t('estado.savingsBarTitle'))}</div>` +
       `<div class="savings-bar-row">` +
         `<span class="savings-bar-label">${escapeHtml(t('estado.savingsBarToday'))}</span>` +
         `<div class="savings-bar-track"><div class="savings-bar-fill ${better ? 'good' : 'warn'}" style="width:${recentPct}%"></div></div>` +
@@ -1181,7 +1174,6 @@ function render(text) {
   safeRender(() => renderActiveNow(sys), 'renderActiveNow');
   safeRender(() => renderNightWake(sys.nightWake), 'renderNightWake');
   safeRender(() => renderTodayCard(sys.todayStats), 'renderTodayCard');
-  safeRender(() => updateTodayCardVisibility(sys.todayStats, sys.nightWake), 'updateTodayCardVisibility');
 
   if (sys.error) {
     setGauge(0);
