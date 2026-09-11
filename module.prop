@@ -1,7 +1,7 @@
 id=PowerSentinel
 name=PowerSentinel
-version=v4.11.0
-versionCode=4110
+version=v4.12.0
+versionCode=4120
 author=kherio
 description=A policy-driven, rooted Android battery optimization module with a native KernelSU WebUI.
 updateJson=https://raw.githubusercontent.com/kherio/PowerSentinel/main/update.json
