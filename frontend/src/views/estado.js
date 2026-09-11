@@ -816,8 +816,17 @@ function scheduleDrainComparisonFetch(eventName) {
     } catch (e) { /* leave display as null - "not enough data yet" */ }
     drainComparisonCache.set(eventName, { display, fetchedAt: Date.now(), fetching: false });
     if (!display) return;
-    const el = document.getElementById(`active-now-drain-${eventName}`);
-    if (!el) return; // card for this event isn't on screen anymore
+    // BUG-AWARE FIX (merge with the hero card): this used to patch a
+    // per-event element (`active-now-drain-${eventName}`) that lived
+    // in that event's own now-removed card. There's only ever one
+    // shared drain line now, reserved for whichever event is
+    // currently PRIMARY - checked fresh here (not just at the moment
+    // this fetch was scheduled) so a slow response for an event that's
+    // since stopped being primary can never overwrite the line with
+    // stale, no-longer-relevant text.
+    if (eventName !== _primaryActiveEvent) return;
+    const el = document.getElementById('e-dashboard-drain');
+    if (!el) return;
     el.textContent = t('dashboard.drainComparison', {
       with: display.withRate.toFixed(1),
       without: display.withoutRate.toFixed(1)
@@ -828,30 +837,67 @@ function scheduleDrainComparisonFetch(eventName) {
   });
 }
 
-function renderActiveNow(sys) {
-  const wrap = document.getElementById('e-active-now-wrap');
-  const mechanisms = sys.activeMechanisms || [];
-  if (!mechanisms.length) { wrap.innerHTML = ''; return; }
+// Feature request (fusionar el medidor y "activo ahora" para quitar la
+// repetición): the mode name + "why" text already said, in slightly
+// different words, exactly what the separate active-now card's own
+// title + "why" line said right underneath it - two stacked cards
+// telling the same story twice. Moved this card's genuinely NEW
+// content (which mechanisms are doing what, since when, the measured
+// drain comparison) directly into the hero card instead, right after
+// its own "why" line, and dropped the separate card/title/why
+// entirely. Tracks which event's drain comparison is currently shown
+// so an in-flight fetch for a since-changed event can't patch stale
+// text in after the fact.
+let _primaryActiveEvent = null;
 
-  wrap.innerHTML = mechanisms.map((mech) => {
-    const startTs = sys.activeEventStartTimes && sys.activeEventStartTimes[mech.event];
-    const since = startTs ? t('dashboard.activeSince', { time: formatSinceTime(startTs) }) : '';
-    const rows = mechanismRows(mech).map((r) =>
-      `<div class="mechanism-row"><span class="mechanism-cat">${escapeHtml(r.label)}</span><span class="mechanism-treatment">${escapeHtml(r.value)}</span></div>`
-    ).join('');
-    const cached = drainComparisonCache.get(mech.event);
-    const drainText = cached && cached.display
-      ? t('dashboard.drainComparison', { with: cached.display.withRate.toFixed(1), without: cached.display.withoutRate.toFixed(1) })
-      : '';
-    scheduleDrainComparisonFetch(mech.event);
-    return `<div class="card active-now-card" style="margin-bottom:14px;">
-      <div class="active-now-header"><span class="active-now-icon">${eventIcon(mech.event)}</span><span class="active-now-title">${escapeHtml(eventDisplayName(mech.event))}</span></div>
-      ${since ? `<div class="active-now-since">${escapeHtml(since)}</div>` : ''}
-      <div class="active-now-mechanisms">${rows}</div>
-      <p class="hint active-now-why">${escapeHtml(eventWhy(mech.event))}</p>
-      <p class="active-now-drain" id="active-now-drain-${escapeHtml(mech.event)}" style="${drainText ? '' : 'display:none;'}">${escapeHtml(drainText)}</p>
-    </div>`;
-  }).join('');
+function renderActiveNow(sys) {
+  const mechanismsEl = document.getElementById('e-dashboard-mechanisms');
+  const sinceEl = document.getElementById('e-dashboard-since');
+  const drainEl = document.getElementById('e-dashboard-drain');
+  const mechanisms = sys.activeMechanisms || [];
+  if (!mechanisms.length) {
+    mechanismsEl.innerHTML = '';
+    sinceEl.textContent = '';
+    drainEl.style.display = 'none';
+    _primaryActiveEvent = null;
+    return;
+  }
+
+  // Several simultaneously active events could each want to show the
+  // same mechanism category (e.g. both claim "Apps") - keep only the
+  // first (matches buildWhyText()'s own "first active event is
+  // primary" convention) rather than showing the same category twice
+  // with two different values.
+  const seenLabels = new Set();
+  const rows = [];
+  mechanisms.forEach((mech) => {
+    mechanismRows(mech).forEach((r) => {
+      if (seenLabels.has(r.label)) return;
+      seenLabels.add(r.label);
+      rows.push(r);
+    });
+  });
+  mechanismsEl.innerHTML = rows.map((r) =>
+    `<div class="mechanism-row"><span class="mechanism-cat">${escapeHtml(r.label)}</span><span class="mechanism-treatment">${escapeHtml(r.value)}</span></div>`
+  ).join('');
+
+  // "Since" reads more naturally anchored to whichever active event
+  // started first, not an arbitrary one.
+  const starts = mechanisms
+    .map((m) => sys.activeEventStartTimes && sys.activeEventStartTimes[m.event])
+    .filter((ts) => typeof ts === 'number');
+  const earliestStart = starts.length ? Math.min(...starts) : null;
+  sinceEl.textContent = earliestStart ? t('dashboard.activeSince', { time: formatSinceTime(earliestStart) }) : '';
+
+  _primaryActiveEvent = mechanisms[0].event;
+  const cached = drainComparisonCache.get(_primaryActiveEvent);
+  if (cached && cached.display) {
+    drainEl.textContent = t('dashboard.drainComparison', { with: cached.display.withRate.toFixed(1), without: cached.display.withoutRate.toFixed(1) });
+    drainEl.style.display = 'block';
+  } else {
+    drainEl.style.display = 'none';
+  }
+  mechanisms.forEach((m) => scheduleDrainComparisonFetch(m.event));
 }
 
 // Jerarquía visual del roadmap (Estado principal → Qué está pasando →
