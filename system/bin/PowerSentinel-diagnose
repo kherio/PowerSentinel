@@ -140,6 +140,21 @@ else
   add_result "jq" "fail" "jq no funciona - esto rompería prácticamente toda la funcionalidad del módulo."
 fi
 
+# --- 9. Functional self-test (feature request: not just "does this
+#     file exist" capability detection, but "does this function
+#     actually behave correctly right now") - the same checks
+#     PowerSentineld runs once at boot, re-run here on demand so a
+#     person can check without waiting for (or forcing) a restart.
+if [ -f "$(dirname "$0")/PowerSentinel-selftest.sh" ]; then
+  . "$(dirname "$0")/PowerSentinel-selftest.sh"
+  selftest_json="$(run_functional_selftest 2>/dev/null)"
+  if [ -n "$selftest_json" ]; then
+    while IFS= read -r line; do
+      [ -n "$line" ] && results+=("$line")
+    done < <("$JQ" -c '.[]' <<<"$selftest_json" 2>/dev/null)
+  fi
+fi
+
 printf '['
 first=1
 for r in "${results[@]}"; do

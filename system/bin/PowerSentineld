@@ -15,6 +15,7 @@ conf="/data/local/tmp/PowerSentinel/PowerSentinel.conf"
 . "$(dirname "$0")/PowerSentinel-chargehealth.sh"
 . "$(dirname "$0")/PowerSentinel-state.sh"
 . "$(dirname "$0")/PowerSentinel-events.sh"
+. "$(dirname "$0")/PowerSentinel-selftest.sh"
 declare -a active_events
 # When each currently-active event started (unix seconds), keyed by
 # event name - populated alongside active_events itself (see
@@ -523,6 +524,26 @@ disable_pwr_save() {
 
 
 init_v2() {
+
+# Functional self-test (feature request: not just "does this file
+# exist" capability detection, but "does this function actually behave
+# correctly right now"). Runs once per boot, entirely from synthetic
+# inputs - never touches this device's real state - so it's safe
+# unconditionally. Only a genuine "fail" gets a critical alert (through
+# the same channel as safe-mode and other rare, real problems); a "warn"
+# just gets logged. Results are also re-checked on demand from the
+# Diagnóstico panel (PowerSentinel-diagnose), which sources this same
+# file rather than duplicating the checks.
+_selftest_results="$(run_functional_selftest 2>/dev/null)"
+if [ -n "$_selftest_results" ]; then
+  _selftest_failed="$("$JQ" -r '[.[] | select(.status=="fail") | .message] | join("; ")' <<<"$_selftest_results" 2>/dev/null)"
+  if [ -n "$_selftest_failed" ]; then
+    log_msg 1 "Functional self-test found real problems: $_selftest_failed"
+    emit selftest critical "PowerSentinel: autodiagnóstico encontró un problema real al arrancar - revisa el panel de Diagnóstico"
+  else
+    log_msg 3 "Functional self-test: all checks passed"
+  fi
+fi
 
 adaptive_mode="$(getconf adaptive_mode false)"
 
