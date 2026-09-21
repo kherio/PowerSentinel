@@ -104,6 +104,9 @@ var FIELD_DEFS = [
   },
   { key: 'kill_wifi', label: t('field.killWifi.label'), type: 'toggle', def: 'false', group: 'sistema',
     warn: t('field.killWifi.warn') },
+  { key: 'restrict_data', label: t('field.restrictData.label'), type: 'toggle', def: 'false', group: 'sistema',
+    help: t('field.restrictData.help'),
+    warn: t('field.restrictData.warn') },
   {
     key: 'max_refresh_rate', label: t('field.maxRefreshRate.label'), type: 'select', def: 'false', group: 'sistema',
     options: [
@@ -173,11 +176,11 @@ var GLOBAL_DEFS = [
 var EVENT_PRESETS = {
   balanced: {
     label: t('preset.balanced.label'),
-    fields: { handle_cores: 'auto', handle_apps: 'nice', handle_gms: 'nice', low_ram: 'false', doze: 'false', kill_wifi: 'false' }
+    fields: { handle_cores: 'auto', handle_apps: 'nice', handle_gms: 'nice', low_ram: 'false', doze: 'false', kill_wifi: 'false', restrict_data: 'false' }
   },
   aggressive: {
     label: t('preset.aggressive.label'),
-    fields: { handle_cores: 'auto', disable_cores: 'auto', handle_apps: 'kill', handle_gms: 'kill', low_ram: 'true', doze: 'deep', kill_wifi: 'true' }
+    fields: { handle_cores: 'auto', disable_cores: 'auto', handle_apps: 'kill', handle_gms: 'kill', low_ram: 'true', doze: 'deep', kill_wifi: 'true', restrict_data: 'true' }
   }
 };
 

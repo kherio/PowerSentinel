@@ -94,12 +94,13 @@ _build_active_mode_text() {
     else title="$title, $(_event_display_name "$n")"; fi
   done <<< "$names"
 
-  local cores doze apps gms wifi lowram maxfreq maxrefresh
+  local cores doze apps gms wifi restrictdata lowram maxfreq maxrefresh
   cores="$("$JQ" -r 'any(.[]; .handle_cores != "false")' <<<"$snapshot" 2>/dev/null)"
   doze="$("$JQ" -r 'any(.[]; .doze != "false")' <<<"$snapshot" 2>/dev/null)"
   apps="$("$JQ" -r '[.[] | select(.handle_apps != "false") | .handle_apps] | unique | join(",")' <<<"$snapshot" 2>/dev/null)"
   gms="$("$JQ" -r 'any(.[]; .handle_gms != "false")' <<<"$snapshot" 2>/dev/null)"
   wifi="$("$JQ" -r 'any(.[]; .kill_wifi == "true")' <<<"$snapshot" 2>/dev/null)"
+  restrictdata="$("$JQ" -r 'any(.[]; .restrict_data == "true")' <<<"$snapshot" 2>/dev/null)"
   lowram="$("$JQ" -r 'any(.[]; .low_ram == "true")' <<<"$snapshot" 2>/dev/null)"
   maxfreq="$("$JQ" -r '[.[] | select(.max_cpu_freq != "false" and .max_cpu_freq != null) | (.max_cpu_freq | tonumber)] | min' <<<"$snapshot" 2>/dev/null)"
   maxrefresh="$("$JQ" -r '[.[] | select(.max_refresh_rate != "false" and .max_refresh_rate != null) | (.max_refresh_rate | tonumber)] | min' <<<"$snapshot" 2>/dev/null)"
@@ -115,6 +116,7 @@ _build_active_mode_text() {
   [ "$doze" = "true" ] && phrases+=("Doze forzado")
   [ "$gms" = "true" ] && phrases+=("Play Services limitado")
   [ "$wifi" = "true" ] && phrases+=("WiFi apagado")
+  [ "$restrictdata" = "true" ] && phrases+=("Ahorro de datos activo")
   [ "$lowram" = "true" ] && phrases+=("modo RAM baja")
   case "$maxfreq" in
     ''|null) ;;

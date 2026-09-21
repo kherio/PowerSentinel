@@ -657,6 +657,7 @@ function summarizeFields(fields) {
   if (fields.handle_gms && fields.handle_gms !== 'false') bits.push(t('config.summaryGms', { v: fields.handle_gms }));
   if (fields.doze && fields.doze !== 'false') bits.push(t('config.summaryDoze', { v: fields.doze }));
   if (fields.kill_wifi === 'true') bits.push(t('config.summaryWifiOff'));
+  if (fields.restrict_data === 'true') bits.push(t('config.summaryDataSaverOn'));
   if (fields.low_ram === 'true') bits.push(t('config.summaryLowRam'));
   if (fields.handle_proc === 'true') bits.push(t('config.summaryProcesses'));
   if (fields.night_start) bits.push(`${fields.night_start}–${fields.night_end || ''}`);

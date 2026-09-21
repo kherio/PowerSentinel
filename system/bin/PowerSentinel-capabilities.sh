@@ -81,6 +81,17 @@ capabilities_detect() {
   CAPS[pm_suspend]="false"
   pm help 2>&1 | grep -qi "suspend" && CAPS[pm_suspend]="true"
 
+  # Data Saver (feature request: "que haya un ahorro de bateria real y
+  # creible" - see the long comment on action_restrictdata_apply in
+  # actions.sh for why this was missing entirely until now). The
+  # netpolicy service backs Settings' own "Ahorro de datos" toggle and
+  # has shipped on every mainline Android release since 7.0, but a
+  # heavily stripped AOSP fork could still lack it - a harmless,
+  # read-only `dumpsys netpolicy` is enough to tell if the service
+  # responds at all, same reasoning already used for doze_force above.
+  CAPS[netpolicy_restrict]="false"
+  dumpsys netpolicy >/dev/null 2>&1 && CAPS[netpolicy_restrict]="true"
+
   log_msg 2 "Capabilities: $(capabilities_summary)"
 }
 
@@ -90,7 +101,7 @@ capability_has() {
 
 capabilities_summary() {
   local out="" k
-  for k in cores_online cores_governor rfkill_wifi svc_wifi doze_force gms_installed pm_suspend; do
+  for k in cores_online cores_governor rfkill_wifi svc_wifi doze_force gms_installed pm_suspend netpolicy_restrict; do
     out+="$k=${CAPS[$k]:-false} "
   done
   echo "$out"

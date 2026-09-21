@@ -110,7 +110,8 @@ async function renderHardwareInfo() {
     svc_wifi: t('acerca.capSvcWifi'),
     doze_force: t('acerca.capDoze'),
     gms_installed: t('acerca.capGms'),
-    pm_suspend: t('acerca.capSuspend')
+    pm_suspend: t('acerca.capSuspend'),
+    netpolicy_restrict: t('acerca.capNetpolicyRestrict')
   };
   try {
     const status = await readStatus();
