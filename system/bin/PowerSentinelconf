@@ -297,6 +297,7 @@ prompt_fields() {
   echo "doze=$(ask_choice 'Forzar Doze (puede retrasar alarmas)' 'false' \
     'false:Desactivado' 'light:Ligero' 'deep:Profundo')"
   echo "kill_wifi=$(ask_yesno '¿Desactivar WiFi?' 'false')"
+  echo "restrict_data=$(ask_yesno '¿Activar Ahorro de datos (bloquea datos en 2º plano de todas las apps)?' 'false')"
   echo "keep_on_charge=$(ask_yesno '¿Mantener ajustes mientras carga?' 'true')"
 }
 

@@ -150,6 +150,7 @@ function timelineMechanismPhrases(detail) {
   if (on(detail.handle_apps)) phrases.push(t('journal.mechApps'));
   if (on(detail.handle_gms)) phrases.push(t('journal.mechGms'));
   if (detail.kill_wifi === 'true') phrases.push(t('journal.mechWifi'));
+  if (detail.restrict_data === 'true') phrases.push(t('journal.mechDataSaver'));
   if (detail.low_ram === 'true') phrases.push(t('journal.mechLowRam'));
   return phrases;
 }

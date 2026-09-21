@@ -496,6 +496,7 @@ enable_pwr_save() {
   action_proc_apply
   action_low_ram_apply
   action_wifi_apply
+  action_restrictdata_apply
   action_doze_apply
   action_cores_apply
   action_cpufreq_apply
@@ -509,6 +510,7 @@ disable_pwr_save() {
   action_cpufreq_undo
   action_cores_undo
   action_doze_undo
+  action_restrictdata_undo
   action_wifi_undo
   action_apps_undo
   action_gms_undo

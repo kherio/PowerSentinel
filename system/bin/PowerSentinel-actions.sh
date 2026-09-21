@@ -656,6 +656,78 @@ action_wifi_undo() {
   fi
 }
 
+# ---------- Background data (Data Saver) ----------
+#
+# Feature request: "que haya un ahorro de bateria real y creible" -
+# reviewing every lever this daemon already pulls (CPU/cores, apps,
+# GMS, WiFi, doze, refresh rate) turned up one real, well-documented,
+# system-wide battery drain this project had never touched: apps
+# syncing, polling and waking the radio in the BACKGROUND over
+# whichever network is active. kill_wifi above only helps when WiFi is
+# the active network and the user is fine losing it outright - it does
+# nothing for background cellular data, and nothing for an app that
+# still gets to sync freely over WiFi the instant it's not fully
+# killed. Android's own Data Saver (Settings > Network > "Ahorro de
+# datos", `cmd netpolicy set restrict-background` underneath) blocks
+# background data for every app system-wide the moment it's on,
+# independent of handle_apps/kill_wifi/handle_gms - genuinely
+# complementary to all three, same relationship max_cpu_freq already
+# has alongside handle_cores.
+: "${restrictdata_state_file:=/data/local/tmp/PowerSentinel/PowerSentinel.restrictdatastate}"
+
+# Whether Data Saver is CURRENTLY on, independent of anything
+# PowerSentinel has done - `dumpsys netpolicy`'s own "Restrict
+# background: <bool>" line reports the same internal flag `cmd
+# netpolicy set restrict-background` toggles, not a heuristic. Same
+# honest caveat as _app_is_suspended's dumpsys parse above: this exact
+# text format cannot be verified against a real device from this
+# environment, and fails safe either way - if it stops matching on some
+# ROM/version, this simply always reports "off", meaning apply/undo
+# behave exactly as they did before this feature existed for that one
+# signal, never a new, worse failure mode than not checking at all.
+_restrict_data_is_enabled_now() {
+  dumpsys netpolicy 2>/dev/null | grep -qi "restrict background: *true"
+}
+
+action_restrictdata_apply() {
+  [ "$restrict_data" = "true" ] || return
+  if ! capability_has netpolicy_restrict; then
+    log_msg 1 "Cannot enable Data Saver: netpolicy service not available on this device"
+    emit capabilities warning "El ahorro de datos no se pudo activar: no soportado en este dispositivo"
+    return
+  fi
+  # Same "record the real original only the first time" pattern already
+  # used for WiFi/low_ram/GMS above: a user who already has Data Saver
+  # on themselves must not have it silently turned back off just
+  # because a PowerSentinel event later ends.
+  if [ ! -f "$restrictdata_state_file" ]; then
+    mkdir -p "$(dirname "$restrictdata_state_file")" 2>/dev/null
+    if _restrict_data_is_enabled_now; then echo "was_on" > "$restrictdata_state_file"; else echo "was_off" > "$restrictdata_state_file"; fi
+    chmod 600 "$restrictdata_state_file" 2>/dev/null
+  fi
+  log_msg 3 "Enabling Data Saver (restrict-background)"
+  cmd netpolicy set restrict-background true 2>/dev/null
+}
+
+action_restrictdata_undo() {
+  [ "$restrict_data" = "true" ] || return
+  capability_has netpolicy_restrict || return
+  # Idempotent (a second call, or a call with no matching apply ever
+  # having run, finds nothing recorded and does nothing further), and
+  # composition-safe: don't turn Data Saver back off if another
+  # currently-active event also wants it on - same
+  # _another_active_event_wants check already used for kill_wifi/
+  # handle_gms/low_ram/max_cpu_freq above.
+  [ -f "$restrictdata_state_file" ] || return
+  _another_active_event_wants restrict_data && return
+  local recorded
+  recorded="$(cat "$restrictdata_state_file" 2>/dev/null)"
+  rm -f "$restrictdata_state_file"
+  [ "$recorded" = "was_on" ] && return
+  log_msg 3 "Disabling Data Saver (restrict-background)"
+  cmd netpolicy set restrict-background false 2>/dev/null
+}
+
 # ---------- Doze ----------
 
 action_doze_apply() {
