@@ -1,0 +1,147 @@
+name: Release
+
+# Fires on a tag push like "v4.16.0" - the exact same trigger the
+# project's own manual release flow already used (git tag vX.Y.Z &&
+# git push origin vX.Y.Z). workflow_dispatch lets you re-run the same
+# job by hand (e.g. after fixing something) without needing to move
+# the tag.
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release (must already exist, e.g. v4.16.0)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  # Same two suites the project already runs locally before every
+  # release (bash tests/run.sh, node tests/frontend/run.mjs) - a
+  # release is refused if either fails, so a regression can never ship
+  # silently just because a human forgot to run them by hand.
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Backend test suite (bash)
+        run: bash tests/run.sh
+
+      - name: Frontend test suite (node)
+        run: node tests/frontend/run.mjs
+
+  release:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # A manual workflow_dispatch run has no ref of its own -
+          # check out the tag the person named explicitly instead of
+          # whatever ref triggered the workflow.
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      # webroot/ is generated, not hand-written (see
+      # docs/webui-x-migration.md) - rebuilding it here, from the
+      # exact commit being tagged, is the only way to guarantee the
+      # shipped zip's WebUI genuinely matches frontend/src at this
+      # tag, rather than trusting whatever was last committed to
+      # webroot/ by hand.
+      - name: Build the WebUI (frontend/src -> webroot/)
+        working-directory: frontend
+        run: npm run build
+
+      - name: Resolve the tag being released
+        id: tag
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      # CRITICAL: refuse to publish a release whose tag doesn't match
+      # what module.prop/update.json actually say - the same class of
+      # self-consistency bug this project's own tests already guard
+      # against elsewhere (e.g. versionCode always kept in sync).
+      # Forgetting the version-bump commit before tagging must fail
+      # loudly here, not ship a mismatched release silently.
+      - name: Verify module.prop / update.json match the tag
+        run: |
+          set -e
+          TAG="${{ steps.tag.outputs.tag }}"
+          PROP_VERSION="$(grep -oP '^version=\K.*' module.prop)"
+          JSON_VERSION="$(jq -r '.version' update.json)"
+          JSON_ZIP="$(jq -r '.zipUrl' update.json)"
+          if [ "$PROP_VERSION" != "$TAG" ]; then
+            echo "::error::module.prop version ($PROP_VERSION) does not match the tag ($TAG)"
+            exit 1
+          fi
+          if [ "$JSON_VERSION" != "$TAG" ]; then
+            echo "::error::update.json version ($JSON_VERSION) does not match the tag ($TAG)"
+            exit 1
+          fi
+          case "$JSON_ZIP" in
+            *"/download/$TAG/PowerSentinel-$TAG.zip") ;;
+            *) echo "::error::update.json zipUrl ($JSON_ZIP) does not point at PowerSentinel-$TAG.zip for this tag"; exit 1 ;;
+          esac
+
+      # Same file list as the project's own manual packaging: every
+      # runtime-necessary root item (Magisk/KernelSU module format),
+      # nothing dev-only (frontend/src, tests/, docs/, CHANGELOG.md,
+      # README.md never ship inside the module zip itself).
+      - name: Package the module zip
+        run: |
+          set -e
+          STAGE="$(mktemp -d)"
+          cp -r META-INF module.prop customize.sh service.sh system webroot update.json "$STAGE/"
+          ZIP_NAME="PowerSentinel-${{ steps.tag.outputs.tag }}.zip"
+          (cd "$STAGE" && zip -r -X "$GITHUB_WORKSPACE/$ZIP_NAME" . -x '*.DS_Store' >/dev/null)
+          echo "zip_name=$ZIP_NAME" >> "$GITHUB_ENV"
+
+      # Release notes = the CHANGELOG's own section for this version
+      # (between its "### vX.Y.Z" header and the next one) - never
+      # hand-retyped, so the GitHub release always says exactly what
+      # CHANGELOG.md says.
+      - name: Extract this version's changelog section
+        run: |
+          awk -v ver="${{ steps.tag.outputs.tag }}" '
+            $0 == "### " ver { found=1; next }
+            found && /^### v/ { exit }
+            found { print }
+          ' CHANGELOG.md > RELEASE_NOTES.md
+          if [ ! -s RELEASE_NOTES.md ]; then
+            echo "::error::No CHANGELOG.md section found for ${{ steps.tag.outputs.tag }} (expected a '### ${{ steps.tag.outputs.tag }}' heading)"
+            exit 1
+          fi
+
+      - name: Create the GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: ${{ steps.tag.outputs.tag }}
+          body_path: RELEASE_NOTES.md
+          files: ${{ env.zip_name }}
+          fail_on_unmatched_files: true
