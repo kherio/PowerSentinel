@@ -1015,7 +1015,9 @@ delay=3
 
 # keep_on_charge
 # true|false
-# keep powersave on while charging
+# keep powersave on while charging (until unplugged OR the battery
+# reaches 100%, whichever comes first - see events.sh's own comment
+# on this check for why it doesn't wait for unplug alone)
 keep_on_charge=true
 
 # handle_cores

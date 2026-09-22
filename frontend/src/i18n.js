@@ -550,7 +550,7 @@ const DICT = {
     'field.maxRefreshRate.help': 'En pantallas de 90/120Hz, mantener esa velocidad de refresco todo el rato consume una batería notable incluso sin hacer nada especial. Bajarla durante este evento (p. ej. de noche o con batería baja) es una de las formas más directas de notar más autonomía.',
     'field.maxRefreshRate.warn': 'No todos los dispositivos ni versiones de Android respetan este ajuste igual - compruébalo en tu móvil antes de confiar en él para tu evento más importante.',
     'field.keepOnCharge.label': 'Mantener ajustes mientras carga',
-    'field.keepOnCharge.help': 'Si está activado, este evento no se desactiva automáticamente al enchufar el cargador.',
+    'field.keepOnCharge.help': 'Si está activado, este evento se mantiene mientras cargas y hasta que la batería llegue al 100%, aunque sigas enchufado.',
 
     'global.delay.label': 'Intervalo de sondeo (segundos)',
     'global.delay.help': 'Valores altos ahorran CPU pero detectan eventos más despacio.',
@@ -1126,7 +1126,7 @@ const DICT = {
     'field.maxRefreshRate.help': "On a 90/120Hz screen, keeping that refresh rate running all the time uses a noticeable amount of battery even when nothing special is happening. Lowering it during this event (e.g. at night or on low battery) is one of the most direct ways to actually feel a difference in battery life.",
     'field.maxRefreshRate.warn': "Not every device or Android version respects this setting the same way - check it on your phone before relying on it for your most important event.",
     'field.keepOnCharge.label': 'Keep settings while charging',
-    'field.keepOnCharge.help': "When enabled, this event isn't automatically disabled when you plug in the charger.",
+    'field.keepOnCharge.help': "When enabled, this event stays active while charging until the battery reaches 100%, even if you're still plugged in.",
 
     'global.delay.label': 'Poll interval (seconds)',
     'global.delay.help': 'Higher values save CPU but detect events more slowly.',

@@ -302,8 +302,27 @@ handle_event() {
   local val
 
   val="$(config_get_event_raw "$event" keep_on_charge false)"
-  if [ "$val" = "true" ] && [ "$flag" = "0" ] && [ "$event" != "charging" ] && [ "$charging" = "true" ]; then
-    log_msg 1 "$event has keep_on_charge set. We are keeping the settings until unplugged"
+  # BUG FIX (real device report: "aunque la bateria este al 100%
+  # cargada a veces parece que esta el dispositivo al 50%"): $charging
+  # here is "is a power source connected" (AC/USB/Wireless powered from
+  # dumpsys battery, or deviceidle's own equivalent flag depending on
+  # mode - see PowerSentinel-detect.sh's header comment) - that stays
+  # "true" for as long as the cable stays plugged in, WELL past the
+  # point the battery actually finishes charging. Android keeps
+  # AC/USB/Wireless powered: true at 100% (status becomes "Full", but
+  # the power-source flag doesn't change), so before this fix
+  # keep_on_charge genuinely meant "until unplugged", never "until
+  # charged" - a phone left on the charger overnight, then picked up
+  # already full, would still be throttled at 9am for no real reason.
+  # DETECT_BATTERY_LEVEL is refreshed every single poll cycle
+  # regardless of mode (detect_refresh(), unconditional) and defaults
+  # to 100 before the first real reading, so this fails toward NOT
+  # holding restrictions back rather than getting stuck - same
+  # direction every other fail-safe in this file already leans.
+  # "-lt 100" mirrors the exact idiom PowerSentinel-chargehealth.sh
+  # already uses for "battery is topped off" ("$level" -eq 100).
+  if [ "$val" = "true" ] && [ "$flag" = "0" ] && [ "$event" != "charging" ] && [ "$charging" = "true" ] && [ "${DETECT_BATTERY_LEVEL:-100}" -lt 100 ]; then
+    log_msg 1 "$event has keep_on_charge set. We are keeping the settings until unplugged or fully charged"
     return 0
   fi
 
