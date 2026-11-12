@@ -1,4 +1,5 @@
 ### Unreleased
+  - **WebUI: in Advanced mode Inicio shows everything** - «Detalles técnicos» (CPU cores, frequency, system, CPU ranking, raw status) is always expanded and its toggle is gone.
   - **Wakeups card shows when a measurement is running** - after «Empezar a medir» it now says "Midiendo desde las HH:MM (hace X)" (and keeps saying so after closing the app, since it reads the snapshot's own timestamp). New `PowerSentinel-wakeups status` mode, covered by the existing wakeups test.
   - **WebUI: the «Quién despierta el móvil» (wakeups) card is no longer buried inside the collapsed «Detalles técnicos»** - it is a regular Advanced-mode card on Inicio.
   - **WebUI: the Análisis tab is now Advanced-mode only** - hidden from the bottom bar in Simple mode, skipped when swiping, and switching to Simple while on it returns to Inicio. Inside it nothing changes.
