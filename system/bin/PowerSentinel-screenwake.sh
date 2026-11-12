@@ -177,6 +177,26 @@ _screenwake_wake_cause() {
   _screenwake_wakelock_hint
 }
 
+# How long _screen_poll_cycle() sleeps before the next screen check.
+# With the screen ON it is the fixed fast cadence (SCREEN_POLL_INTERVAL_S,
+# 2s: reacts quickly when the screen turns off). With the screen OFF the
+# check is only there to notice it turning back on, so it runs less often
+# (global `screen_poll_off`, default 5s, 2-60) - fewer dumpsys calls and
+# fewer CPU wake-ups while the phone sits idle. Trade-off: a screen-on
+# shorter than that interval can be missed by the night-wake counter and
+# the reaction to screen-on is up to that much later; set it to 2 for the
+# old behaviour. Sets SW_POLL_INTERVAL (no subshell: runs every cycle).
+declare -g SW_POLL_INTERVAL=2
+screenwake_choose_interval() {
+  SW_POLL_INTERVAL="${SCREEN_POLL_INTERVAL_S:-2}"
+  if [ "$_screenwake_prev_screen" = "false" ]; then
+    local off
+    off="$(getconf screen_poll_off 5)"
+    case "$off" in ''|*[!0-9]*) off=5 ;; esac
+    [ "$off" -ge "$SW_POLL_INTERVAL" ] && SW_POLL_INTERVAL="$off"
+  fi
+}
+
 # Called every SCREEN_POLL_INTERVAL_S (see _screen_poll_cycle() in
 # PowerSentineld). Records a wake ONLY on a genuine false->true
 # transition (edge-triggered) - never on every cycle the screen
