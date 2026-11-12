@@ -620,7 +620,13 @@ function refreshHighlight() {
 }
 
 let isDirty = false;
-function markDirty(dirty) { isDirty = dirty; dirtyFlag.style.visibility = dirty ? 'visible' : 'hidden'; }
+function markDirty(dirty) {
+  const changed = isDirty !== dirty;
+  isDirty = dirty;
+  dirtyFlag.style.visibility = dirty ? 'visible' : 'hidden';
+  // main.js listens to arm/disarm the system-Back guard.
+  if (changed) document.dispatchEvent(new document.defaultView.CustomEvent('powersentinel:dirtychange', { detail: { dirty } }));
+}
 
 function renderGlobalFields() {
   const container = document.getElementById('c-global-fields');
@@ -736,6 +742,11 @@ function renderEvents() {
       });
     }
     head.appendChild(nameEl);
+
+    const pill = document.createElement('span');
+    pill.className = 'event-active-pill';
+    pill.textContent = t('config.activeNowPill');
+    head.appendChild(pill);
 
     if (isActiveNow) {
       const activeBadge = document.createElement('span');
@@ -1165,6 +1176,14 @@ function updateActiveIndicators() {
     const iconEl = card.querySelector('.event-icon');
     if (iconEl) iconEl.title = isActive ? t('config.activeNowTitle') : '';
   });
+  const banner = document.getElementById('c-active-banner');
+  if (banner) {
+    const names = [...activeEventNames].map((n) => eventDisplayName(n));
+    banner.classList.toggle('has-active', names.length > 0);
+    banner.textContent = names.length
+      ? t('config.activeBanner', { names: names.join(', ') })
+      : t('config.noneActive');
+  }
 }
 
 // Live-updates the same dot on a slower cadence than Estado's own 3s
@@ -1200,7 +1219,7 @@ export function activateConfig() {
   // whenever the user switches into this tab - safe to re-render at this
   // moment since nothing here has input focus yet.
   refreshLiveStatus();
-  if (!liveStatusTimer) liveStatusTimer = setInterval(refreshLiveStatus, 10000);
+  if (!liveStatusTimer) liveStatusTimer = setInterval(refreshLiveStatus, 5000);
 }
 
 export function deactivateConfig() {
@@ -1209,6 +1228,8 @@ export function deactivateConfig() {
 
 // Used by the tab-switch / swipe-nav guard in main.js: returns true if
 // it's fine to leave (no changes, or the user confirmed discarding them).
+export function isConfigDirty() { return !!(loaded && isDirty); }
+
 export function confirmLeaveConfig() {
   if (!loaded || !isDirty) return true;
   return window.confirm(t('config.leaveConfirm'));

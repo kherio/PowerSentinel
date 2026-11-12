@@ -270,7 +270,38 @@ applyStaticI18n();
 
 initViewportFix();
 initTabButtons();
+// System Back (gesture/button) with unsaved Automatización edits: the
+// WebUI would just close and lose them. While there ARE unsaved edits, a
+// sentinel history entry turns Back into a popstate we can intercept:
+// ask first, and if the user stays, push the sentinel again. With no
+// unsaved edits there is no sentinel, so Back behaves exactly as usual
+// (no extra press needed to leave).
+function initBackGuard() {
+  let armed = false;      // sentinel entry currently in the history
+  let selfPop = false;    // the next popstate is our own cleanup
+  document.addEventListener('powersentinel:dirtychange', (e) => {
+    const dirty = !!(e.detail && e.detail.dirty);
+    if (dirty && !armed) {
+      try { history.pushState({ psGuard: true }, ''); armed = true; } catch (err) { /* ignore */ }
+    } else if (!dirty && armed) {
+      armed = false; selfPop = true;
+      try { history.back(); } catch (err) { selfPop = false; }
+    }
+  });
+  window.addEventListener('popstate', () => {
+    if (selfPop) { selfPop = false; return; }
+    if (!armed) return;
+    if (window.confirm(t('config.leaveConfirm'))) {
+      armed = false;
+      history.back();
+    } else {
+      try { history.pushState({ psGuard: true }, ''); } catch (err) { /* ignore */ }
+    }
+  });
+}
+
 initMoreSheet();
+initBackGuard();
 initModeListener();
 initDiagnose();
 initProgrammaticNav();
