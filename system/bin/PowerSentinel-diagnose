@@ -153,6 +153,15 @@ if [ -f "$(dirname "$0")/PowerSentinel-selftest.sh" ]; then
       [ -n "$line" ] && results+=("$line")
     done < <("$JQ" -c '.[]' <<<"$selftest_json" 2>/dev/null)
   fi
+  # --- 10. Opt-in mechanisms that must give system state back:
+  #     support, "configured but unsupported", and limits left behind.
+  mech_status_file="$status_file"; mech_conf_file="$conf_file"; mech_state_dir="$DATA_DIR"
+  mech_json="$(run_mechanism_checks 2>/dev/null)"
+  if [ -n "$mech_json" ]; then
+    while IFS= read -r line; do
+      [ -n "$line" ] && results+=("$line")
+    done < <("$JQ" -c '.[]' <<<"$mech_json" 2>/dev/null)
+  fi
 fi
 
 printf '['
