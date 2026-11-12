@@ -130,3 +130,84 @@ run_functional_selftest() {
   done
   printf ']\n'
 }
+
+# ---------------------------------------------------------------------
+# Opt-in mechanisms that write real system state and must give it back
+# (tune_system, radio_lte, scan_off, bucket): for each one, report
+#   - whether the device supports it (capability, from the status file),
+#   - whether it is configured on some event but UNSUPPORTED here, and
+#   - whether a limit was LEFT behind (its state file still holds the
+#     recorded originals although no active event wants it any more -
+#     e.g. the daemon died mid-event and nothing has restored it yet).
+# Read-only: it only reads the status file, the config and the state
+# files, never touches the device. Prints a JSON array (same shape as
+# run_functional_selftest). Paths come from variables so tests can point
+# them at temp files.
+: "${mech_status_file:=/data/local/tmp/PowerSentinel/PowerSentinel.status}"
+: "${mech_conf_file:=${json_conf:-/data/local/tmp/PowerSentinel/PowerSentinel.json}}"
+: "${mech_state_dir:=/data/local/tmp/PowerSentinel}"
+: "${mech_leftover_grace:=120}"   # a state file younger than this is just an event starting up
+
+run_mechanism_checks() {
+  local results=() caps active spec
+  caps=" $(grep -m1 '^Capabilities:' "$mech_status_file" 2>/dev/null | sed 's/^Capabilities:[[:space:]]*//') "
+  active="$(grep -m1 '^ActiveMechanisms:' "$mech_status_file" 2>/dev/null | sed 's/^ActiveMechanisms:[[:space:]]*//')"
+  [ -n "$active" ] || active='[]'
+
+  _mech_add() {
+    results+=("$("$JQ" -cn --arg id "$1" --arg status "$2" --arg message "$3" '{id:$id,status:$status,message:$message}')")
+  }
+
+  # spec = field:capability:statefile-name:label ("-" = no state file)
+  for spec in \
+    "tune_system:kernel_tunables:PowerSentinel.tunestate:Ajustes de kernel en reposo" \
+    "radio_lte:radio_lte:PowerSentinel.radiostate:Sin 5G" \
+    "scan_off:scan_off:PowerSentinel.scanstate:Sin escaneo Wi-Fi/Bluetooth" \
+    "handle_apps=bucket:standby_bucket:-:Cubos de espera de apps"; do
+    local field cap sfile label key want="true" supported configured wanted_now sf age
+    IFS=: read -r field cap sfile label <<<"$spec"
+    key="$field"
+    case "$field" in *=*) key="${field%%=*}"; want="${field#*=}" ;; esac
+
+    case "$caps" in *" $cap=true "*) supported=1 ;; *) supported=0 ;; esac
+    configured="$("$JQ" -r --arg k "$key" --arg w "$want" \
+      '[.events[]? | select(type=="object") | .[$k]? | select(. == $w)] | length' "$mech_conf_file" 2>/dev/null)"
+    case "$configured" in ''|*[!0-9]*) configured=0 ;; esac
+    wanted_now="$("$JQ" -r --arg k "$key" --arg w "$want" 'any(.[]?; .[$k] == $w)' <<<"$active" 2>/dev/null)"
+
+    if [ "$configured" -gt 0 ] && [ "$supported" -eq 0 ]; then
+      _mech_add "mech_$key" "warn" "$label: está activado en algún evento pero este dispositivo no lo soporta, así que no hará nada."
+      continue
+    fi
+
+    if [ "$sfile" != "-" ]; then
+      sf="$mech_state_dir/$sfile"
+      if [ -s "$sf" ] && [ "$wanted_now" != "true" ]; then
+        age=$(( $(date +%s) - $(stat -c %Y "$sf" 2>/dev/null || echo 0) ))
+        if [ "$age" -gt "$mech_leftover_grace" ]; then
+          _mech_add "mech_$key" "warn" "$label: quedó un límite sin restaurar de una ejecución anterior (el registro de valores originales sigue ahí y ningún evento activo lo necesita). Se restaura solo al reiniciar el demonio."
+          continue
+        fi
+      fi
+    fi
+
+    if [ "$supported" -eq 1 ]; then
+      if [ "$configured" -gt 0 ]; then
+        _mech_add "mech_$key" "pass" "$label: soportado y configurado; no hay nada sin restaurar."
+      else
+        _mech_add "mech_$key" "pass" "$label: soportado por este dispositivo (no está activado en ningún evento)."
+      fi
+    else
+      _mech_add "mech_$key" "pass" "$label: no soportado en este dispositivo, pero tampoco está activado en ningún evento."
+    fi
+  done
+
+  printf '['
+  local first=1 r
+  for r in "${results[@]}"; do
+    [ "$first" -eq 1 ] || printf ','
+    printf '%s' "$r"
+    first=0
+  done
+  printf ']\n'
+}
