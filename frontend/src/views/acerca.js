@@ -1,5 +1,6 @@
 import { ICONS } from '../icons.js';
-import { readModuleInfo, readStatus, readLog } from '../api.js';
+import { readModuleInfo, readStatus, readLog, readConfig, writeConfig } from '../api.js';
+import { parseConfig, serializeConfig } from '../config-form.js';
 import { t, getLocaleOverride, setLocaleOverride } from '../i18n.js';
 import { toast, escapeHtml } from '../helpers.js';
 
@@ -81,12 +82,19 @@ async function checkForUpdate(installedVersion) {
 function initLanguageSelector() {
   const select = document.getElementById('a-language-select');
   select.value = getLocaleOverride() || 'auto';
-  select.addEventListener('change', () => {
+  select.addEventListener('change', async () => {
     // LOCALE is resolved once at module load across every file, so a
     // change only takes effect after reloading the page - simplest and
     // most reliable way to apply it everywhere at once, rather than
     // trying to re-render every already-mounted view live.
     setLocaleOverride(select.value === 'auto' ? null : select.value);
+    // Keep the daemon's notifications in the same language. Best-effort:
+    // a missing/unreadable config must never block the language switch.
+    try {
+      const model = parseConfig(await readConfig());
+      model.language = select.value;
+      await writeConfig(serializeConfig(model));
+    } catch (e) {}
     location.reload();
   });
 }
@@ -113,7 +121,8 @@ async function renderHardwareInfo() {
     pm_suspend: t('acerca.capSuspend'),
     netpolicy_restrict: t('acerca.capNetpolicyRestrict'),
     standby_bucket: t('acerca.capStandbyBucket'),
-    kernel_tunables: t('acerca.capKernelTunables')
+    kernel_tunables: t('acerca.capKernelTunables'),
+    radio_lte: t('acerca.capRadioLte')
   };
   try {
     const status = await readStatus();

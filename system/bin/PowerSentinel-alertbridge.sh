@@ -15,10 +15,76 @@
 # (safe mode active, a config safety guard rejecting an unsafe
 # allowlist-less suspend setting) still reach the user this way.
 
+# Language of everything the daemon itself shows the user (the
+# notifications below). `language` in the global config: auto|es|en.
+# "auto" follows Android's locale; with no locale readable at all it
+# stays Spanish, which is what the daemon always used before this
+# existed. The WebUI's language selector writes the same field, so the
+# app and the notifications always agree.
+_ps_lang() {
+  local l sys
+  l="$(getconf language auto 2>/dev/null)"
+  case "$l" in es|en) echo "$l"; return ;; esac
+  sys="$(getprop persist.sys.locale 2>/dev/null)"
+  [ -n "$sys" ] || sys="$(getprop ro.product.locale 2>/dev/null)"
+  case "$sys" in ''|es*) echo es ;; *) echo en ;; esac
+}
+
+# _tr <key>: the phrase for $key in the current language. Unknown key
+# returns the key itself so a missing entry can never produce empty text.
+_tr() {
+  local lang
+  lang="$(_ps_lang)"
+  if [ "$lang" = "en" ]; then
+    case "$1" in
+      ev_boot) echo "Boot" ;; ev_charging) echo "Charging" ;; ev_screen_off) echo "Screen off" ;;
+      ev_low_power) echo "System saving" ;; ev_night) echo "Night" ;; ev_thermal) echo "High temperature" ;;
+      ev_manual) echo "Manual" ;; ev_adaptive_tier1) echo "Light saving" ;;
+      ev_adaptive_tier2) echo "Moderate saving" ;; ev_adaptive_tier3) echo "Extreme saving" ;;
+      cpu_save) echo "CPU in power-save" ;;
+      apps_nice) echo "background apps slowed down" ;; apps_kill) echo "background apps closed" ;;
+      apps_suspend) echo "background apps suspended" ;; apps_bucket) echo "background apps restricted" ;;
+      apps_other) echo "background apps managed" ;;
+      doze) echo "Doze forced" ;; gms) echo "Play Services limited" ;; wifi) echo "WiFi off" ;;
+      data) echo "Data saver on" ;; tune) echo "kernel idle tuning" ;; radio) echo "5G off" ;; lowram) echo "low-RAM mode" ;;
+      cpu_pct) echo "CPU at $2%" ;; refresh) echo "screen at ${2}Hz" ;;
+      none) echo "no active changes" ;;
+      selftest) echo "PowerSentinel: the startup self-test found a real problem - check the Diagnostics panel" ;;
+      safemode) echo "Safe Mode is Active" ;;
+      *) echo "$1" ;;
+    esac
+  else
+    case "$1" in
+      ev_boot) echo "Arranque" ;; ev_charging) echo "Cargando" ;; ev_screen_off) echo "Pantalla apagada" ;;
+      ev_low_power) echo "Ahorro del sistema" ;; ev_night) echo "Noche" ;; ev_thermal) echo "Temperatura alta" ;;
+      ev_manual) echo "Manual" ;; ev_adaptive_tier1) echo "Ahorro suave" ;;
+      ev_adaptive_tier2) echo "Ahorro moderado" ;; ev_adaptive_tier3) echo "Ahorro extremo" ;;
+      cpu_save) echo "CPU en ahorro" ;;
+      apps_nice) echo "apps en 2º plano ralentizadas" ;; apps_kill) echo "apps en 2º plano cerradas" ;;
+      apps_suspend) echo "apps en 2º plano suspendidas" ;; apps_bucket) echo "apps en 2º plano restringidas" ;;
+      apps_other) echo "apps en 2º plano gestionadas" ;;
+      doze) echo "Doze forzado" ;; gms) echo "Play Services limitado" ;; wifi) echo "WiFi apagado" ;;
+      data) echo "Ahorro de datos activo" ;; tune) echo "ajustes de kernel en reposo" ;; radio) echo "sin 5G" ;; lowram) echo "modo RAM baja" ;;
+      cpu_pct) echo "CPU al $2%" ;; refresh) echo "pantalla a ${2}Hz" ;;
+      none) echo "sin cambios activos" ;;
+      selftest) echo "PowerSentinel: autodiagnóstico encontró un problema real al arrancar - revisa el panel de Diagnóstico" ;;
+      safemode) echo "Modo seguro activo" ;;
+      *) echo "$1" ;;
+    esac
+  fi
+}
+
 alert_dispatch() {
   local severity="$1" message="$2"
   [ "$severity" = "critical" ] || return 0
   [ "$(getconf notify true)" = "true" ] || return 0
+
+  # The two fixed critical messages are emitted (and journaled) in one
+  # language; show them in the user's.
+  case "$message" in
+    "PowerSentinel: autodiagnóstico encontró"*) message="$(_tr selftest)" ;;
+    "Safe Mode is Active") message="$(_tr safemode)" ;;
+  esac
 
   # SECURITY: see the equivalent comment this replaced in the old
   # notif() - base64-encoding neutralizes shell metacharacters before
@@ -58,16 +124,8 @@ alert_dispatch() {
 # fallback.
 _event_display_name() {
   case "$1" in
-    boot) echo "Arranque" ;;
-    charging) echo "Cargando" ;;
-    screen_off) echo "Pantalla apagada" ;;
-    low_power) echo "Ahorro del sistema" ;;
-    night) echo "Noche" ;;
-    thermal) echo "Temperatura alta" ;;
-    manual) echo "Manual" ;;
-    adaptive_tier1) echo "Ahorro suave" ;;
-    adaptive_tier2) echo "Ahorro moderado" ;;
-    adaptive_tier3) echo "Ahorro extremo" ;;
+    boot|charging|screen_off|low_power|night|thermal|manual|adaptive_tier1|adaptive_tier2|adaptive_tier3)
+      _tr "ev_$1" ;;
     *) echo "$1" ;;
   esac
 }
@@ -94,7 +152,7 @@ _build_active_mode_text() {
     else title="$title, $(_event_display_name "$n")"; fi
   done <<< "$names"
 
-  local cores doze apps gms wifi restrictdata tune lowram maxfreq maxrefresh
+  local cores doze apps gms wifi restrictdata tune radio lowram maxfreq maxrefresh
   cores="$("$JQ" -r 'any(.[]; .handle_cores != "false")' <<<"$snapshot" 2>/dev/null)"
   doze="$("$JQ" -r 'any(.[]; .doze != "false")' <<<"$snapshot" 2>/dev/null)"
   apps="$("$JQ" -r '[.[] | select(.handle_apps != "false") | .handle_apps] | unique | join(",")' <<<"$snapshot" 2>/dev/null)"
@@ -102,32 +160,34 @@ _build_active_mode_text() {
   wifi="$("$JQ" -r 'any(.[]; .kill_wifi == "true")' <<<"$snapshot" 2>/dev/null)"
   restrictdata="$("$JQ" -r 'any(.[]; .restrict_data == "true")' <<<"$snapshot" 2>/dev/null)"
   tune="$("$JQ" -r 'any(.[]; .tune_system == "true")' <<<"$snapshot" 2>/dev/null)"
+  radio="$("$JQ" -r 'any(.[]; .radio_lte == "true")' <<<"$snapshot" 2>/dev/null)"
   lowram="$("$JQ" -r 'any(.[]; .low_ram == "true")' <<<"$snapshot" 2>/dev/null)"
   maxfreq="$("$JQ" -r '[.[] | select(.max_cpu_freq != "false" and .max_cpu_freq != null) | (.max_cpu_freq | tonumber)] | min' <<<"$snapshot" 2>/dev/null)"
   maxrefresh="$("$JQ" -r '[.[] | select(.max_refresh_rate != "false" and .max_refresh_rate != null) | (.max_refresh_rate | tonumber)] | min' <<<"$snapshot" 2>/dev/null)"
 
-  [ "$cores" = "true" ] && phrases+=("CPU en ahorro")
+  [ "$cores" = "true" ] && phrases+=("$(_tr cpu_save)")
   case "$apps" in
     "") ;;
-    nice) phrases+=("apps en 2º plano ralentizadas") ;;
-    kill) phrases+=("apps en 2º plano cerradas") ;;
-    suspend) phrases+=("apps en 2º plano suspendidas") ;;
-    bucket) phrases+=("apps en 2º plano restringidas") ;;
-    *) phrases+=("apps en 2º plano gestionadas") ;;
+    nice) phrases+=("$(_tr apps_nice)") ;;
+    kill) phrases+=("$(_tr apps_kill)") ;;
+    suspend) phrases+=("$(_tr apps_suspend)") ;;
+    bucket) phrases+=("$(_tr apps_bucket)") ;;
+    *) phrases+=("$(_tr apps_other)") ;;
   esac
-  [ "$doze" = "true" ] && phrases+=("Doze forzado")
-  [ "$gms" = "true" ] && phrases+=("Play Services limitado")
-  [ "$wifi" = "true" ] && phrases+=("WiFi apagado")
-  [ "$restrictdata" = "true" ] && phrases+=("Ahorro de datos activo")
-  [ "$tune" = "true" ] && phrases+=("ajustes de kernel en reposo")
-  [ "$lowram" = "true" ] && phrases+=("modo RAM baja")
+  [ "$doze" = "true" ] && phrases+=("$(_tr doze)")
+  [ "$gms" = "true" ] && phrases+=("$(_tr gms)")
+  [ "$wifi" = "true" ] && phrases+=("$(_tr wifi)")
+  [ "$restrictdata" = "true" ] && phrases+=("$(_tr data)")
+  [ "$tune" = "true" ] && phrases+=("$(_tr tune)")
+  [ "$radio" = "true" ] && phrases+=("$(_tr radio)")
+  [ "$lowram" = "true" ] && phrases+=("$(_tr lowram)")
   case "$maxfreq" in
     ''|null) ;;
-    *) phrases+=("CPU al ${maxfreq}%") ;;
+    *) phrases+=("$(_tr cpu_pct "$maxfreq")") ;;
   esac
   case "$maxrefresh" in
     ''|null) ;;
-    *) phrases+=("pantalla a ${maxrefresh}Hz") ;;
+    *) phrases+=("$(_tr refresh "$maxrefresh")") ;;
   esac
 
   body=""
@@ -136,7 +196,7 @@ _build_active_mode_text() {
     if [ "$first" = 1 ]; then body="$p"; first=0
     else body="$body · $p"; fi
   done
-  [ -n "$body" ] || body="sin cambios activos"
+  [ -n "$body" ] || body="$(_tr none)"
 
   printf '%s|%s' "$title" "$body"
 }

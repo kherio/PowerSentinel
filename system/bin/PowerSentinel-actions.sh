@@ -242,16 +242,20 @@ action_apps_apply() {
     elif [ "$effective" = "bucket" ]; then
       # App Standby Bucket "restricted": Android itself then limits the
       # app's jobs, alarms and background network - nothing is killed or
-      # frozen. Only touches an app sitting in one of the four regular
-      # buckets (10 active, 20 working set, 30 frequent, 40 rare); the
-      # exempted (5), never-used (50) and already-restricted (45) buckets
-      # are left alone, and so is any app another action already owns
+      # frozen. Only touches an app sitting in working set (20),
+      # frequent (30) or rare (40). Active (10) means the user is using
+      # the app right now (a real device report: it restricted the
+      # browser while it was open), so it is left alone - Android drops
+      # it to a lower bucket by itself once it is no longer in use and
+      # the next apply cycle can pick it up. The exempted (5), never-used
+      # (50) and already-restricted (45) buckets are left alone too, and
+      # so is any app another action already owns
       # (the ownership record holds one action per app).
       capability_has standby_bucket || continue
       [ -z "${_owned_action[$app]:-}" ] || continue
       cur="$(am get-standby-bucket "$app" 2>/dev/null | tr -d '[:space:]')"
       case "$cur" in
-        10|20|30|40)
+        20|30|40)
           _owned_action[$app]="bucket"
           _owned_bucket[$app]="$cur"
           changed=1
@@ -852,6 +856,97 @@ action_tune_undo() {
     echo "$orig" > "$path" 2>/dev/null
   done < "$tune_state_file"
   rm -f "$tune_state_file"
+}
+
+# ---------- Radio: no 5G while an event is active (radio_lte) ----------
+#
+# Removes only the NR (5G) bit from the user's allowed-network-types
+# bitmask, via the telephony shell command
+# (`cmd phone set-allowed-network-types-for-users [-s SLOT] BITMASK`),
+# so the modem stays on LTE and below. It never builds a mask from
+# scratch: it takes the current one and clears one bit, and it refuses
+# to act unless the result still contains LTE - so it can never leave a
+# phone without a usable data network. The real original per SIM slot
+# is recorded once in $radio_state_file ("slot orig applied" per line)
+# and restored when the last event that wants radio_lte ends - same
+# ownership/composition contract as tune_system above. If the value is
+# no longer what we set (the user changed the preferred network type
+# meanwhile) it is left alone. Whether this saves anything depends on
+# the carrier and coverage; PowerSentinel-comparedrain is how to check.
+: "${radio_state_file:=/data/local/tmp/PowerSentinel/PowerSentinel.radiostate}"
+: "${radio_nr_bit:=524288}"   # TelephonyManager.NETWORK_TYPE_BITMASK_NR = 1 << 19
+: "${radio_lte_bit:=4096}"    # TelephonyManager.NETWORK_TYPE_BITMASK_LTE = 1 << 12
+: "${radio_slots:=0 1}"
+
+_radio_get() {
+  local v
+  v="$(cmd phone get-allowed-network-types-for-users -s "$1" 2>/dev/null | grep -oE '[0-9]+' | tail -1)"
+  case "$v" in ''|*[!0-9]*) return 1 ;; esac
+  echo "$v"
+}
+
+action_radio_apply() {
+  [ "$radio_lte" = "true" ] || return
+  if ! capability_has radio_lte; then
+    log_msg 1 "Cannot limit the radio to LTE: telephony shell command not available on this device"
+    emit capabilities warning "No se pudo limitar la red a 4G: no soportado en este dispositivo"
+    return
+  fi
+  mkdir -p "$(dirname "$radio_state_file")" 2>/dev/null
+  local slot cur new check
+  for slot in $radio_slots; do
+    cur="$(_radio_get "$slot")" || continue
+    [ $(( cur & radio_nr_bit )) -ne 0 ] || continue          # no 5G allowed: nothing to do
+    new=$(( cur & ~radio_nr_bit ))
+    [ $(( new & radio_lte_bit )) -ne 0 ] || continue          # never leave a mask without LTE
+    if ! awk -v s="$slot" '$1 == s { found = 1 } END { exit !found }' "$radio_state_file" 2>/dev/null; then
+      echo "$slot $cur $new" >> "$radio_state_file"
+      chmod 600 "$radio_state_file" 2>/dev/null
+    fi
+    log_msg 3 "Limiting SIM slot $slot to LTE and below (allowed types $cur -> $new)"
+    cmd phone set-allowed-network-types-for-users -s "$slot" "$new" &>/dev/null
+    check="$(_radio_get "$slot")"
+    if [ "$check" != "$new" ]; then
+      log_msg 1 "SIM slot $slot did not accept the new allowed types ($check) - restoring $cur"
+      cmd phone set-allowed-network-types-for-users -s "$slot" "$cur" &>/dev/null
+      sed -i "/^$slot /d" "$radio_state_file" 2>/dev/null
+    fi
+  done
+}
+
+# Restores whatever is recorded in $radio_state_file. Shared by the
+# normal undo and by the startup recovery below.
+_radio_restore_recorded() {
+  [ -s "$radio_state_file" ] || return 0
+  local slot orig applied now
+  while read -r slot orig applied; do
+    [ -n "$slot" ] || continue
+    case "$orig$applied" in *[!0-9]*|'') continue ;; esac
+    now="$(_radio_get "$slot")" || continue
+    if [ "$now" = "$applied" ]; then
+      log_msg 3 "Restoring SIM slot $slot allowed network types to $orig"
+      cmd phone set-allowed-network-types-for-users -s "$slot" "$orig" &>/dev/null
+    else
+      log_msg 3 "SIM slot $slot allowed network types changed since ($now) - leaving it as-is"
+    fi
+  done < "$radio_state_file"
+  rm -f "$radio_state_file"
+}
+
+action_radio_undo() {
+  [ "$radio_lte" = "true" ] || return
+  capability_has radio_lte || return
+  _another_active_event_wants radio_lte && return
+  _radio_restore_recorded
+}
+
+# Called once at daemon start, when no event is active yet: if a
+# previous run died with the radio limited, give the user their 5G back.
+action_radio_recover() {
+  capability_has radio_lte || return 0
+  [ -s "$radio_state_file" ] || return 0
+  log_msg 1 "Found a radio limit left by a previous run - restoring it"
+  _radio_restore_recorded
 }
 
 # ---------- Doze ----------

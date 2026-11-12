@@ -108,6 +108,9 @@ var FIELD_DEFS = [
   { key: 'restrict_data', label: t('field.restrictData.label'), type: 'toggle', def: 'false', group: 'sistema',
     help: t('field.restrictData.help'),
     warn: t('field.restrictData.warn') },
+  { key: 'radio_lte', label: t('field.radioLte.label'), type: 'toggle', def: 'false', group: 'sistema',
+    help: t('field.radioLte.help'),
+    warn: t('field.radioLte.warn') },
   { key: 'tune_system', label: t('field.tuneSystem.label'), type: 'toggle', def: 'false', group: 'sistema',
     help: t('field.tuneSystem.help'),
     warn: t('field.tuneSystem.warn') },
@@ -159,6 +162,15 @@ var GLOBAL_DEFS = [
       { value: '3', label: '3 · DEBUG' }
     ],
     help: t('global.logLevel.help')
+  },
+  {
+    key: 'language', label: t('global.language.label'), type: 'select', def: 'auto',
+    options: [
+      { value: 'auto', label: t('global.language.optAuto') },
+      { value: 'es', label: 'Español' },
+      { value: 'en', label: 'English' }
+    ],
+    help: t('global.language.help')
   },
   { key: 'notify', label: t('global.notify.label'), type: 'toggle', def: 'true',
     help: t('global.notify.help') },
