@@ -21,20 +21,24 @@ run_tests() {
   declare -A MASK=()
   CMD_LOG=()
   REFUSE=0
-  # cmd phone get-allowed-network-types-for-users -s N
-  # cmd phone set-allowed-network-types-for-users -s N MASK
+  # Real device format: get PRINTS NAMES (as on a OnePlus 11), set takes a
+  # BINARY digit string. The fake keeps one decimal mask per slot.
+  local NAMES=("GPRS" "EDGE" "UMTS" "CDMA" "CDMA - EvDo rev. 0" "CDMA - EvDo rev. A" "CDMA - 1xRTT" "HSDPA" "HSUPA" "HSPA" "iDEN" "CDMA - EvDo rev. B" "LTE" "CDMA - eHRPD" "HSPA+" "GSM" "TD_SCDMA" "IWLAN" "LTE_CA" "NR")
+  names_of() { local m="$1" i out=""; for i in "${!NAMES[@]}"; do [ $(( m & (1 << i) )) -ne 0 ] && out+="${out:+|}${NAMES[$i]}"; done; echo "$out"; }
   cmd() {
     [ "$1" = phone ] || return 1
     case "$2" in
-      get-allowed-network-types-for-users) echo "Allowed network types for reason user: ${MASK[$4]}" ;;
+      get-allowed-network-types-for-users) names_of "${MASK[$4]}" ;;
       set-allowed-network-types-for-users)
+        case "$5" in ''|*[!01]*) return 1 ;; esac      # decimal or names are rejected, like AOSP
         CMD_LOG+=("set $4 $5")
-        [ "$REFUSE" = 1 ] || MASK[$4]="$5"
+        [ "$REFUSE" = 1 ] || MASK[$4]=$(( 2#$5 ))
         ;;
     esac
   }
   NR=524288; LTE=4096
-  ALL=$(( 4194303 ))          # every bit set incl. NR and LTE
+  # The exact list the OnePlus 11 printed: every type except iDEN and IWLAN.
+  ALL=$(( (1 << 20) - 1 - 1024 - 131072 ))
   NO5G=$(( ALL & ~NR ))
   reset() { MASK=([0]=$ALL [1]=$ALL); CMD_LOG=(); REFUSE=0; rm -f "$radio_state_file"; }
 
@@ -63,6 +67,36 @@ run_tests() {
   action_radio_apply
   assert_eq "0" "${#CMD_LOG[@]}" "ya sin 5G: no hay nada que hacer"
   assert_eq "0 $ALL $NO5G" "$(grep '^0 ' "$radio_state_file")" "el original no se sobreescribe"
+
+  section "lectura: la salida literal de un OnePlus 11 se interpreta bien"
+  cmd() { echo "GPRS|EDGE|UMTS|CDMA|CDMA - EvDo rev. 0|CDMA - EvDo rev. A|CDMA - 1xRTT|HSDPA|HSUPA|HSPA|CDMA - EvDo rev. B|LTE|CDMA - eHRPD|HSPA+|GSM|TD_SCDMA|LTE_CA|NR"; }
+  assert_eq "$ALL" "$(_radio_get 0)" "los nombres de la salida real dan la mascara esperada"
+  cmd() { echo ""; }
+  _radio_get 0 >/dev/null; assert_true $([ $? -ne 0 ] && echo 0 || echo 1) "salida vacia: la lectura falla"
+  cmd() { echo "Allowed network types: 4194303"; }
+  _radio_get 0 >/dev/null; assert_true $([ $? -ne 0 ] && echo 0 || echo 1) "salida numerica/desconocida: la lectura falla, no se adivina"
+  # restaurar el fake
+  cmd() {
+    [ "$1" = phone ] || return 1
+    case "$2" in
+      get-allowed-network-types-for-users) names_of "${MASK[$4]}" ;;
+      set-allowed-network-types-for-users)
+        case "$5" in ''|*[!01]*) return 1 ;; esac
+        CMD_LOG+=("set $4 $5")
+        [ "$REFUSE" = 1 ] || MASK[$4]=$(( 2#$5 ))
+        ;;
+    esac
+  }
+
+  section "formato real: el set recibe binario, nunca decimal ni nombres"
+  reset; action_radio_apply
+  case "${CMD_LOG[0]}" in "set 0 "*[!01]*) assert_eq "binario" "no" "el set recibio algo que no es binario" ;; *) assert_eq 0 0 "el set recibio una cadena binaria" ;; esac
+
+  section "un nombre de red desconocido: no se toca nada (no se adivina)"
+  reset; NAMES+=("FUTURE_RAT"); MASK[0]=$(( ALL | (1 << 20) )); MASK[1]=$(( ALL | (1 << 20) ))
+  CMD_LOG=(); action_radio_apply
+  assert_eq "0" "${#CMD_LOG[@]}" "con un nombre fuera de la tabla no se llama a set"
+  capability_has() { return 0; }
 
   section "slot que ya no tiene 5G no se toca ni se registra"
   reset; MASK[1]=$NO5G

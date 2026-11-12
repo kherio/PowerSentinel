@@ -110,11 +110,8 @@ capabilities_detect() {
   # actually print the current allowed-network-types bitmask for slot 0
   # (so we know the output format is what the action parses). Read-only.
   CAPS[radio_lte]="false"
-  if cmd phone help 2>&1 | grep -q "allowed-network-types-for-users"; then
-    case "$(cmd phone get-allowed-network-types-for-users -s 0 2>/dev/null | grep -oE '[0-9]+' | tail -1)" in
-      ''|*[!0-9]*) ;;
-      *) CAPS[radio_lte]="true" ;;
-    esac
+  if cmd phone help 2>&1 | grep -q "allowed-network-types-for-users" && declare -F _radio_get >/dev/null && _radio_get 0 >/dev/null; then
+    CAPS[radio_lte]="true"
   fi
 
   log_msg 2 "Capabilities: $(capabilities_summary)"
