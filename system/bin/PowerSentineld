@@ -498,6 +498,7 @@ enable_pwr_save() {
   action_wifi_apply
   action_restrictdata_apply
   action_tune_apply
+  action_radio_apply
   action_doze_apply
   action_cores_apply
   action_cpufreq_apply
@@ -511,6 +512,7 @@ disable_pwr_save() {
   action_cpufreq_undo
   action_cores_undo
   action_doze_undo
+  action_radio_undo
   action_tune_undo
   action_restrictdata_undo
   action_wifi_undo
@@ -1198,6 +1200,10 @@ detect_critical_apps
 # two detections above since the rfkill_wifi capability depends on
 # RFKILL_CMD already being set.
 capabilities_detect
+
+# If a previous run died while the radio was limited to LTE (radio_lte),
+# give the user their 5G back now - no event is active at this point.
+action_radio_recover
 
 # By this point, every install has been migrated to v2 (see the
 # widened migrate() trigger above) - v1 no longer has a code path at

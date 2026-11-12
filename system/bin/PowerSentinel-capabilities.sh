@@ -106,6 +106,17 @@ capabilities_detect() {
     CAPS[kernel_tunables]="true"
   fi
 
+  # Radio (radio_lte): the telephony shell command must exist AND
+  # actually print the current allowed-network-types bitmask for slot 0
+  # (so we know the output format is what the action parses). Read-only.
+  CAPS[radio_lte]="false"
+  if cmd phone help 2>&1 | grep -q "allowed-network-types-for-users"; then
+    case "$(cmd phone get-allowed-network-types-for-users -s 0 2>/dev/null | grep -oE '[0-9]+' | tail -1)" in
+      ''|*[!0-9]*) ;;
+      *) CAPS[radio_lte]="true" ;;
+    esac
+  fi
+
   log_msg 2 "Capabilities: $(capabilities_summary)"
 }
 
@@ -115,7 +126,7 @@ capability_has() {
 
 capabilities_summary() {
   local out="" k
-  for k in cores_online cores_governor rfkill_wifi svc_wifi doze_force gms_installed pm_suspend netpolicy_restrict standby_bucket kernel_tunables; do
+  for k in cores_online cores_governor rfkill_wifi svc_wifi doze_force gms_installed pm_suspend netpolicy_restrict standby_bucket kernel_tunables radio_lte; do
     out+="$k=${CAPS[$k]:-false} "
   done
   echo "$out"

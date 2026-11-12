@@ -117,11 +117,14 @@ config_get() {
     log_level)
       case "$value" in ''|*[!0-9]*) value="$default" ;; esac
       ;;
-    notify|keep_on_charge|handle_proc|low_ram|doze_enabled|kill_wifi|restrict_data|tune_system|safemode|adaptive_mode)
+    notify|keep_on_charge|handle_proc|low_ram|doze_enabled|kill_wifi|restrict_data|tune_system|radio_lte|safemode|adaptive_mode)
       config_valid_bool "$value" || value="$default"
       ;;
     nightwake_start|nightwake_end)
       config_valid_time_hhmm "$value" || value="$default"
+      ;;
+    language)
+      case "$value" in auto|es|en) ;; *) value="$default" ;; esac
       ;;
     doze)
       case "$value" in false|light|deep) ;; *) value="$default" ;; esac

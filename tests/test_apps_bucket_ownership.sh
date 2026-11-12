@@ -32,7 +32,7 @@ run_tests() {
 
   declare -A BUCKET=()
   AM_SETS=()
-  PKGS="com.a.frequent com.b.rare com.c.exempt com.d.never com.e.restricted"
+  PKGS="com.a.frequent com.b.rare com.c.exempt com.d.never com.e.restricted com.f.active"
   pm() { [ "$1" = "list" ] && for p in $PKGS; do echo "package:$p"; done; }
   am() {
     case "$1" in
@@ -48,7 +48,7 @@ run_tests() {
     esac
   }
   reset_buckets() {
-    BUCKET=([com.a.frequent]=30 [com.b.rare]=40 [com.c.exempt]=5 [com.d.never]=50 [com.e.restricted]=45)
+    BUCKET=([com.a.frequent]=30 [com.b.rare]=40 [com.c.exempt]=5 [com.d.never]=50 [com.e.restricted]=45 [com.f.active]=10)
     AM_SETS=()
     rm -f "$apps_ownership_file"
   }
@@ -70,7 +70,7 @@ run_tests() {
   [ -f "$apps_ownership_file" ]
   assert_true $([ $? -eq 1 ] && echo 0 || echo 1) "sin la capacidad tampoco se crea el fichero de ownership"
 
-  section "apply: solo toca los buckets 10/20/30/40"
+  section "apply: solo toca los buckets 20/30/40"
   reset_buckets
   capability_has() { return 0; }
   action_apps_apply
@@ -79,6 +79,7 @@ run_tests() {
   assert_eq "45" "${BUCKET[com.b.rare]}" "la app rara queda en restricted"
   assert_eq "5" "${BUCKET[com.c.exempt]}" "una app exenta (5) no se toca"
   assert_eq "50" "${BUCKET[com.d.never]}" "una app nunca usada (50) no se toca"
+  assert_eq "10" "${BUCKET[com.f.active]}" "una app en active (10, el usuario la esta usando) no se toca"
   assert_eq "frequent" "$("$JQ" -r '.["com.a.frequent"].bucket_orig as $b | if $b == "30" then "frequent" else $b end' "$apps_ownership_file")" "se registra el bucket ORIGINAL real (30)"
   assert_eq "bucket" "$("$JQ" -r '.["com.a.frequent"].action' "$apps_ownership_file")" "la accion registrada es bucket"
   assert_eq "null" "$("$JQ" -r '.["com.e.restricted"]' "$apps_ownership_file")" "una app que ya estaba restricted no se registra como nuestra"
