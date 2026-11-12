@@ -27,7 +27,7 @@ A few concrete principles this project follows in practice:
 
 - **Event-driven power management** — boot, charging, screen-off, low-power, night, thermal, manual and fully custom events, each with independent configuration.
 - **Adaptive engine** — an opt-in pressure score (0-100, from battery level, temperature, charging state, screen state, night, and CPU load) mapped to three escalating tiers, so behavior scales with how much the device actually needs rather than one fixed policy applying uniformly.
-- **App management** — kill, suspend, or reprioritize applications with allow/deny lists, plus a global **per-app policy in 4 levels** (never touch / gentle only, capped at `nice` / follow whatever the active event asks for / always aggressive, forces suspend) that can override a specific app's treatment regardless of which event is currently active.
+- **App management** — kill, suspend, reprioritize, or put applications in Android's **restricted standby bucket** (`bucket`: Android itself then limits their jobs, alarms and background network, and nothing is killed or frozen; apps in the `active` bucket - the one you are using right now - are never touched) with allow/deny lists, plus a global **per-app policy in 4 levels** (never touch / gentle only, capped at `nice` / follow whatever the active event asks for / always aggressive, forces suspend) that can override a specific app's treatment regardless of which event is currently active.
 - **Critical app protection** — the device's default dialer, SMS, and emergency apps, and anything already exempt from Android's own battery optimization, are always protected. Not configurable, since this is about safety rather than preference.
 - **Problematic-app detection** — a background watch flags apps sustaining real CPU use while the screen is off, using the stable `/proc/[pid]/stat` kernel interface rather than a fragile framework dump. Purely observational: flagged apps are surfaced for review (with a one-tap "limit this app" action in the WebUI), never acted on automatically.
 - **On-demand CPU ranking** — a one-shot, explicitly-triggered measurement of which installed apps are using the most CPU right now, sorted by percentage. Zero ongoing cost: it only runs, and only ever costs anything, when someone asks to see it.
@@ -35,8 +35,11 @@ A few concrete principles this project follows in practice:
 - **Hardware detection** — the WebUI shows the real detected manufacturer/model and exactly which low-level mechanisms this specific device supports (core control, WiFi control method, Doze, GMS, app suspension), and only surfaces a device-specific risk warning (e.g. core disabling on some Samsung devices) when it's actually relevant to the device it's running on.
 - **CPU optimization** — powersave governors and optional core disabling, gated by a Capability Manager that probes what the device can actually do once at startup, instead of blindly attempting something unsupported every cycle.
 - **System controls** — Doze, WiFi, low-RAM mode (with the device's real original value preserved and restored, not overwritten to a hardcoded default), GMS and process priorities.
-- **Basic/Advanced modes** — a simple aggressiveness picker (Low/Medium/High, each with a plain-language breakdown of what it actually does) for anyone who doesn't want to configure individual events by hand, and a full per-event editor with raw JSON access for anyone who does. Both read and write the exact same underlying configuration.
-- **Event Journal & sane notifications** — every event transition and status change is recorded to a structured journal (viewable in the WebUI's "Historial" tab); only genuinely critical situations (Safe Mode engaging, a rejected unsafe configuration) ever reach an actual Android notification, instead of every routine status change interrupting the notification shade.
+- **Kernel idle tuning** (`tune_system`, opt-in per event) — raises two kernel timers while an event is active (`vm.stat_interval` 1 s → 10 s, `vm.dirty_writeback_centisecs` 5 s → 30 s) so an idle core wakes less often. A knob already at or above the target is never lowered. Trade-off: up to ~30 s of unsynced writes are at risk on an abrupt power loss.
+- **No 5G** (`radio_lte`, opt-in per event) — removes only the NR bit from each SIM slot's allowed network types through `cmd phone`, so the modem stays on LTE and below while the event is active. It never builds a mask from scratch, refuses to act if the result would have no LTE or if it meets a network name it does not know, restores the real original when the last event that wants it ends (and not over a value you changed meanwhile), and lifts a limit left behind by a crashed daemon at the next start. Whether it saves anything depends on your carrier and coverage.
+- **Wakeup measurement** — a one-shot "who wakes the phone" report from the kernel's wakeup-source counters (`/sys/class/wakeup`): start a measurement, leave the phone idle with the screen off (ideally overnight), then read the result. Nothing runs in between.
+- **Simple/Advanced mode** — one switch ("Más" → Advanced mode) for the whole WebUI. Simple shows a plain aggressiveness picker (Low/Medium/High, each with a plain-language breakdown of what it actually does) for anyone who doesn't want to configure individual events by hand; Advanced adds the full per-event editor with raw JSON access plus the hardware/capabilities and Diagnostics cards. Inicio shows the same full information in both modes. Both modes read and write the exact same underlying configuration.
+- **Event Journal & sane notifications** — every event transition and status change is recorded to a structured journal (the data files are still written; Inicio shows the recent activity); only genuinely critical situations (Safe Mode engaging, a rejected unsafe configuration) ever reach an actual Android notification, instead of every routine status change interrupting the notification shade. An optional persistent notification shows which mode is active. The daemon's notifications follow the `language` setting (`auto`, `es`, `en`; `auto` follows Android's locale), which the WebUI's language selector also writes.
 - **Profiles** — save and restore complete event configurations.
 - **Safe mode** — stops every event immediately and holds off until explicitly resumed, reachable from the WebUI or `PowerSentinelctl safe`/`resume`.
 - **WebUI** — native KernelSU WebUI using `kernelsu.exec()`, no local HTTP server.
@@ -82,7 +85,8 @@ Policy (PowerSentinel-policy.sh)  +  Detect (PowerSentinel-detect.sh)
       ↓
 Actions (PowerSentinel-actions.sh)
   - the only place that actually touches the system: apps, CPU cores,
-    WiFi, Doze, GMS, process priorities, low-RAM mode
+    WiFi, Doze, GMS, process priorities, low-RAM mode, kernel timers,
+    allowed network types
 ```
 
 Two layers sit in front of every app-affecting action, evaluated in this order:
@@ -94,7 +98,7 @@ A **Capability Manager** (`PowerSentinel-capabilities.sh`) probes once at startu
 
 A **State Manager** (`PowerSentinel-state.sh`) persists which events are currently active across daemon restarts and reboots, so a crash (or an unclean reboot) doesn't leave the daemon with no memory of what it previously applied - cores staying offline, apps staying suspended, or WiFi staying blocked indefinitely with nothing left to undo it. On every startup, the daemon reconciles back to a clean baseline before evaluating current conditions from scratch.
 
-An **Event Journal** (`PowerSentinel-journal.sh`) records every event transition and status change as structured data (viewable in the WebUI's "Historial" tab), while an **Alert Bridge** (`PowerSentinel-alertbridge.sh`) is the only place that ever posts a real Android notification - and only for genuinely critical severity, not routine status.
+An **Event Journal** (`PowerSentinel-journal.sh`) records every event transition and status change as structured data (the WebUI's Inicio shows the recent activity), while an **Alert Bridge** (`PowerSentinel-alertbridge.sh`) is the only place that ever posts a real Android notification - and only for genuinely critical severity, not routine status.
 
 ## Installation
 
@@ -139,7 +143,7 @@ PowerSentinel supports the current v2 event-driven configuration format, stored 
 
 Multiple events can be active at the same time. Configure overlapping policies carefully and keep essential applications protected.
 
-The WebUI's Config tab offers two modes: **Básico**, the default for every fresh install, which exposes just an adaptive-savings switch and an aggressiveness level (Low/Medium/High); and **Avanzado**, which exposes the full per-event editor and a raw JSON view. Both modes read and write this exact same file - Basic mode is a simplified presentation layer, not a different underlying mechanism.
+The WebUI's Automatización tab follows the global **Simple/Advanced** switch ("Más" → Advanced mode). **Simple**, the default for every fresh install, exposes just an adaptive-savings switch and an aggressiveness level (Low/Medium/High); **Advanced** exposes the full per-event editor (with a banner and an ACTIVE badge showing which events are active right now) and a raw JSON view. Both read and write this exact same file - Simple mode is a simplified presentation layer, not a different underlying mechanism. Leaving the tab (or pressing the system Back button) with unsaved edits asks for confirmation first.
 
 ## How configuration changes take effect
 
@@ -161,6 +165,8 @@ PowerSentinelctl pause
 PowerSentinelctl resume
 PowerSentinelctl safe
 ```
+
+`PowerSentinel-wakeups snapshot|status|report` is the measurement behind the WebUI's wakeups card (`snapshot` saves the counters, `status` says whether a measurement is running and since when, `report` prints what fired since the snapshot as one line of JSON).
 
 `PowerSentinelconf` provides an interactive wizard and direct configuration operations:
 
