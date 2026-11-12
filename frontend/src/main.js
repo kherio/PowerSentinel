@@ -1,4 +1,5 @@
 import './style.css';
+import { applyGlobalMode, setAdvancedMode } from './mode.js';
 import { LOCALE, applyStaticI18n, t } from './i18n.js';
 import { ICONS } from './icons.js';
 import { initViewportFix } from './helpers.js';
@@ -124,6 +125,9 @@ function initMoreSheet() {
   document.getElementById('more-icon-perfiles').innerHTML = NAV_ICONS.perfiles;
   document.getElementById('more-icon-acerca').innerHTML = NAV_ICONS.acerca;
   document.getElementById('more-icon-details').innerHTML = ICONS.settings;
+  document.getElementById('more-icon-mode').innerHTML = ICONS.settings;
+  applyGlobalMode();
+  document.getElementById('more-advanced-toggle').addEventListener('change', (e) => setAdvancedMode(e.target.checked));
 
   document.getElementById('tab-btn-more').addEventListener('click', open);
   document.getElementById('more-sheet-cancel').addEventListener('click', close);
