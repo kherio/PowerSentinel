@@ -24,7 +24,11 @@ import {
 // same "apps" split, so rendering the two halves as separate,
 // independently-updating forms doesn't break it.
 const APPS_GROUP_DEFS = FIELD_DEFS.filter((d) => d.group === 'apps');
-const OTHER_FIELD_DEFS = FIELD_DEFS.filter((d) => d.group !== 'apps');
+// The night event's start/end times ('horario' group) go FIRST in its
+// card - they define when the event runs, so they come before the
+// template picker and every other setting.
+const TIME_GROUP_DEFS = FIELD_DEFS.filter((d) => d.group === 'horario');
+const OTHER_FIELD_DEFS = FIELD_DEFS.filter((d) => d.group !== 'apps' && d.group !== 'horario');
 
 let model = null;
 let original = '';
@@ -828,6 +832,12 @@ function renderEvents() {
       const body = document.createElement('div');
       body.className = 'event-body';
 
+      // Schedule (night start/end) at the very top of the card; it only
+      // renders anything for the "night" event (showIf on __eventName).
+      const timeDiv = document.createElement('div');
+      timeDiv.className = 'event-schedule';
+      body.appendChild(timeDiv);
+
       // Quick-start template row
       const presetRow = document.createElement('div');
       presetRow.style.marginBottom = '16px';
@@ -881,6 +891,7 @@ function renderEvents() {
         summary.textContent = summarizeFields(block.fields);
         mountAppsPicker(appsDiv, block.fields, () => markDirty(true));
       };
+      renderFieldsForm(timeDiv, block.fields, TIME_GROUP_DEFS, coreList, onAnyFieldChange);
       renderFieldsForm(fieldsDiv, block.fields, APPS_GROUP_DEFS, coreList, onAnyFieldChange);
       mountAppsPicker(appsDiv, block.fields, () => markDirty(true));
       renderFieldsForm(otherFieldsDiv, block.fields, OTHER_FIELD_DEFS, coreList, onAnyFieldChange);
