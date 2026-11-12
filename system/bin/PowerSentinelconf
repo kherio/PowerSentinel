@@ -298,6 +298,7 @@ prompt_fields() {
     'false:Desactivado' 'light:Ligero' 'deep:Profundo')"
   echo "kill_wifi=$(ask_yesno '¿Desactivar WiFi?' 'false')"
   echo "restrict_data=$(ask_yesno '¿Activar Ahorro de datos (bloquea datos en 2º plano de todas las apps)?' 'false')"
+  echo "tune_system=$(ask_yesno '¿Ajustes de kernel en reposo (menos despertares periódicos; hasta ~30s de escrituras sin sincronizar si se va la corriente)?' 'false')"
   echo "keep_on_charge=$(ask_yesno '¿Mantener ajustes mientras carga?' 'true')"
 }
 

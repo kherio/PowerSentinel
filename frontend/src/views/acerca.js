@@ -111,7 +111,9 @@ async function renderHardwareInfo() {
     doze_force: t('acerca.capDoze'),
     gms_installed: t('acerca.capGms'),
     pm_suspend: t('acerca.capSuspend'),
-    netpolicy_restrict: t('acerca.capNetpolicyRestrict')
+    netpolicy_restrict: t('acerca.capNetpolicyRestrict'),
+    standby_bucket: t('acerca.capStandbyBucket'),
+    kernel_tunables: t('acerca.capKernelTunables')
   };
   try {
     const status = await readStatus();

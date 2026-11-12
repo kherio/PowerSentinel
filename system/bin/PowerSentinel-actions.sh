@@ -783,6 +783,77 @@ action_restrictdata_undo() {
   cmd netpolicy set restrict-background false 2>/dev/null
 }
 
+# ---------- Kernel idle tunables (tune_system) ----------
+#
+# Two small sysctl changes that only ever make the kernel do LESS
+# periodic work while an event is active:
+#   - vm.stat_interval 1 -> 10 (seconds): the per-CPU vmstat timer fires
+#     once a second by default, which can wake an otherwise idle core.
+#   - vm.dirty_writeback_centisecs 500 -> 3000: the flusher thread
+#     wakes every 5s to write dirty pages; every 30s means fewer flash
+#     wakeups. Cost: up to ~30s of unsynced writes are at risk on an
+#     abrupt power loss, which is why this is opt-in per event.
+# Each knob is only ever RAISED: if the current value is already at or
+# above the target (a ROM or the user already tuned it) it is left
+# alone and nothing is recorded. The real original of each knob is
+# recorded once in $tune_state_file ("path value" per line) and
+# restored when the last event that wants tune_system ends - the same
+# ownership/composition contract as kill_wifi, restrict_data and
+# low_ram above. The size of the benefit is NOT claimed anywhere: it is
+# small, and PowerSentinel-comparedrain / the wakeups report are how to
+# check it on a real device.
+: "${tune_state_file:=/data/local/tmp/PowerSentinel/PowerSentinel.tunestate}"
+
+# $tune_sysctl_root exists only so tests can point this at a fake tree.
+: "${tune_sysctl_root:=/proc/sys}"
+
+_tune_knobs() {
+  printf '%s\n' \
+    "$tune_sysctl_root/vm/stat_interval 10" \
+    "$tune_sysctl_root/vm/dirty_writeback_centisecs 3000"
+}
+
+action_tune_apply() {
+  [ "$tune_system" = "true" ] || return
+  if ! capability_has kernel_tunables; then
+    log_msg 1 "Cannot tune kernel idle settings: sysctl files not writable on this device"
+    emit capabilities warning "Los ajustes de kernel no se pudieron aplicar: no soportado en este dispositivo"
+    return
+  fi
+  mkdir -p "$(dirname "$tune_state_file")" 2>/dev/null
+  local path target cur
+  while read -r path target; do
+    [ -n "$path" ] || continue
+    [ -w "$path" ] || continue
+    cur="$(cat "$path" 2>/dev/null | tr -d '[:space:]')"
+    case "$cur" in ''|*[!0-9]*) continue ;; esac
+    # Only ever raise an interval, never lower one.
+    [ "$cur" -lt "$target" ] || continue
+    if ! awk -v p="$path" '$1 == p { found = 1 } END { exit !found }' "$tune_state_file" 2>/dev/null; then
+      echo "$path $cur" >> "$tune_state_file"
+      chmod 600 "$tune_state_file" 2>/dev/null
+    fi
+    log_msg 3 "Setting $path to $target (was $cur)"
+    echo "$target" > "$path" 2>/dev/null
+  done < <(_tune_knobs)
+}
+
+action_tune_undo() {
+  [ "$tune_system" = "true" ] || return
+  capability_has kernel_tunables || return
+  [ -s "$tune_state_file" ] || return
+  _another_active_event_wants tune_system && return
+  local path orig
+  while read -r path orig; do
+    [ -n "$path" ] || continue
+    [ -w "$path" ] || continue
+    case "$orig" in ''|*[!0-9]*) continue ;; esac
+    log_msg 3 "Restoring $path to $orig"
+    echo "$orig" > "$path" 2>/dev/null
+  done < "$tune_state_file"
+  rm -f "$tune_state_file"
+}
+
 # ---------- Doze ----------
 
 action_doze_apply() {
