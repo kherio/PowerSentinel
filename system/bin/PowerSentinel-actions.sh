@@ -862,7 +862,7 @@ action_tune_undo() {
 #
 # Removes only the NR (5G) bit from the user's allowed-network-types
 # bitmask, via the telephony shell command
-# (`cmd phone set-allowed-network-types-for-users [-s SLOT] BITMASK`),
+# (`cmd phone set-allowed-network-types-for-users [-s SLOT] BINARY_MASK`),
 # so the modem stays on LTE and below. It never builds a mask from
 # scratch: it takes the current one and clears one bit, and it refuses
 # to act unless the result still contains LTE - so it can never leave a
@@ -874,15 +874,49 @@ action_tune_undo() {
 # meanwhile) it is left alone. Whether this saves anything depends on
 # the carrier and coverage; PowerSentinel-comparedrain is how to check.
 : "${radio_state_file:=/data/local/tmp/PowerSentinel/PowerSentinel.radiostate}"
-: "${radio_nr_bit:=524288}"   # TelephonyManager.NETWORK_TYPE_BITMASK_NR = 1 << 19
-: "${radio_lte_bit:=4096}"    # TelephonyManager.NETWORK_TYPE_BITMASK_LTE = 1 << 12
+: "${radio_nr_bit:=524288}"   # NR = type 20 -> 1 << 19
+: "${radio_lte_bit:=4096}"    # LTE = type 13 -> 1 << 12
 : "${radio_slots:=0 1}"
 
+# `cmd phone get-allowed-network-types-for-users` PRINTS NAMES
+# ("GPRS|EDGE|...|LTE|...|NR"), while `set-allowed-network-types-for-users`
+# wants the mask as a BINARY digit string (AOSP parses it with
+# Long.parseLong(s, 2); names are rejected). Both are converted here
+# through TelephonyManager's own type numbers (bit = 1 << (type - 1)).
+# A name that is not in this table makes the read FAIL instead of being
+# guessed, so an unfamiliar modem/ROM is left alone rather than risk
+# writing back a mask that silently drops a network type.
+declare -gA _RADIO_BIT=(
+  ["GPRS"]=1 ["EDGE"]=2 ["UMTS"]=4 ["CDMA"]=8 ["CDMA - EvDo rev. 0"]=16
+  ["CDMA - EvDo rev. A"]=32 ["CDMA - 1xRTT"]=64 ["HSDPA"]=128 ["HSUPA"]=256
+  ["HSPA"]=512 ["iDEN"]=1024 ["CDMA - EvDo rev. B"]=2048 ["LTE"]=4096
+  ["CDMA - eHRPD"]=8192 ["HSPA+"]=16384 ["GSM"]=32768 ["TD_SCDMA"]=65536
+  ["IWLAN"]=131072 ["LTE_CA"]=262144 ["NR"]=524288
+)
+
+# Prints the slot's allowed mask as a decimal number; fails if the output
+# is empty or contains any name not in the table above.
 _radio_get() {
-  local v
-  v="$(cmd phone get-allowed-network-types-for-users -s "$1" 2>/dev/null | grep -oE '[0-9]+' | tail -1)"
-  case "$v" in ''|*[!0-9]*) return 1 ;; esac
-  echo "$v"
+  local out name mask=0 n=0 IFS='|'
+  out="$(cmd phone get-allowed-network-types-for-users -s "$1" 2>/dev/null | head -n 1)"
+  [ -n "$out" ] || return 1
+  for name in $out; do
+    name="${name#"${name%%[![:space:]]*}"}"; name="${name%"${name##*[![:space:]]}"}"
+    [ -n "$name" ] || continue
+    [ -n "${_RADIO_BIT[$name]:-}" ] || return 1
+    mask=$(( mask | _RADIO_BIT[$name] )); n=$((n + 1))
+  done
+  [ "$n" -gt 0 ] || return 1
+  echo "$mask"
+}
+
+# Writes a decimal mask to a slot (converted to the binary string the
+# shell command expects).
+_radio_set() {
+  local m="$2" bin=""
+  [ "$m" -gt 0 ] 2>/dev/null || return 1
+  while [ "$m" -gt 0 ]; do bin="$((m & 1))$bin"; m=$((m >> 1)); done
+  cmd phone set-allowed-network-types-for-users -s "$1" "$bin" &>/dev/null
 }
 
 action_radio_apply() {
@@ -904,11 +938,11 @@ action_radio_apply() {
       chmod 600 "$radio_state_file" 2>/dev/null
     fi
     log_msg 3 "Limiting SIM slot $slot to LTE and below (allowed types $cur -> $new)"
-    cmd phone set-allowed-network-types-for-users -s "$slot" "$new" &>/dev/null
+    _radio_set "$slot" "$new"
     check="$(_radio_get "$slot")"
     if [ "$check" != "$new" ]; then
       log_msg 1 "SIM slot $slot did not accept the new allowed types ($check) - restoring $cur"
-      cmd phone set-allowed-network-types-for-users -s "$slot" "$cur" &>/dev/null
+      _radio_set "$slot" "$cur"
       sed -i "/^$slot /d" "$radio_state_file" 2>/dev/null
     fi
   done
@@ -925,7 +959,7 @@ _radio_restore_recorded() {
     now="$(_radio_get "$slot")" || continue
     if [ "$now" = "$applied" ]; then
       log_msg 3 "Restoring SIM slot $slot allowed network types to $orig"
-      cmd phone set-allowed-network-types-for-users -s "$slot" "$orig" &>/dev/null
+      _radio_set "$slot" "$orig"
     else
       log_msg 3 "SIM slot $slot allowed network types changed since ($now) - leaving it as-is"
     fi
