@@ -6,6 +6,7 @@
 #
 # Usage:
 #   PowerSentinel-wakeups snapshot   save the current counters
+#   PowerSentinel-wakeups status     is a measurement running, since when
 #   PowerSentinel-wakeups report     diff the counters against the saved
 #                                    snapshot (what happened since then)
 #   PowerSentinel-wakeups [N]        sample, wait N seconds (default 10),
@@ -117,6 +118,17 @@ case "${1:-}" in
     else
       _unavailable
     fi
+    ;;
+  status)
+    # Is a measurement running (a snapshot exists), and since when.
+    t0="$(head -n 1 "$STATE" 2>/dev/null)"
+    case "$t0" in
+      ''|*[!0-9]*) echo '{"available":true,"measuring":false,"since":0,"elapsed_s":0}' ;;
+      *)
+        el=$(( $(date +%s) - t0 )); [ "$el" -ge 0 ] || el=0
+        printf '{"available":true,"measuring":true,"since":%s,"elapsed_s":%s}\n' "$t0" "$el"
+        ;;
+    esac
     ;;
   report)
     if [ -s "$STATE" ]; then

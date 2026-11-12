@@ -1,5 +1,5 @@
 import { ICONS } from '../icons.js';
-import { readStatus, readCpuRanking, startWakeupsMeasurement, readWakeupsReport, readJournal, readEnergyLog, restartDaemon, readConfig, writeConfig, readFlaggedApps, startManualTimed, stopEvent, readSuggestedNightWindow, readDrainComparison } from '../api.js';
+import { readStatus, readCpuRanking, startWakeupsMeasurement, readWakeupsReport, readWakeupsStatus, readJournal, readEnergyLog, restartDaemon, readConfig, writeConfig, readFlaggedApps, startManualTimed, stopEvent, readSuggestedNightWindow, readDrainComparison } from '../api.js';
 import { toast, escapeHtml } from '../helpers.js';
 import { t } from '../i18n.js';
 import { parseJournalLines, filterBootRestartNoise, renderTimelineEntry, parseEnergyLines, computeRecentRate } from './log.js';
@@ -1451,6 +1451,26 @@ async function loadCpuRanking() {
 // click, never from the poll loop (same rule as loadCpuRanking above).
 // Nothing runs in the background between the two clicks - "Empezar"
 // just saves the kernel's counters, "Ver resultado" diffs against them.
+// "Midiendo desde las 23:10 (hace 3 h 12 min)" while a measurement is
+// running; empty otherwise. Reads the snapshot's own timestamp, so it
+// survives closing the app.
+async function refreshWakeupsStatus() {
+  const el = document.getElementById('e-wakeups-status');
+  if (!el) return;
+  try {
+    const d = JSON.parse(await readWakeupsStatus());
+    if (!d.available || !d.measuring) { el.style.display = 'none'; el.textContent = ''; return; }
+    const since = new Date(d.since * 1000);
+    const hh = String(since.getHours()).padStart(2, '0') + ':' + String(since.getMinutes()).padStart(2, '0');
+    const mins = Math.max(0, Math.floor((d.elapsed_s || 0) / 60));
+    const ago = mins >= 60 ? `${Math.floor(mins / 60)} h ${mins % 60} min` : `${mins} min`;
+    el.textContent = t('estado.wakeupsMeasuring', { time: hh, ago });
+    el.style.display = '';
+  } catch (e) {
+    el.style.display = 'none';
+  }
+}
+
 async function startWakeups() {
   const btn = document.getElementById('e-wakeups-start-btn');
   const list = document.getElementById('e-wakeups-list');
@@ -1462,6 +1482,7 @@ async function startWakeups() {
     } else {
       list.innerHTML = '';
       toast(t('estado.wakeupsStarted'), 'success');
+      refreshWakeupsStatus();
     }
   } catch (e) {
     toast(t('estado.wakeupsError', { msg: e.message }), 'error');
@@ -1506,6 +1527,7 @@ async function loadWakeupsReport() {
 // project avoids elsewhere (see loadCpuRanking's own comment above).
 export function activateEstado() {
   loadStatus(true);
+  refreshWakeupsStatus();
   renderRecentActivity();
   renderSavingsBar();
   renderTodayInterventions();
