@@ -78,6 +78,7 @@ function timelineMechanismPhrases(detail) {
   if (detail.restrict_data === 'true') phrases.push(t('journal.mechDataSaver'));
   if (detail.tune_system === 'true') phrases.push(t('journal.mechTuneSystem'));
   if (detail.radio_lte === 'true') phrases.push(t('journal.mechRadioLte'));
+  if (detail.scan_off === 'true') phrases.push(t('journal.mechScanOff'));
   if (detail.low_ram === 'true') phrases.push(t('journal.mechLowRam'));
   return phrases;
 }

@@ -771,6 +771,7 @@ function mechanismRows(mech) {
   if (mech.restrict_data === 'true') rows.push({ label: t('dashboard.mechDataSaver'), value: '✓' });
   if (mech.tune_system === 'true') rows.push({ label: t('dashboard.mechTuneSystem'), value: '✓' });
   if (mech.radio_lte === 'true') rows.push({ label: t('dashboard.mechRadioLte'), value: '✓' });
+  if (mech.scan_off === 'true') rows.push({ label: t('dashboard.mechScanOff'), value: '✓' });
   // BUG FIX (found while building the status-notification feature,
   // which reuses this same resolved-mechanism data): max_cpu_freq/
   // max_refresh_rate (v4.1.0) were never added here, so the "active
@@ -983,7 +984,8 @@ function renderSystemHealth(caps) {
     { label: t('estado.healthWifi'), ok: !!(caps.rfkill_wifi || caps.svc_wifi) },
     { label: t('estado.healthDataSaver'), ok: !!caps.netpolicy_restrict },
     { label: t('estado.healthTuning'), ok: !!caps.kernel_tunables },
-    { label: t('estado.healthRadio'), ok: !!caps.radio_lte }
+    { label: t('estado.healthRadio'), ok: !!caps.radio_lte },
+    { label: t('estado.healthScan'), ok: !!caps.scan_off }
   ];
   const allOk = items.every((i) => i.ok);
   const headline = allOk

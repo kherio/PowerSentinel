@@ -1,3 +1,6 @@
+### Unreleased
+  - **New mechanism: `scan_off` (no background Wi-Fi/Bluetooth scanning while an event is active)** - sets the two "scanning always available" global settings (`wifi_scan_always_enabled`, `ble_scan_always_enabled`) to 0, so Android stops scanning for networks/devices while Wi-Fi/Bluetooth are off. It only ever lowers them: a setting already at 0 is never recorded or touched, the real originals are recorded once and restored when the last event that wants `scan_off` ends (never over a value the user changed), and a leftover from a crashed run is restored at daemon start. Capability-gated (the setting must read back as a plain 0/1). Opt-in per event: Automatización -> advanced editor -> Sistema. Location may be slightly less accurate while it is active. New persisted test `test_scan_off_ownership.sh`.
+
 ### v4.20.0
   - Also ships everything from v4.19.0 (global Simple/Advanced WebUI mode), which was never published as a release.
   - **Automatización: active events are obvious** - a banner above the event list ("● Activos ahora: Noche, Manual" / "Ningún evento activo"), an ACTIVO pill and an accent border on each active event, refreshed every 5 s while the tab is open.

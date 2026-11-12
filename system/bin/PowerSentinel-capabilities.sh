@@ -114,6 +114,13 @@ capabilities_detect() {
     CAPS[radio_lte]="true"
   fi
 
+  # Background scanning (scan_off): the settings must read back as a
+  # plain 0/1 (on ROMs without them `settings get` prints "null").
+  CAPS[scan_off]="false"
+  if declare -F _scan_get >/dev/null && _scan_get wifi_scan_always_enabled >/dev/null; then
+    CAPS[scan_off]="true"
+  fi
+
   log_msg 2 "Capabilities: $(capabilities_summary)"
 }
 
@@ -123,7 +130,7 @@ capability_has() {
 
 capabilities_summary() {
   local out="" k
-  for k in cores_online cores_governor rfkill_wifi svc_wifi doze_force gms_installed pm_suspend netpolicy_restrict standby_bucket kernel_tunables radio_lte; do
+  for k in cores_online cores_governor rfkill_wifi svc_wifi doze_force gms_installed pm_suspend netpolicy_restrict standby_bucket kernel_tunables radio_lte scan_off; do
     out+="$k=${CAPS[$k]:-false} "
   done
   echo "$out"
