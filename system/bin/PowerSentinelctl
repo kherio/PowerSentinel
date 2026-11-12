@@ -8,8 +8,10 @@
 # but a user who customized ctl_file via the WebUI (writing to JSON)
 # would have this tool silently keep using the stale default from the
 # frozen .conf, writing commands to a file the daemon isn't watching.
-json_conf="/data/local/tmp/PowerSentinel/PowerSentinel.json"
-JQ="$(dirname "$0")/jq"
+# $PS_JSON_CONF / $JQ exist only so tests can run this script against a
+# temp tree; on a device neither is set and the defaults apply.
+json_conf="${PS_JSON_CONF:-/data/local/tmp/PowerSentinel/PowerSentinel.json}"
+JQ="${JQ:-$(dirname "$0")/jq}"
 
 getconf() {
   local value
@@ -75,8 +77,14 @@ case "${1:-}" in
       esac
     done
 
+    # BUG FIX (found on a real device): "stop" with no event name used to
+    # write "start manual" too - the branch tested start OR stop but
+    # always wrote "start". So `PowerSentinelctl stop` never stopped the
+    # manual event; it only (re)started it, and since an already-active
+    # event ignores a second start, a manual event stayed active forever
+    # and never picked up config changes made after it started.
     if [[ "$1" = "start" || "$1" = "stop" ]] && [ "$#" -eq 1 ]; then
-      echo "start manual" > "$ctl_file"
+      echo "$1 manual" > "$ctl_file"
     else
       printf '%s\n' "$*" > "$ctl_file"
     fi
