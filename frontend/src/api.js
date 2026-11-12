@@ -10,7 +10,7 @@ export {
   readModuleInfo, listRunningPackages,
   enterSafeMode, exitSafeMode, restartDaemon,
   readFlaggedApps, dismissFlaggedApp, setAppPolicy, readCpuRanking, readSuggestedNightWindow, readDiagnostics, readDrainComparison,
-  readAppPolicies, readUsageBuckets
+  readAppPolicies, readUsageBuckets, startWakeupsMeasurement, readWakeupsReport
 } from './backend-ksu.js';
 
 export { PowerSentinelApiError } from './errors.js';

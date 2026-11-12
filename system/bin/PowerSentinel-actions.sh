@@ -130,6 +130,19 @@ _app_is_suspended() {
   dumpsys package "$1" 2>/dev/null | grep -q "suspended=true"
 }
 
+# App Standby Bucket number (as printed by `am get-standby-bucket`) ->
+# the name `am set-standby-bucket` documents. Anything else (exempted 5,
+# restricted 45, never 50, unknown) deliberately maps to nothing: those
+# are never restored to.
+_bucket_name() {
+  case "$1" in
+    10) echo active ;;
+    20) echo working_set ;;
+    30) echo frequent ;;
+    40) echo rare ;;
+  esac
+}
+
 # ---------- Apps ----------
 
 action_apps_apply() {
@@ -164,14 +177,17 @@ action_apps_apply() {
   # original nice value) in $apps_ownership_file, loaded and saved once
   # per call rather than once per app to avoid a jq subprocess per
   # installed package.
-  local effective app pkg act nice
-  declare -A _owned_action=() _owned_nice=()
+  local effective app pkg act nice bkt cur bname
+  declare -A _owned_action=() _owned_nice=() _owned_bucket=()
   if [ -s "$apps_ownership_file" ]; then
-    while IFS=$'\t' read -r pkg act nice; do
+    # "-" stands for "no value": with a tab IFS, consecutive tabs
+    # collapse, so an empty middle column would shift the next one.
+    while IFS=$'\t' read -r pkg act nice bkt; do
       [ -n "$pkg" ] || continue
       _owned_action[$pkg]="$act"
-      [ -n "$nice" ] && _owned_nice[$pkg]="$nice"
-    done < <("$JQ" -r 'to_entries[] | "\(.key)\t\(.value.action)\t\(.value.nice_orig // "")"' "$apps_ownership_file" 2>/dev/null)
+      [ -n "$nice" ] && [ "$nice" != "-" ] && _owned_nice[$pkg]="$nice"
+      [ -n "$bkt" ] && [ "$bkt" != "-" ] && _owned_bucket[$pkg]="$bkt"
+    done < <("$JQ" -r 'to_entries[] | "\(.key)\t\(.value.action)\t\(.value.nice_orig // "-")\t\(.value.bucket_orig // "-")"' "$apps_ownership_file" 2>/dev/null)
   fi
   local changed=0
 
@@ -196,7 +212,7 @@ action_apps_apply() {
     # treated the same as "false" - skip this app entirely - rather
     # than falling through to suspend.
     case "$effective" in
-      nice|kill|suspend) ;;
+      nice|kill|suspend|bucket) ;;
       *) continue ;;
     esac
     # BUG FIX (security/robustness audit): every pgrep call in this file
@@ -223,6 +239,26 @@ action_apps_apply() {
     elif [ "$effective" = "kill" ]; then
       log_msg 3 "Stopping $app"
       am force-stop "$app" &>/dev/null &
+    elif [ "$effective" = "bucket" ]; then
+      # App Standby Bucket "restricted": Android itself then limits the
+      # app's jobs, alarms and background network - nothing is killed or
+      # frozen. Only touches an app sitting in one of the four regular
+      # buckets (10 active, 20 working set, 30 frequent, 40 rare); the
+      # exempted (5), never-used (50) and already-restricted (45) buckets
+      # are left alone, and so is any app another action already owns
+      # (the ownership record holds one action per app).
+      capability_has standby_bucket || continue
+      [ -z "${_owned_action[$app]:-}" ] || continue
+      cur="$(am get-standby-bucket "$app" 2>/dev/null | tr -d '[:space:]')"
+      case "$cur" in
+        10|20|30|40)
+          _owned_action[$app]="bucket"
+          _owned_bucket[$app]="$cur"
+          changed=1
+          log_msg 3 "Restricting standby bucket of $app (was $cur)"
+          am set-standby-bucket "$app" restricted &>/dev/null
+          ;;
+      esac
     else
       if _app_is_suspended "$app"; then
         log_msg 3 "$app is already suspended independently of PowerSentinel - leaving it as-is"
@@ -245,8 +281,8 @@ action_apps_apply() {
     tmp="$(mktemp "$dir/.PowerSentinel.appstate.XXXXXX")" || return
     echo '{}' > "$tmp"
     for pkg in "${!_owned_action[@]}"; do
-      "$JQ" --arg p "$pkg" --arg a "${_owned_action[$pkg]}" --arg n "${_owned_nice[$pkg]:-}" \
-        '.[$p] = ({action: $a} + (if $n != "" then {nice_orig: $n} else {} end))' \
+      "$JQ" --arg p "$pkg" --arg a "${_owned_action[$pkg]}" --arg n "${_owned_nice[$pkg]:-}" --arg b "${_owned_bucket[$pkg]:-}" \
+        '.[$p] = ({action: $a} + (if $n != "" then {nice_orig: $n} else {} end) + (if $b != "" then {bucket_orig: $b} else {} end))' \
         "$tmp" > "$tmp.step" 2>/dev/null && mv "$tmp.step" "$tmp"
     done
     chmod 600 "$tmp" 2>/dev/null
@@ -256,14 +292,17 @@ action_apps_apply() {
 
 action_apps_undo() {
   [ "$handle_apps" = "false" ] && return
-  local effective app pkg act nice
-  declare -A _owned_action=() _owned_nice=()
+  local effective app pkg act nice bkt cur bname
+  declare -A _owned_action=() _owned_nice=() _owned_bucket=()
   if [ -s "$apps_ownership_file" ]; then
-    while IFS=$'\t' read -r pkg act nice; do
+    # "-" stands for "no value": with a tab IFS, consecutive tabs
+    # collapse, so an empty middle column would shift the next one.
+    while IFS=$'\t' read -r pkg act nice bkt; do
       [ -n "$pkg" ] || continue
       _owned_action[$pkg]="$act"
-      [ -n "$nice" ] && _owned_nice[$pkg]="$nice"
-    done < <("$JQ" -r 'to_entries[] | "\(.key)\t\(.value.action)\t\(.value.nice_orig // "")"' "$apps_ownership_file" 2>/dev/null)
+      [ -n "$nice" ] && [ "$nice" != "-" ] && _owned_nice[$pkg]="$nice"
+      [ -n "$bkt" ] && [ "$bkt" != "-" ] && _owned_bucket[$pkg]="$bkt"
+    done < <("$JQ" -r 'to_entries[] | "\(.key)\t\(.value.action)\t\(.value.nice_orig // "-")\t\(.value.bucket_orig // "-")"' "$apps_ownership_file" 2>/dev/null)
   fi
   local changed=0
 
@@ -289,6 +328,22 @@ action_apps_undo() {
         unset "_owned_action[$app]" "_owned_nice[$app]"
         changed=1
         ;;
+      bucket)
+        _another_active_event_wants_app "$app" && continue
+        # Restore only if the app is STILL restricted: Android moves an
+        # app out of restricted by itself when the user opens it, and
+        # that newer decision must not be overwritten with an old value.
+        cur="$(am get-standby-bucket "$app" 2>/dev/null | tr -d '[:space:]')"
+        bname="$(_bucket_name "${_owned_bucket[$app]:-}")"
+        if [ "$cur" = "45" ] && [ -n "$bname" ]; then
+          log_msg 3 "Restoring the original standby bucket for $app ($bname)"
+          am set-standby-bucket "$app" "$bname" &>/dev/null
+        else
+          log_msg 3 "Standby bucket of $app already changed by the system - leaving it as-is"
+        fi
+        unset "_owned_action[$app]" "_owned_bucket[$app]"
+        changed=1
+        ;;
       suspend)
         _another_active_event_wants_app "$app" && continue
         log_msg 3 "Unsuspending $app"
@@ -309,8 +364,8 @@ action_apps_undo() {
     tmp="$(mktemp "$dir/.PowerSentinel.appstate.XXXXXX")" || return
     echo '{}' > "$tmp"
     for pkg in "${!_owned_action[@]}"; do
-      "$JQ" --arg p "$pkg" --arg a "${_owned_action[$pkg]}" --arg n "${_owned_nice[$pkg]:-}" \
-        '.[$p] = ({action: $a} + (if $n != "" then {nice_orig: $n} else {} end))' \
+      "$JQ" --arg p "$pkg" --arg a "${_owned_action[$pkg]}" --arg n "${_owned_nice[$pkg]:-}" --arg b "${_owned_bucket[$pkg]:-}" \
+        '.[$p] = ({action: $a} + (if $n != "" then {nice_orig: $n} else {} end) + (if $b != "" then {bucket_orig: $b} else {} end))' \
         "$tmp" > "$tmp.step" 2>/dev/null && mv "$tmp.step" "$tmp"
     done
     chmod 600 "$tmp" 2>/dev/null

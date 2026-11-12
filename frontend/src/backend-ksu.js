@@ -183,6 +183,19 @@ export async function readCpuRanking() {
   return run(`PowerSentinel-cpurank 2 2>/dev/null || echo '[]'`);
 }
 
+// Wakeup-source measurement (PowerSentinel-wakeups): "snapshot" saves
+// the kernel's wakeup counters, "report" diffs the current counters
+// against that snapshot. Read-only and one-shot, never polled - the
+// intended use is snapshot, leave the phone idle with the screen off,
+// then report. Both print one line of JSON.
+export async function startWakeupsMeasurement() {
+  return run(`PowerSentinel-wakeups snapshot 2>/dev/null || echo '{"available":false,"elapsed_s":0,"sources":[]}'`);
+}
+
+export async function readWakeupsReport() {
+  return run(`PowerSentinel-wakeups report 2>/dev/null || echo '{"available":false,"elapsed_s":0,"sources":[]}'`);
+}
+
 // Diagnostic panel (feature request): every check the standalone
 // script runs exists because of a real bug this project actually hit
 // and fixed - see the script's own header. One-shot/on-demand, same

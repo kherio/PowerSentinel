@@ -260,7 +260,7 @@ prompt_fields() {
 
   local handle_apps
   handle_apps=$(ask_choice "Gestión de apps" "false" \
-    "false:No gestionar" "kill:Matar (kill)" "nice:Reducir prioridad (nice)" "suspend:Suspender")
+    "false:No gestionar" "kill:Matar (kill)" "nice:Reducir prioridad (nice)" "bucket:Restringir en segundo plano (bucket)" "suspend:Suspender")
   echo "handle_apps=$handle_apps"
   if [ "$handle_apps" = "suspend" ]; then
     echo "allowlist=$(ask 'Ruta de la allowlist' "$CONF_DIR/apps.allow")"

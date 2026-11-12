@@ -1,0 +1,145 @@
+#!/system/bin/bash
+# PowerSentinel-wakeups - one-shot, on-demand measurement of which kernel
+# wakeup sources fired over a window of time. Purely informational: it
+# never changes anything on the device and nothing feeds from it into any
+# automatic decision (same contract as PowerSentinel-cpurank/usagerank).
+#
+# Usage:
+#   PowerSentinel-wakeups snapshot   save the current counters
+#   PowerSentinel-wakeups report     diff the counters against the saved
+#                                    snapshot (what happened since then)
+#   PowerSentinel-wakeups [N]        sample, wait N seconds (default 10),
+#                                    sample again, print the diff
+#
+# The intended use is snapshot -> leave the phone idle with the screen
+# off for a while (the real question is the overnight drain) -> report.
+# A short `N` run is only a smoke test: a few seconds of idle say little.
+#
+# Source of truth: /sys/class/wakeup/wakeupN/ (kernel wakeup-source
+# class, present on 5.x kernels; the older /sys/kernel/wakeup_reasons is
+# what screenwake.sh tries and is often absent). Per source it reads
+# `name`, `wakeup_count` and `active_time_ms`. If the directory is
+# missing or unreadable on this kernel/ROM, the output says so
+# ({"available": false}) instead of guessing from anything else.
+#
+# Output is ONE line of JSON:
+#   {"available": true, "elapsed_s": 3600,
+#    "sources": [{"name": "...", "wakeups": 12, "active_ms": 340}, ...]}
+# sorted by wakeups then active time, top 25, sources with no activity
+# in the window omitted. Sources sharing a name are summed.
+
+JQ="${JQ:-$(dirname "$0")/jq}"
+SYS="${WAKEUP_SYSFS:-/sys/class/wakeup}"
+STATE="${WAKEUP_STATE:-/data/local/tmp/PowerSentinel/PowerSentinel.wakeups_snapshot}"
+
+_unavailable() {
+  echo '{"available":false,"elapsed_s":0,"sources":[]}'
+}
+
+# name<TAB>wakeup_count<TAB>active_time_ms, one line per source dir.
+_read_sources() {
+  local d name wc at
+  for d in "$SYS"/wakeup*; do
+    [ -r "$d/name" ] || continue
+    name="$(head -c 100 "$d/name" 2>/dev/null | tr -d '\t\r\n')"
+    [ -n "$name" ] || continue
+    wc="$(cat "$d/wakeup_count" 2>/dev/null)"
+    at="$(cat "$d/active_time_ms" 2>/dev/null)"
+    case "$wc" in ''|*[!0-9]*) wc=0 ;; esac
+    case "$at" in ''|*[!0-9]*) at=0 ;; esac
+    printf '%s\t%s\t%s\n' "$name" "$wc" "$at"
+  done
+}
+
+_have_sources() {
+  [ -d "$SYS" ] || return 1
+  [ -n "$(_read_sources | head -n 1)" ]
+}
+
+# First line: epoch seconds. Then the source rows.
+_snapshot_text() {
+  date +%s
+  _read_sources
+}
+
+# $1 = snapshot text (as produced by _snapshot_text). Diffs it against
+# the counters as they are right now.
+_report_from() {
+  local snap="$1" t0 now elapsed rows
+  t0="$(printf '%s\n' "$snap" | head -n 1)"
+  case "$t0" in ''|*[!0-9]*) _unavailable; return ;; esac
+  now="$(date +%s)"
+  elapsed=$((now - t0))
+  [ "$elapsed" -ge 0 ] || elapsed=0
+
+  rows="$(
+    {
+      printf '%s\n' "$snap" | tail -n +2 | sed 's/^/B\t/'
+      _read_sources | sed 's/^/N\t/'
+    } | awk -F'\t' '
+      $1 == "B" { bw[$2] += $3; ba[$2] += $4; next }
+      $1 == "N" { nw[$2] += $3; na[$2] += $4; seen[$2] = 1 }
+      END {
+        for (n in seen) {
+          dw = nw[n] - bw[n]; da = na[n] - ba[n]
+          # A counter that went DOWN means the source was reset since the
+          # snapshot - the delta is meaningless, count it as no activity.
+          if (dw < 0) dw = 0
+          if (da < 0) da = 0
+          if (dw > 0 || da > 0) printf "%s\t%d\t%d\n", n, dw, da
+        }
+      }' | sort -t "$(printf '\t')" -k2,2nr -k3,3nr | head -n 25
+  )"
+
+  printf '%s\n' "$rows" | "$JQ" -Rnc --argjson el "$elapsed" '
+    {available: true, elapsed_s: $el,
+     sources: [inputs | select(length > 0) | split("\t")
+               | {name: .[0], wakeups: (.[1] | tonumber), active_ms: (.[2] | tonumber)}]}
+  ' 2>/dev/null || _unavailable
+}
+
+_save_snapshot() {
+  local dir tmp
+  dir="$(dirname "$STATE")"
+  mkdir -p "$dir" 2>/dev/null
+  tmp="$(mktemp "$dir/.PowerSentinel.wakeups.XXXXXX")" || return 1
+  _snapshot_text > "$tmp" && chmod 600 "$tmp" 2>/dev/null && mv "$tmp" "$STATE" && return 0
+  rm -f "$tmp"
+  return 1
+}
+
+_have_sources || { _unavailable; exit 0; }
+
+case "${1:-}" in
+  snapshot)
+    if _save_snapshot; then
+      echo '{"available":true,"saved":true}'
+    else
+      _unavailable
+    fi
+    ;;
+  report)
+    if [ -s "$STATE" ]; then
+      _report_from "$(cat "$STATE")"
+    else
+      echo '{"available":true,"elapsed_s":0,"sources":[],"error":"no_snapshot"}'
+    fi
+    ;;
+  ''|*[!0-9]*)
+    if [ -n "${1:-}" ]; then
+      echo '{"available":true,"elapsed_s":0,"sources":[],"error":"usage"}'
+      exit 0
+    fi
+    snap="$(_snapshot_text)"
+    sleep 10
+    _report_from "$snap"
+    ;;
+  *)
+    secs="$1"
+    [ "$secs" -ge 1 ] 2>/dev/null || secs=10
+    [ "$secs" -le 300 ] || secs=300
+    snap="$(_snapshot_text)"
+    sleep "$secs"
+    _report_from "$snap"
+    ;;
+esac

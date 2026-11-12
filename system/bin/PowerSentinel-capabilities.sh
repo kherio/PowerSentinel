@@ -92,6 +92,13 @@ capabilities_detect() {
   CAPS[netpolicy_restrict]="false"
   dumpsys netpolicy >/dev/null 2>&1 && CAPS[netpolicy_restrict]="true"
 
+  # App Standby Buckets (the "bucket" level of handle_apps). `am
+  # get-standby-bucket` / `set-standby-bucket` have existed since Android
+  # 9 (API 28), but a stripped fork could lack them - `am help` lists
+  # the subcommand when supported, same read-only reasoning as pm_suspend.
+  CAPS[standby_bucket]="false"
+  am help 2>&1 | grep -qi "set-standby-bucket" && CAPS[standby_bucket]="true"
+
   log_msg 2 "Capabilities: $(capabilities_summary)"
 }
 
@@ -101,7 +108,7 @@ capability_has() {
 
 capabilities_summary() {
   local out="" k
-  for k in cores_online cores_governor rfkill_wifi svc_wifi doze_force gms_installed pm_suspend netpolicy_restrict; do
+  for k in cores_online cores_governor rfkill_wifi svc_wifi doze_force gms_installed pm_suspend netpolicy_restrict standby_bucket; do
     out+="$k=${CAPS[$k]:-false} "
   done
   echo "$out"
