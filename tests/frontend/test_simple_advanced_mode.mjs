@@ -28,7 +28,7 @@ export async function runTests() {
 
   const html = fs.readFileSync(new URL('../../frontend/index.html', import.meta.url), 'utf8');
   const hasAdv = (id) => new RegExp(`<[^>]*class="[^"]*\\badv-only\\b[^"]*"[^>]*id="${id}"|<[^>]*id="${id}"[^>]*class="[^"]*\\badv-only\\b`).test(html);
-  for (const id of ['e-nightwake-card', 'e-tech-details-body', 'e-cpu-summary-row', 'e-tech-details-toggle', 'e-pressure-wrap', 'e-dashboard-detail-toggle', 'more-item-diagnose', 'more-item-details', 'tab-btn-log']) {
+  for (const id of ['e-nightwake-card', 'e-tech-details-body', 'e-cpu-summary-row', 'e-tech-details-toggle', 'e-pressure-wrap', 'e-dashboard-detail-toggle', 'more-item-diagnose', 'more-item-details']) {
     assertEq(true, hasAdv(id), `${id} es solo-avanzado`);
   }
   for (const id of ['e-battery-card', 'e-today-card', 'e-dashboard-mode-name', 'e-dashboard-why', 'e-dashboard-mechanisms']) {

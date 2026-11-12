@@ -5,7 +5,6 @@ import { ICONS } from './icons.js';
 import { initViewportFix } from './helpers.js';
 import { initEstado, activateEstado, deactivateEstado, refreshEstado } from './views/estado.js';
 import { initConfig, activateConfig, deactivateConfig, confirmLeaveConfig, initAppsView, activateAppsView, deactivateAppsView } from './views/config.js';
-import { initLog, activateLog, deactivateLog, refreshLog, refreshJournal } from './views/log.js';
 import { initPerfiles, activatePerfiles, deactivatePerfiles } from './views/perfiles.js';
 import { initAcerca, activateAcerca, deactivateAcerca } from './views/acerca.js';
 import { initDiagnose, openDiagnosticsModal } from './views/diagnose.js';
@@ -20,23 +19,23 @@ import { initDiagnose, openDiagnosticsModal } from './views/diagnose.js';
 // mantienen sin cambios a propósito para no arrastrar renombrados a
 // cada referencia del código ya probado; solo cambian las etiquetas
 // visibles (i18n) y el orden de aparición.
-const VIEWS = ['estado', 'log', 'conf', 'apps', 'perfiles', 'acerca'];
+const VIEWS = ['estado', 'conf', 'apps', 'perfiles', 'acerca'];
 // Vistas con un botón propio en la barra inferior - el resto
 // (perfiles, acerca) solo se resalta a través de "Más".
 // Views only reachable in Advanced mode (their nav button is .adv-only).
-const ADVANCED_ONLY_VIEWS = ['log'];
+// None right now: the Análisis tab was removed.
+const ADVANCED_ONLY_VIEWS = [];
 const isViewAvailable = (name) => isAdvancedMode() || !ADVANCED_ONLY_VIEWS.includes(name);
 
-const PRIMARY_NAV_VIEWS = ['estado', 'log', 'conf', 'apps'];
+const PRIMARY_NAV_VIEWS = ['estado', 'conf', 'apps'];
 const LIFECYCLE = {
   estado: { activate: activateEstado, deactivate: deactivateEstado },
   conf: { activate: activateConfig, deactivate: deactivateConfig },
   apps: { activate: activateAppsView, deactivate: deactivateAppsView },
-  log: { activate: activateLog, deactivate: deactivateLog },
   perfiles: { activate: activatePerfiles, deactivate: deactivatePerfiles },
   acerca: { activate: activateAcerca, deactivate: deactivateAcerca }
 };
-const NAV_ICONS = { estado: ICONS.gauge, conf: ICONS.settings, apps: ICONS.apps, log: ICONS.list, perfiles: ICONS.layers, acerca: ICONS.info };
+const NAV_ICONS = { estado: ICONS.gauge, conf: ICONS.settings, apps: ICONS.apps, perfiles: ICONS.layers, acerca: ICONS.info };
 
 let currentIndex = 0;
 
@@ -280,13 +279,10 @@ initSwipeNav();
 initEstado();
 initConfig();
 initAppsView();
-initLog();
 initPerfiles();
 initAcerca();
 
 initPullToRefresh('e-pull-area', 'e-pull-indicator', refreshEstado);
-initPullToRefresh('l-pull-area', 'l-pull-indicator', refreshLog);
-initPullToRefresh('j-pull-area', 'j-pull-indicator', refreshJournal);
 
 // Estado starts active on load; the rest only start their polling once
 // the user actually swipes/taps to them (see commitToIndex/LIFECYCLE).

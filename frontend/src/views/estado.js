@@ -1386,10 +1386,6 @@ export function initEstado() {
   document.getElementById('e-wakeups-start-btn').addEventListener('click', startWakeups);
   document.getElementById('e-wakeups-report-btn').textContent = t('estado.wakeupsReportButton');
   document.getElementById('e-wakeups-report-btn').addEventListener('click', loadWakeupsReport);
-  document.getElementById('e-recent-activity-more').textContent = t('estado.recentActivityMore');
-  document.getElementById('e-recent-activity-more').addEventListener('click', () => {
-    document.dispatchEvent(new CustomEvent('powersentinel:navigate', { detail: { view: 'log' } }));
-  });
   document.getElementById('e-restart-daemon-btn').textContent = t('estado.restartDaemonButton');
   document.getElementById('e-restart-daemon-btn').addEventListener('click', onRestartDaemonClick);
   initTechDetailsToggle();
