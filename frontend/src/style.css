@@ -2174,7 +2174,7 @@ label.switch input { accent-color: var(--accent); }
 body:not(.advanced) .adv-only { display: none !important; }
 .more-sheet-mode input { width: 20px; height: 20px; }
 
-/* Advanced mode: Inicio shows everything - the "Detalles técnicos"
+/* Inicio always shows everything, in both modes: the "Detalles técnicos"
    block is always expanded and its toggle is not needed. */
-body.advanced #e-tech-details-body { display: block !important; }
-body.advanced #e-tech-details-toggle { display: none !important; }
+#e-tech-details-body { display: block !important; }
+#e-tech-details-toggle { display: none !important; }

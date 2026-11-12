@@ -4,8 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PowerSentinel</title>
-  <script type="module" crossorigin src="./assets/index-D8Z-WpbI.js"></script>
-  <link rel="stylesheet" crossorigin href="./assets/index-DuicLt3f.css">
+  <script type="module" crossorigin src="./assets/index-CkDrpSBw.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-Leg_yXwY.css">
 </head>
 <body class="app-shell">
   <header class="app-header">
@@ -56,7 +56,7 @@
             <div class="dashboard-status-col">
               <div class="dashboard-subtitle" id="e-dashboard-subtitle"></div>
 
-              <div class="dashboard-pressure-wrap adv-only" id="e-pressure-wrap" style="display:none;">
+              <div class="dashboard-pressure-wrap" id="e-pressure-wrap" style="display:none;">
                 <div class="dashboard-pressure-label-row">
                   <span data-i18n="dashboard.pressureLabel">Presión energética</span>
                   <span id="e-pressure-score-text"></span>
@@ -75,8 +75,8 @@
           <div class="dashboard-why" id="e-dashboard-why"></div>
 
           <div class="dashboard-mechanisms" id="e-dashboard-mechanisms"></div>
-          <div class="dashboard-since adv-only" id="e-dashboard-since"></div>
-          <div class="dashboard-drain adv-only" id="e-dashboard-drain" style="display:none;"></div>
+          <div class="dashboard-since" id="e-dashboard-since"></div>
+          <div class="dashboard-drain" id="e-dashboard-drain" style="display:none;"></div>
 
           <div class="perfmode-row" id="e-perfmode-row">
             <span class="perfmode-label" data-i18n="dashboard.perfModeLabel">Rendimiento temporal:</span>
@@ -89,15 +89,15 @@
             <button class="link-btn" id="e-perfmode-cancel" data-i18n="dashboard.perfModeCancel">Cancelar</button>
           </div>
 
-          <button class="dashboard-detail-toggle adv-only" id="e-dashboard-detail-toggle" type="button" style="display:none;">
+          <button class="dashboard-detail-toggle" id="e-dashboard-detail-toggle" type="button" style="display:none;">
             <span data-i18n="dashboard.details">Detalles</span><span class="aggression-detail-caret">›</span>
           </button>
-          <div class="dashboard-detail-body adv-only" id="e-dashboard-detail-body" style="display:none;"></div>
+          <div class="dashboard-detail-body" id="e-dashboard-detail-body" style="display:none;"></div>
         </div>
 
 
 
-        <div class="card adv-only" style="margin-bottom:14px;">
+        <div class="card" style="margin-bottom:14px;">
           <div class="section-title" style="margin-top:0;" data-i18n="estado.recentActivityTitle">Actividad reciente</div>
           <div id="e-recent-activity" class="timeline-list"></div>
         </div>
@@ -113,7 +113,7 @@
           <div class="today-chart-caption" id="e-today-chart-caption"></div>
         </div>
 
-        <div class="card nightwake-section adv-only" id="e-nightwake-card" style="display:none;margin-bottom:14px;">
+        <div class="card nightwake-section" id="e-nightwake-card" style="display:none;margin-bottom:14px;">
             <div class="nightwake-header">
               <span class="nightwake-title">🌙 <span data-i18n="dashboard.nightWakeTitle">Encendidos nocturnos</span></span>
               <span class="nightwake-window-editable" id="e-nightwake-window">
@@ -153,16 +153,16 @@
           </div>
         </div>
 
-        <div class="card adv-only" style="margin-bottom:14px;">
+        <div class="card" style="margin-bottom:14px;">
           <div class="section-title" style="margin-top:0;" data-i18n="estado.systemHealthTitle">Sistema</div>
           <div id="e-system-health"></div>
         </div>
 
-        <div class="cpu-summary-row adv-only" id="e-cpu-summary-row" style="display:none;">
+        <div class="cpu-summary-row" id="e-cpu-summary-row" style="display:none;">
           <span id="e-cpu-summary-text"></span>
         </div>
 
-        <div class="card adv-only" id="e-wakeups-card" style="margin-bottom:14px;">
+        <div class="card" id="e-wakeups-card" style="margin-bottom:14px;">
           <div class="section-title" style="margin-top:0;" data-i18n="estado.wakeupsTitle">Quién despierta el móvil</div>
           <p class="hint" data-i18n="estado.wakeupsHint">Pulsa «Empezar a medir», deja el móvil con la pantalla apagada un buen rato (mejor toda la noche) y luego pulsa «Ver resultado». No se ejecuta nada en segundo plano.</p>
           <div style="display:flex;gap:8px;margin-top:8px;">
@@ -173,11 +173,11 @@
           <div id="e-wakeups-list" style="margin-top:10px;"></div>
         </div>
 
-        <button class="dashboard-detail-toggle tech-details-toggle adv-only" id="e-tech-details-toggle" type="button">
+        <button class="dashboard-detail-toggle tech-details-toggle" id="e-tech-details-toggle" type="button">
           <span data-i18n="estado.techDetails">Detalles técnicos</span><span class="aggression-detail-caret">›</span>
         </button>
 
-        <div id="e-tech-details-body" class="adv-only" style="display:none;">
+        <div id="e-tech-details-body" style="display:none;">
 
         <div class="section-title" style="margin-top:0;" data-i18n="estado.coresTitle">Núcleos de CPU</div>
         <div id="e-core-counts" style="font-size:12px;color:var(--muted);margin-bottom:8px;"></div>
