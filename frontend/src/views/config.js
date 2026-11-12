@@ -7,6 +7,7 @@ import {
 import { toast, escapeHtml } from '../helpers.js';
 import { eventDisplayName } from './estado.js';
 import { t } from '../i18n.js';
+import { isAdvancedMode, setAdvancedMode, MODE_CHOSEN_KEY } from '../mode.js';
 import { mountAppsPicker, persistAppsPicker } from './apps-picker.js';
 import {
   PREDEFINED_EVENTS, FIELD_DEFS, GLOBAL_DEFS, EVENT_PRESETS,
@@ -49,27 +50,19 @@ let editor, highlightCode, dirtyFlag;
 // Por defecto (ninguna preferencia guardada todavía, instalación
 // nueva) se muestra el modo básico - ver AGGRESSION_PRESETS más abajo
 // para el razonamiento de seguridad detrás de cada nivel.
-const ADVANCED_MODE_KEY = 'powersentinel-advanced-mode';
 // Distinto de ADVANCED_MODE_KEY: registra si el usuario ha visto/
 // elegido activamente un modo alguna vez, para diferenciar "nunca se
 // ha decidido nada, es la primera visita" de "ya eligió básico
 // explícitamente" - solo el primer caso abre la pantalla de elección
 // automáticamente.
-const MODE_CHOSEN_KEY = 'powersentinel-mode-chosen';
 
-function isAdvancedMode() {
-  try { return localStorage.getItem(ADVANCED_MODE_KEY) === 'true'; } catch (e) { return false; }
-}
 
 function hasChosenMode() {
   try { return localStorage.getItem(MODE_CHOSEN_KEY) === 'true'; } catch (e) { return false; }
 }
 
 function chooseMode(advanced) {
-  try {
-    localStorage.setItem(ADVANCED_MODE_KEY, advanced ? 'true' : 'false');
-    localStorage.setItem(MODE_CHOSEN_KEY, 'true');
-  } catch (e) {}
+  setAdvancedMode(advanced);
   closeModeModal();
   applyMode();
   maybeOpenScheduleWizardStep();
@@ -1087,6 +1080,7 @@ export function initConfig() {
   });
   document.getElementById('wizard-schedule-skip').addEventListener('click', () => finishScheduleWizardStep());
 
+  document.addEventListener('powersentinel:modechange', applyMode);
   applyMode();
   if (!hasChosenMode()) openModeModal();
 
