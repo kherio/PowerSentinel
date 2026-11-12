@@ -126,6 +126,46 @@ _screenwake_wakelock_hint() {
   printf '%s' "$out" | head -c 200
 }
 
+# The REAL reason Android woke the display. PowerManagerService logs
+# every wake to the system log buffer, e.g.
+#   Waking up from Dozing (uid=1000, reason=WAKE_REASON_POWER_BUTTON, details=android.policy:POWER)...
+# (reasons: POWER_BUTTON, WAKE_KEY, PLUGGED_IN, GESTURE, TAP, APPLICATION,
+# BIOMETRIC...). Unlike the kernel's last_resume_reason - which keeps
+# the LAST suspend-resume IRQ until the next suspend, so a screen-on
+# that did not come from a resume just repeats an old reason - this
+# names the actual trigger and, for apps, the uid that asked.
+#
+# Sets _SW_CAUSE as "pm:REASON|who|details" (who = package for an app
+# uid, the uid otherwise, empty for system uid 1000) and returns:
+#   0 = the log is readable (cause may still be empty: no NEW line
+#       since the last wake we accounted for - never reuse an old one)
+#   1 = log unreadable here (no logcat / empty) -> caller falls back
+# Must run in the main shell (not in $(...)): it remembers the last
+# line it used in _screenwake_last_pm_line.
+declare -g _screenwake_last_pm_line=""
+declare -g _SW_CAUSE=""
+_screenwake_pm_log_cause() {
+  _SW_CAUSE=""
+  local lines last reason uid details who="" pkglist resolved
+  lines="$(timeout 3 logcat -b system -d -t 400 -s PowerManagerService:I 2>/dev/null)"
+  [ -n "$lines" ] || return 1
+  last="$(printf '%s\n' "$lines" | grep 'Waking up from' | tail -n 1)"
+  [ -n "$last" ] || return 0
+  [ "$last" = "$_screenwake_last_pm_line" ] && return 0
+  _screenwake_last_pm_line="$last"
+  reason="$(printf '%s' "$last" | sed -n 's/.*reason=\([A-Za-z0-9_]*\).*/\1/p')"
+  uid="$(printf '%s' "$last" | sed -n 's/.*uid=\([0-9][0-9]*\).*/\1/p')"
+  details="$(printf '%s' "$last" | sed -n 's/.*details=\([^)]*\).*/\1/p' | head -c 120)"
+  [ -n "$reason" ] || return 0
+  if [ -n "$uid" ] && [ "$uid" -ge 10000 ] 2>/dev/null; then
+    pkglist="$(timeout 2 pm list packages -U 2>/dev/null)"
+    resolved="$(printf '%s\n' "$pkglist" | grep -F "uid:$uid" | head -n1 | sed -n 's/^package:\([^ ]*\).*/\1/p')"
+    who="${resolved:-uid $uid}"
+  fi
+  _SW_CAUSE="pm:${reason}|${who}|${details}"
+  return 0
+}
+
 # Tries the hardware-level reason first (when available, it's the more
 # precise of the two - a real IRQ source, not an inference from
 # whatever else happens to be running); falls back to active wake
@@ -167,8 +207,18 @@ screenwake_check() {
   # self-heals within one more cycle either way, never gets
   # permanently stuck), but the same fix is just as cheap.
   is_valid_bool_reading "$now_on" || return
-  if [ "$_screenwake_prev_screen" = "false" ] && [ "$now_on" = "true" ]; then
-    _screenwake_record_wake "$(date +%s)" "$(date +%H:%M)" "$(_screenwake_wake_cause)"
+  if [ -z "$_screenwake_prev_screen" ]; then
+    # First reading after daemon start: remember the newest wake line
+    # already in the log so it is not mistaken for the next wake's cause.
+    _screenwake_pm_log_cause >/dev/null
+  elif [ "$_screenwake_prev_screen" = "false" ] && [ "$now_on" = "true" ]; then
+    local cause
+    if _screenwake_pm_log_cause; then
+      cause="$_SW_CAUSE"
+    else
+      cause="$(_screenwake_wake_cause)"      # log unreadable: old best-effort path
+    fi
+    _screenwake_record_wake "$(date +%s)" "$(date +%H:%M)" "$cause"
   fi
   _screenwake_prev_screen="$now_on"
 }

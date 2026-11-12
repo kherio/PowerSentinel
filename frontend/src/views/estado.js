@@ -513,7 +513,43 @@ const WAKE_REASON_PATTERNS = [
   { re: /pwrkey|power.?key|gpio_keys|volume/i, key: 'button' },
   { re: /jobscheduler|\bsync\b/i, key: 'sync' }
 ];
+// The daemon now reports the REAL Android wake reason as
+// "pm:WAKE_REASON_X|who|details" (PowerManagerService's own log line);
+// anything else is the old best-effort kernel/wakelock string.
+const PM_WAKE_LABELS = {
+  POWER_BUTTON: 'dashboard.wakePmPower', WAKE_KEY: 'dashboard.wakePmKey',
+  PLUGGED_IN: 'dashboard.wakePmPlugged', GESTURE: 'dashboard.wakePmGesture',
+  TAP: 'dashboard.wakePmGesture', WAKE_MOTION: 'dashboard.wakePmGesture',
+  BIOMETRIC: 'dashboard.wakePmBiometric', APPLICATION: 'dashboard.wakePmApp'
+};
+function parsePmWake(raw) {
+  if (!raw || raw.indexOf('pm:') !== 0) return null;
+  const parts = raw.slice(3).split('|');
+  return { reason: (parts[0] || '').replace(/^WAKE_REASON_/, ''), who: parts[1] || '', details: parts[2] || '' };
+}
+export function wakeReasonLabel(raw) {
+  const pm = parsePmWake(raw);
+  if (!pm) {
+    const key = categorizeWakeReason(raw);
+    return key ? `${t(WAKE_REASON_LABEL_KEYS[key])} · ${raw}` : (raw || t('dashboard.wakeReasonUnknown'));
+  }
+  let label;
+  if (pm.reason === 'PLUGGED_IN') {
+    label = t(/PLUGGED:false/i.test(pm.details) ? 'dashboard.wakePmUnplugged' : 'dashboard.wakePmPlugged');
+  } else if (PM_WAKE_LABELS[pm.reason]) {
+    label = t(PM_WAKE_LABELS[pm.reason]);
+  } else {
+    label = pm.reason ? pm.reason.toLowerCase().replace(/_/g, ' ') : t('dashboard.wakeReasonUnknown');
+  }
+  return pm.who ? `${label} · ${pm.who}` : label;
+}
 function categorizeWakeReason(raw) {
+  const pm = parsePmWake(raw);
+  if (pm) {
+    if (pm.reason === 'POWER_BUTTON' || pm.reason === 'WAKE_KEY') return 'button';
+    if (pm.reason === 'PLUGGED_IN') return 'charging';
+    return null;
+  }
   if (!raw) return null;
   const match = WAKE_REASON_PATTERNS.find((p) => p.re.test(raw));
   return match ? match.key : null;
@@ -643,8 +679,7 @@ function renderNightWake(nw) {
   if (entries.length) {
     toggle.style.display = 'flex';
     timesEl.innerHTML = entries.map((e) => {
-      const key = categorizeWakeReason(e.reason);
-      const label = key ? `${t(WAKE_REASON_LABEL_KEYS[key])} · ${e.reason}` : (e.reason || t('dashboard.wakeReasonUnknown'));
+      const label = wakeReasonLabel(e.reason);
       return `<div class="nightwake-entry"><span class="nightwake-entry-time">${escapeHtml(e.time)}</span><span class="nightwake-entry-reason">${escapeHtml(label)}</span></div>`;
     }).join('');
     renderWakeRemediationHint(entries);
