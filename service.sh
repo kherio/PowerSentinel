@@ -57,6 +57,17 @@ LOCKDIR="/data/local/tmp/PowerSentinel/.daemon_launch.lock"
 
 launch_daemon_if_needed() {
   is_daemon_running && return
+  # BUG FIX (found on a fresh install, e.g. after changing ROM): `mkdir`
+  # below is deliberately NOT `mkdir -p` (it is the atomic lock), so it
+  # fails whenever its PARENT directory doesn't exist - and that
+  # directory is created by the daemon itself, which this function is
+  # what launches. On a device that had never run PowerSentinel before
+  # (no /data/local/tmp/PowerSentinel yet) the lock could never be taken,
+  # the daemon never started, and the watchdog below kept failing the
+  # same way forever: no status file, no config, no log. Existing
+  # installs never hit it because the directory already existed. The
+  # parent is now created first (idempotent, and not part of the lock).
+  mkdir -p "$(dirname "$LOCKDIR")" 2>/dev/null
   if mkdir "$LOCKDIR" 2>/dev/null; then
     is_daemon_running || /system/bin/bash /system/bin/PowerSentineld &
     sleep 1
