@@ -118,7 +118,7 @@ declare -gA _event_applied_fields=()
 
 _snapshot_event_fields() {
   local ev="$1"
-  _event_applied_fields[$ev]="$(declare -p handle_cores disable_cores handle_apps allowlist denylist handle_proc proc_file handle_gms low_ram doze kill_wifi restrict_data tune_system radio_lte max_cpu_freq max_refresh_rate 2>/dev/null)"
+  _event_applied_fields[$ev]="$(declare -p handle_cores disable_cores handle_apps allowlist denylist handle_proc proc_file handle_gms low_ram doze kill_wifi restrict_data tune_system radio_lte scan_off max_cpu_freq max_refresh_rate 2>/dev/null)"
 }
 
 _restore_event_snapshot() {
@@ -158,6 +158,7 @@ _resolve_event_fields() {
   restrict_data=false
   tune_system=false
   radio_lte=false
+  scan_off=false
   max_cpu_freq=false
   max_refresh_rate=false
 
@@ -189,6 +190,8 @@ _resolve_event_fields() {
   [ "$val" = "true" ] && tune_system="true"
   val="$(config_get_event_raw "$ev" radio_lte false)"
   [ "$val" = "true" ] && radio_lte="true"
+  val="$(config_get_event_raw "$ev" scan_off false)"
+  [ "$val" = "true" ] && scan_off="true"
   val="$(config_get_event_raw "$ev" max_cpu_freq false)"
   case "$val" in ''|false|*[!0-9]*) ;; *) max_cpu_freq="$val" ;; esac
   val="$(config_get_event_raw "$ev" max_refresh_rate false)"
@@ -229,7 +232,7 @@ active_mechanisms_snapshot() {
   local _save_handle_apps="$handle_apps" _save_allowlist="$allowlist" _save_denylist="$denylist"
   local _save_handle_proc="$handle_proc" _save_proc_file="$proc_file"
   local _save_handle_gms="$handle_gms" _save_low_ram="$low_ram"
-  local _save_doze="$doze" _save_kill_wifi="$kill_wifi" _save_restrict_data="$restrict_data" _save_tune_system="$tune_system" _save_radio_lte="$radio_lte"
+  local _save_doze="$doze" _save_kill_wifi="$kill_wifi" _save_restrict_data="$restrict_data" _save_tune_system="$tune_system" _save_radio_lte="$radio_lte" _save_scan_off="$scan_off"
   local _save_max_cpu_freq="$max_cpu_freq" _save_max_refresh_rate="$max_refresh_rate"
 
   for ev in "${active_events[@]}"; do
@@ -238,9 +241,9 @@ active_mechanisms_snapshot() {
     items+=("$("$JQ" -cn \
       --arg ev "$ev" --arg apps "$handle_apps" --arg cores "$handle_cores" \
       --arg doze "$doze" --arg gms "$handle_gms" --arg wifi "$kill_wifi" --arg lowram "$low_ram" \
-      --arg restrictdata "$restrict_data" --arg tune "$tune_system" --arg radio "$radio_lte" \
+      --arg restrictdata "$restrict_data" --arg tune "$tune_system" --arg radio "$radio_lte" --arg scan "$scan_off" \
       --arg maxfreq "$max_cpu_freq" --arg maxrefresh "$max_refresh_rate" \
-      '{event: $ev, handle_apps: $apps, handle_cores: $cores, doze: $doze, handle_gms: $gms, kill_wifi: $wifi, low_ram: $lowram, restrict_data: $restrictdata, tune_system: $tune, radio_lte: $radio, max_cpu_freq: $maxfreq, max_refresh_rate: $maxrefresh}' \
+      '{event: $ev, handle_apps: $apps, handle_cores: $cores, doze: $doze, handle_gms: $gms, kill_wifi: $wifi, low_ram: $lowram, restrict_data: $restrictdata, tune_system: $tune, radio_lte: $radio, scan_off: $scan, max_cpu_freq: $maxfreq, max_refresh_rate: $maxrefresh}' \
       2>/dev/null)")
   done
 
@@ -248,7 +251,7 @@ active_mechanisms_snapshot() {
   handle_apps="$_save_handle_apps"; allowlist="$_save_allowlist"; denylist="$_save_denylist"
   handle_proc="$_save_handle_proc"; proc_file="$_save_proc_file"
   handle_gms="$_save_handle_gms"; low_ram="$_save_low_ram"
-  doze="$_save_doze"; kill_wifi="$_save_kill_wifi"; restrict_data="$_save_restrict_data"; tune_system="$_save_tune_system"; radio_lte="$_save_radio_lte"
+  doze="$_save_doze"; kill_wifi="$_save_kill_wifi"; restrict_data="$_save_restrict_data"; tune_system="$_save_tune_system"; radio_lte="$_save_radio_lte"; scan_off="$_save_scan_off"
   max_cpu_freq="$_save_max_cpu_freq"; max_refresh_rate="$_save_max_refresh_rate"
 
   if [ "${#items[@]}" -eq 0 ]; then
@@ -294,6 +297,7 @@ handle_event() {
   restrict_data=false
   tune_system=false
   radio_lte=false
+  scan_off=false
   max_cpu_freq=false
   max_refresh_rate=false
 
@@ -377,6 +381,8 @@ handle_event() {
   [ "$val" = "true" ] && tune_system="true"
   val="$(config_get_event_raw "$event" radio_lte false)"
   [ "$val" = "true" ] && radio_lte="true"
+  val="$(config_get_event_raw "$event" scan_off false)"
+  [ "$val" = "true" ] && scan_off="true"
 
   val="$(config_get_event_raw "$event" max_cpu_freq false)"
   case "$val" in ''|false|*[!0-9]*) ;; *) max_cpu_freq="$val" ;; esac
@@ -438,8 +444,8 @@ handle_event() {
     # actually happened, not what the same event would do today.
     emit "$event" info "$event started" \
       "$("$JQ" -cn --arg apps "$handle_apps" --arg cores "$handle_cores" --arg doze "$doze" \
-        --arg gms "$handle_gms" --arg wifi "$kill_wifi" --arg restrictdata "$restrict_data" --arg tune "$tune_system" --arg radio "$radio_lte" --arg lowram "$low_ram" \
-        '{handle_apps: $apps, handle_cores: $cores, doze: $doze, handle_gms: $gms, kill_wifi: $wifi, restrict_data: $restrictdata, tune_system: $tune, radio_lte: $radio, low_ram: $lowram}' 2>/dev/null)"
+        --arg gms "$handle_gms" --arg wifi "$kill_wifi" --arg restrictdata "$restrict_data" --arg tune "$tune_system" --arg radio "$radio_lte" --arg scan "$scan_off" --arg lowram "$low_ram" \
+        '{handle_apps: $apps, handle_cores: $cores, doze: $doze, handle_gms: $gms, kill_wifi: $wifi, restrict_data: $restrictdata, tune_system: $tune, radio_lte: $radio, scan_off: $scan, low_ram: $lowram}' 2>/dev/null)"
     if [ "$event" = "boot" ] && \
     [ "$quit" = "true" ]; then
       log_msg 1 "Boot event has the quit option set. Killing the daemon."

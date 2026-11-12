@@ -122,7 +122,8 @@ async function renderHardwareInfo() {
     netpolicy_restrict: t('acerca.capNetpolicyRestrict'),
     standby_bucket: t('acerca.capStandbyBucket'),
     kernel_tunables: t('acerca.capKernelTunables'),
-    radio_lte: t('acerca.capRadioLte')
+    radio_lte: t('acerca.capRadioLte'),
+    scan_off: t('acerca.capScanOff')
   };
   try {
     const status = await readStatus();

@@ -300,6 +300,7 @@ prompt_fields() {
   echo "restrict_data=$(ask_yesno '¿Activar Ahorro de datos (bloquea datos en 2º plano de todas las apps)?' 'false')"
   echo "tune_system=$(ask_yesno '¿Ajustes de kernel en reposo (menos despertares periódicos; hasta ~30s de escrituras sin sincronizar si se va la corriente)?' 'false')"
   echo "radio_lte=$(ask_yesno '¿Limitar la red a 4G (sin 5G) mientras esté activo?' 'false')"
+  echo "scan_off=$(ask_yesno '¿Desactivar el escaneo Wi-Fi/Bluetooth en segundo plano mientras esté activo?' 'false')"
   echo "keep_on_charge=$(ask_yesno '¿Mantener ajustes mientras carga?' 'true')"
 }
 

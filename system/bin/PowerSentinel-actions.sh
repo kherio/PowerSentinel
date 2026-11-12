@@ -983,6 +983,86 @@ action_radio_recover() {
   _radio_restore_recorded
 }
 
+# ---------- Wi-Fi / Bluetooth background scanning off (scan_off) ----------
+#
+# Android can keep scanning for Wi-Fi networks and Bluetooth LE devices
+# even when Wi-Fi / Bluetooth are switched off ("scanning always
+# available", used to improve location). Both are plain 0/1 global
+# settings. While an event that asks for scan_off is active they are set
+# to 0 - it only ever LOWERS them (a setting already at 0 is never
+# touched or recorded). Real originals are recorded once in
+# $scan_state_file ("key orig" per line) and restored when the last
+# event that wants scan_off ends - same ownership/composition contract
+# as tune_system/radio_lte: if the value is no longer 0 by the time we
+# restore (the user turned it back on meanwhile) it is left alone.
+# Side effect worth knowing: with Wi-Fi/Bluetooth OFF, location accuracy
+# can drop a little while this is active.
+: "${scan_state_file:=/data/local/tmp/PowerSentinel/PowerSentinel.scanstate}"
+: "${scan_keys:=wifi_scan_always_enabled ble_scan_always_enabled}"
+
+# Prints the setting value only if it is a plain 0/1; fails for
+# "null"/empty/anything else (so an unknown ROM is left alone).
+_scan_get() {
+  local v
+  v="$(settings get global "$1" 2>/dev/null | head -n 1)"
+  case "$v" in 0|1) echo "$v" ;; *) return 1 ;; esac
+}
+
+action_scan_apply() {
+  [ "$scan_off" = "true" ] || return
+  if ! capability_has scan_off; then
+    log_msg 1 "Cannot turn off background scanning: settings not available on this device"
+    emit capabilities warning "No se pudo desactivar el escaneo en segundo plano: no soportado en este dispositivo"
+    return
+  fi
+  mkdir -p "$(dirname "$scan_state_file")" 2>/dev/null
+  local key cur
+  for key in $scan_keys; do
+    cur="$(_scan_get "$key")" || continue
+    [ "$cur" = "1" ] || continue                               # already off: nothing to do
+    if ! awk -v k="$key" '$1 == k { found = 1 } END { exit !found }' "$scan_state_file" 2>/dev/null; then
+      echo "$key $cur" >> "$scan_state_file"
+      chmod 600 "$scan_state_file" 2>/dev/null
+    fi
+    log_msg 3 "Turning off $key (was $cur)"
+    settings put global "$key" 0 &>/dev/null
+  done
+}
+
+# Restores whatever is recorded in $scan_state_file. Shared by the
+# normal undo and by the startup recovery below.
+_scan_restore_recorded() {
+  [ -s "$scan_state_file" ] || return 0
+  local key orig now
+  while read -r key orig; do
+    [ -n "$key" ] || continue
+    case "$orig" in 0|1) ;; *) continue ;; esac
+    now="$(_scan_get "$key")" || continue
+    if [ "$now" = "0" ]; then
+      log_msg 3 "Restoring $key to $orig"
+      settings put global "$key" "$orig" &>/dev/null
+    else
+      log_msg 3 "$key changed since ($now) - leaving it as-is"
+    fi
+  done < "$scan_state_file"
+  rm -f "$scan_state_file"
+}
+
+action_scan_undo() {
+  [ "$scan_off" = "true" ] || return
+  capability_has scan_off || return
+  _another_active_event_wants scan_off && return
+  _scan_restore_recorded
+}
+
+# Called once at daemon start, when no event is active yet.
+action_scan_recover() {
+  capability_has scan_off || return 0
+  [ -s "$scan_state_file" ] || return 0
+  log_msg 1 "Found background scanning left off by a previous run - restoring it"
+  _scan_restore_recorded
+}
+
 # ---------- Doze ----------
 
 action_doze_apply() {
