@@ -16,9 +16,7 @@ import { assertEq, loadModule } from './lib/harness.mjs';
 export async function runTests() {
   const mod = await loadModule('views/log.js', {
     replacements: [
-      [/import \{ ICONS \} from '\.\.\/icons\.js';/, 'const ICONS = {};'],
-      [/import \{[^}]*\} from '\.\.\/api\.js';/, "const readLog=async()=>'',readJournal=async()=>'',readEnergyLog=async()=>'',exportLog=async()=>'';"],
-      [/import \{ toast, escapeHtml \} from '\.\.\/helpers\.js';/, "const toast=()=>{}; const escapeHtml=(s)=>String(s);"],
+      [/import \{ escapeHtml \} from '\.\.\/helpers\.js';/, "const escapeHtml=(s)=>String(s);"],
       [/import \{ t \} from '\.\.\/i18n\.js';/, "const t = (k) => k;"],
       [/import \{ eventDisplayName, eventIcon \} from '\.\/estado\.js';/, "const eventDisplayName=(n)=>n, eventIcon=()=>'';"]
     ]
