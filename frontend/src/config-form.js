@@ -155,6 +155,8 @@ var GLOBAL_DEFS = [
     showIf: function (f) { return f.adaptive_mode === 'true'; } },
   { key: 'delay', label: t('global.delay.label'), type: 'number', def: '3',
     help: t('global.delay.help') },
+  { key: 'screen_poll_off', label: t('global.screenPollOff.label'), type: 'number', def: '5',
+    help: t('global.screenPollOff.help') },
   { key: 'log_file', label: t('global.logFile.label'), type: 'text', def: '/sdcard/PowerSentinel.log',
     help: t('global.logFile.help') },
   {

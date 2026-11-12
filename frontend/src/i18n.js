@@ -568,6 +568,8 @@ const DICT = {
 
     'global.delay.label': 'Intervalo de sondeo (segundos)',
     'global.delay.help': 'Valores altos ahorran CPU pero detectan eventos más despacio.',
+    'global.screenPollOff.label': 'Sondeo con la pantalla apagada (segundos)',
+    'global.screenPollOff.help': 'Cada cuántos segundos se comprueba la pantalla mientras está apagada (2–60, por defecto 5). Más alto = menos consumo, pero una pantalla encendida más corta que ese tiempo puede no contarse en «Encendidos nocturnos» y el módulo tarda ese tiempo en notar que la encendiste. Con 2 se comporta como antes.',
     'global.logFile.label': 'Archivo de log',
     'global.logFile.help': 'Dónde escribe el demonio su registro de actividad (visible en la pestaña Log).',
     'global.logLevel.label': 'Nivel de log',
@@ -1163,6 +1165,8 @@ const DICT = {
 
     'global.delay.label': 'Poll interval (seconds)',
     'global.delay.help': 'Higher values save CPU but detect events more slowly.',
+    'global.screenPollOff.label': 'Poll interval with the screen off (seconds)',
+    'global.screenPollOff.help': 'How often the screen is checked while it is off (2–60, default 5). Higher = less battery use, but a screen-on shorter than that may not be counted in "Night wakes" and the module takes that long to notice you turned it on. With 2 it behaves as before.',
     'global.logFile.label': 'Log file',
     'global.logFile.help': 'Where the daemon writes its activity log (visible in the Log tab).',
     'global.logLevel.label': 'Log level',

@@ -114,6 +114,11 @@ config_get() {
     delay)
       case "$value" in ''|*[!0-9]*) value="$default" ;; esac
       ;;
+    screen_poll_off)
+      # seconds between screen checks while the screen is OFF (2-60)
+      case "$value" in ''|*[!0-9]*) value="$default" ;; esac
+      { [ "$value" -ge 2 ] && [ "$value" -le 60 ]; } 2>/dev/null || value="$default"
+      ;;
     log_level)
       case "$value" in ''|*[!0-9]*) value="$default" ;; esac
       ;;

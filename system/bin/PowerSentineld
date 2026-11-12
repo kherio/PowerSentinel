@@ -656,8 +656,10 @@ _screen_poll_cycle() {
     screenwake_check "$shared_screen_on"
     todaystats_check "$shared_screen_on"
     [ "$elapsed" -ge "$delay" ] && return
-    sleep "$SCREEN_POLL_INTERVAL_S"
-    elapsed=$((elapsed + SCREEN_POLL_INTERVAL_S))
+    # Slower checks while the screen is off (see screenwake_choose_interval).
+    screenwake_choose_interval
+    sleep "$SW_POLL_INTERVAL"
+    elapsed=$((elapsed + SW_POLL_INTERVAL))
   done
 }
 
