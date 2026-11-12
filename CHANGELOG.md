@@ -1,4 +1,5 @@
 ### Unreleased
+  - **WebUI: the «Quién despierta el móvil» (wakeups) card is no longer buried inside the collapsed «Detalles técnicos»** - it is a regular Advanced-mode card on Inicio.
   - **WebUI: the Análisis tab is now Advanced-mode only** - hidden from the bottom bar in Simple mode, skipped when swiping, and switching to Simple while on it returns to Inicio. Inside it nothing changes.
   - **Notifications follow the app language**: new global `language` (`auto`|`es`|`en`). `auto` follows Android's locale (and stays Spanish if none can be read, as before). The language selector in Ajustes now also writes it, so the daemon's notifications always match the WebUI. Covers the status notification and the two fixed critical alerts (self-test, safe mode).
   - **`bucket` no longer touches apps in the `active` standby bucket** - a real device report: it restricted the browser while it was open. Only working set / frequent / rare apps are restricted now; Android lowers an unused app by itself and the next cycle can pick it up.

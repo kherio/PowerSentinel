@@ -163,6 +163,16 @@
           <span id="e-cpu-summary-text"></span>
         </div>
 
+        <div class="card adv-only" id="e-wakeups-card" style="margin-bottom:14px;">
+          <div class="section-title" style="margin-top:0;" data-i18n="estado.wakeupsTitle">Quién despierta el móvil</div>
+          <p class="hint" data-i18n="estado.wakeupsHint">Pulsa «Empezar a medir», deja el móvil con la pantalla apagada un buen rato (mejor toda la noche) y luego pulsa «Ver resultado». No se ejecuta nada en segundo plano.</p>
+          <div style="display:flex;gap:8px;margin-top:8px;">
+            <button class="btn" id="e-wakeups-start-btn" style="flex:1;"></button>
+            <button class="btn" id="e-wakeups-report-btn" style="flex:1;"></button>
+          </div>
+          <div id="e-wakeups-list" style="margin-top:10px;"></div>
+        </div>
+
         <button class="dashboard-detail-toggle tech-details-toggle adv-only" id="e-tech-details-toggle" type="button">
           <span data-i18n="estado.techDetails">Detalles técnicos</span><span class="aggression-detail-caret">›</span>
         </button>
@@ -208,15 +218,6 @@
           <div id="e-cpurank-list" style="margin-top:10px;"></div>
         </div>
 
-        <div class="card" style="margin-bottom:14px;">
-          <div class="section-title" style="margin-top:0;" data-i18n="estado.wakeupsTitle">Quién despierta el móvil</div>
-          <p class="hint" data-i18n="estado.wakeupsHint">Pulsa «Empezar a medir», deja el móvil con la pantalla apagada un buen rato (mejor toda la noche) y luego pulsa «Ver resultado». No se ejecuta nada en segundo plano.</p>
-          <div style="display:flex;gap:8px;margin-top:8px;">
-            <button class="btn" id="e-wakeups-start-btn" style="flex:1;"></button>
-            <button class="btn" id="e-wakeups-report-btn" style="flex:1;"></button>
-          </div>
-          <div id="e-wakeups-list" style="margin-top:10px;"></div>
-        </div>
 
         <details class="raw">
           <summary data-i18n="estado.viewRaw">Ver salida sin procesar</summary>
