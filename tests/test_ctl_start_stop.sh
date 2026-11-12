@@ -39,11 +39,19 @@ run_tests() {
   assert_eq "resume" "$(last)" "resume"
 
   section "argumentos invalidos se rechazan y no llegan al fichero de control"
-  echo "intacto" > "$ctl"
-  runctl 'start;reboot' >/dev/null
-  assert_eq "intacto" "$(last)" "metacaracteres de shell rechazados"
-  runctl start a b >/dev/null
-  assert_eq "intacto" "$(last)" "demasiados argumentos rechazados"
+  # No se comprueba que el fichero quede "intacto": ensure_ctl_file lo
+  # recrea vacio cuando no es de root (asi es en el runner de CI, no en
+  # un dispositivo), asi que el resultado seria distinto segun quien
+  # ejecute el test. Lo que importa es que lo rechazado NO se escribe.
+  : > "$ctl"
+  runctl 'start;reboot' >/dev/null; rc1=$?
+  assert_eq "2" "$rc1" "metacaracteres de shell: codigo de salida 2"
+  grep -q 'reboot' "$ctl"
+  assert_true $([ $? -eq 1 ] && echo 0 || echo 1) "y lo rechazado no llega al fichero de control"
+  runctl start a b >/dev/null; rc2=$?
+  assert_eq "2" "$rc2" "demasiados argumentos: codigo de salida 2"
+  grep -q 'start a b' "$ctl"
+  assert_true $([ $? -eq 1 ] && echo 0 || echo 1) "y tampoco se escribe"
 
   rm -rf "$tmp"
 }
