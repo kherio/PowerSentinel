@@ -176,7 +176,10 @@ function buildWhyText(sys) {
   const active = !!(sys.activeEvents && sys.activeEvents.length);
   if (!active) return '';
   if (!sys.pressureBreakdown) {
-    return eventWhy(sys.activeEvents[0]);
+    // Classic mode: one line per active event (each with its own icon),
+    // not just the first - several can be active at once (e.g. boot +
+    // charging) and the person should see why every one of them is on.
+    return sys.activeEvents.map((n) => `${eventIcon(n)} ${eventWhy(n)}`).join('\n');
   }
   const b = sys.pressureBreakdown;
   const candidates = [];
@@ -307,7 +310,12 @@ function renderDashboard(sys) {
   // está bajando y..."). Plain textContent (auto-escaped by the
   // browser) is enough here - no markup involved, unlike the other
   // innerHTML-built blocks in this file.
-  whyEl.textContent = whyText ? `${active ? eventIcon(sys.activeEvents[0]) : 'ℹ️'} ${whyText}` : '';
+  // Classic mode already prefixes every line with its own event icon
+  // (buildWhyText); the adaptive text is a single line and gets the
+  // first event's icon here.
+  whyEl.textContent = whyText
+    ? (!sys.pressureBreakdown && active ? whyText : `${active ? eventIcon(sys.activeEvents[0]) : 'ℹ️'} ${whyText}`)
+    : '';
 
   renderProfileChecklist(sys);
 
