@@ -28,13 +28,13 @@ export async function runTests() {
 
   const html = fs.readFileSync(new URL('../../frontend/index.html', import.meta.url), 'utf8');
   const hasAdv = (id) => new RegExp(`<[^>]*class="[^"]*\\badv-only\\b[^"]*"[^>]*id="${id}"|<[^>]*id="${id}"[^>]*class="[^"]*\\badv-only\\b`).test(html);
-  for (const id of ['e-nightwake-card', 'e-tech-details-body', 'e-cpu-summary-row', 'e-tech-details-toggle', 'e-pressure-wrap', 'e-dashboard-detail-toggle', 'more-item-diagnose', 'more-item-details']) {
+  for (const id of ['more-item-diagnose', 'more-item-details']) {
     assertEq(true, hasAdv(id), `${id} es solo-avanzado`);
   }
-  for (const id of ['e-battery-card', 'e-today-card', 'e-dashboard-mode-name', 'e-dashboard-why', 'e-dashboard-mechanisms']) {
-    assertEq(false, hasAdv(id), `${id} se ve en modo sencillo`);
+  for (const id of ['e-battery-card', 'e-today-card', 'e-dashboard-mode-name', 'e-dashboard-why', 'e-dashboard-mechanisms', 'e-nightwake-card', 'e-tech-details-body', 'e-cpu-summary-row', 'e-tech-details-toggle', 'e-pressure-wrap', 'e-dashboard-detail-toggle', 'e-wakeups-card']) {
+    assertEq(false, hasAdv(id), `${id} se ve siempre en Inicio`);
   }
   const css = fs.readFileSync(new URL('../../frontend/src/style.css', import.meta.url), 'utf8');
-  assertEq(true, /body\.advanced #e-tech-details-body \{ display: block !important; \}/.test(css), 'modo avanzado: Detalles tecnicos siempre desplegado');
+  assertEq(true, /\n#e-tech-details-body \{ display: block !important; \}/.test(css), 'Inicio: Detalles tecnicos siempre desplegado en ambos modos');
   assertEq(true, /body:not\(\.advanced\) \.adv-only \{ display: none !important; \}/.test(css), 'regla CSS que oculta .adv-only');
 }
