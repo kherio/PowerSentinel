@@ -125,10 +125,6 @@ export function eventIcon(name) {
   const meta = EVENT_META[name];
   return meta ? meta.icon : '⚙️';
 }
-function eventWhy(name) {
-  const meta = EVENT_META[name];
-  return meta ? t(meta.whyKey) : t('dashboard.whyCustom');
-}
 function formatSigned(n) {
   if (typeof n !== 'number') return '—';
   return (n >= 0 ? '+' : '') + n;
@@ -176,10 +172,10 @@ function buildWhyText(sys) {
   const active = !!(sys.activeEvents && sys.activeEvents.length);
   if (!active) return '';
   if (!sys.pressureBreakdown) {
-    // Classic mode: one line per active event (each with its own icon),
-    // not just the first - several can be active at once (e.g. boot +
-    // charging) and the person should see why every one of them is on.
-    return sys.activeEvents.map((n) => `${eventIcon(n)} ${eventWhy(n)}`).join('\n');
+    // Classic mode: no explanatory text - the profile chips right above
+    // already show which events are on, and the sentences per event
+    // ("activó este perfil porque...") only repeated them.
+    return '';
   }
   const b = sys.pressureBreakdown;
   const candidates = [];
@@ -310,14 +306,10 @@ function renderDashboard(sys) {
   // está bajando y..."). Plain textContent (auto-escaped by the
   // browser) is enough here - no markup involved, unlike the other
   // innerHTML-built blocks in this file.
-  // Classic mode already prefixes every line with its own event icon
-  // (buildWhyText); the adaptive text is a single line and gets the
-  // first event's icon here.
-  whyEl.textContent = whyText
-    ? (!sys.pressureBreakdown && active ? whyText : `${active ? eventIcon(sys.activeEvents[0]) : 'ℹ️'} ${whyText}`)
-    : '';
+  whyEl.textContent = whyText ? `${active ? eventIcon(sys.activeEvents[0]) : 'ℹ️'} ${whyText}` : '';
 
   renderProfileChecklist(sys);
+  refreshConfiguredEvents();
 
   // Quick-stat tiles: only the real drain rate now (computeBattDrainRate
   // - the SAME source that already feeds "hours remaining" on the
@@ -408,12 +400,43 @@ function renderPerfMode(sys) {
 // are real, ordinary members of this list, not special-cased, since
 // both can genuinely be active like any other profile.
 const CLASSIC_PROFILE_ORDER = ['boot', 'charging', 'screen_off', 'low_power', 'night', 'thermal', 'manual'];
-function renderProfileChecklist(sys) {
+// The chips list every event that exists in Automatización (predefined
+// AND custom), in the order they appear there: green with a check when
+// active, dim when not. The names come from the config (re-read at most
+// every CONFIGURED_EVENTS_TTL_MS, never on the render path itself); until
+// it has been read - or if it can't be - the predefined list is used.
+// Adaptive tiers are not profiles in classic mode, so they only show
+// while actually active.
+const CONFIGURED_EVENTS_TTL_MS = 15000;
+let configuredEventNames = null;
+let configuredEventsReadAt = 0;
+let lastChecklistSys = null;
+export function profileChipNames(configured, active) {
+  const base = (configured && configured.length ? configured : CLASSIC_PROFILE_ORDER)
+    .filter((n) => !/^adaptive_tier/.test(n) || active.indexOf(n) !== -1);
+  active.forEach((n) => { if (base.indexOf(n) === -1) base.push(n); });
+  return base;
+}
+export async function refreshConfiguredEvents() {
+  const now = Date.now();
+  if (now - configuredEventsReadAt < CONFIGURED_EVENTS_TTL_MS) return;
+  configuredEventsReadAt = now;
+  try {
+    const names = parseConfig(await readConfig()).blocks.map((b) => b.name);
+    if (JSON.stringify(names) !== JSON.stringify(configuredEventNames)) {
+      configuredEventNames = names;
+      if (lastChecklistSys) renderProfileChecklist(lastChecklistSys);
+    }
+  } catch (e) { /* keep whatever list we had */ }
+}
+export function renderProfileChecklist(sys) {
   const el = document.getElementById('e-profile-checklist');
+  lastChecklistSys = sys;
   if (typeof sys.pressureScore === 'number') { el.style.display = 'none'; return; }
-  const activeSet = new Set(sys.activeEvents || []);
+  const activeList = sys.activeEvents || [];
+  const activeSet = new Set(activeList);
   el.style.display = 'flex';
-  el.innerHTML = CLASSIC_PROFILE_ORDER.map((name) => {
+  el.innerHTML = profileChipNames(configuredEventNames, activeList).map((name) => {
     const isActive = activeSet.has(name);
     return `<span class="profile-chip${isActive ? ' active' : ''}">${isActive ? '✓ ' : ''}${escapeHtml(eventDisplayName(name))}</span>`;
   }).join('');
