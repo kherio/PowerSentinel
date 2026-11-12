@@ -2132,3 +2132,13 @@ body:not(.advanced) .adv-only { display: none !important; }
    block is always expanded and its toggle is not needed. */
 #e-tech-details-body { display: block !important; }
 #e-tech-details-toggle { display: none !important; }
+
+/* Automatización: which events are active right now, at a glance. */
+.active-banner { font-size: 13px; color: var(--muted); padding: 8px 12px; margin-bottom: 8px;
+  border: 1px dashed var(--border); border-radius: var(--radius); }
+.active-banner.has-active { color: var(--text); font-weight: 600; border: 1px solid var(--accent);
+  background: var(--accent-dim); }
+.event-card .event-active-pill { display: none; font-size: 11px; font-weight: 700; letter-spacing: .04em;
+  padding: 2px 8px; border-radius: 999px; background: var(--accent); color: #fff; }
+.event-card.is-active-now .event-active-pill { display: inline-block; }
+.event-card.is-active-now { border-color: var(--accent); box-shadow: inset 4px 0 0 var(--accent); }
