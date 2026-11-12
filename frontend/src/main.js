@@ -1,5 +1,5 @@
 import './style.css';
-import { applyGlobalMode, setAdvancedMode } from './mode.js';
+import { applyGlobalMode, setAdvancedMode, isAdvancedMode } from './mode.js';
 import { LOCALE, applyStaticI18n, t } from './i18n.js';
 import { ICONS } from './icons.js';
 import { initViewportFix } from './helpers.js';
@@ -23,6 +23,10 @@ import { initDiagnose, openDiagnosticsModal } from './views/diagnose.js';
 const VIEWS = ['estado', 'log', 'conf', 'apps', 'perfiles', 'acerca'];
 // Vistas con un botón propio en la barra inferior - el resto
 // (perfiles, acerca) solo se resalta a través de "Más".
+// Views only reachable in Advanced mode (their nav button is .adv-only).
+const ADVANCED_ONLY_VIEWS = ['log'];
+const isViewAvailable = (name) => isAdvancedMode() || !ADVANCED_ONLY_VIEWS.includes(name);
+
 const PRIMARY_NAV_VIEWS = ['estado', 'log', 'conf', 'apps'];
 const LIFECYCLE = {
   estado: { activate: activateEstado, deactivate: deactivateEstado },
@@ -115,6 +119,14 @@ function initTabButtons() {
 // shortcut straight into Automatización - the same destination the
 // existing "Ver ajustes avanzados" shortcut in Ajustes already uses,
 // just reachable from one tap further down too.
+function initModeListener() {
+  document.addEventListener('powersentinel:modechange', () => {
+    if (isViewAvailable(VIEWS[currentIndex])) return;
+    if (!confirmLeave(currentIndex)) return;
+    commitToIndex(VIEWS.indexOf('estado'));
+  });
+}
+
 function initMoreSheet() {
   const overlay = document.getElementById('more-sheet-overlay');
   const open = () => { overlay.style.display = 'flex'; };
@@ -161,7 +173,7 @@ function initProgrammaticNav() {
   document.addEventListener('powersentinel:navigate', (e) => {
     const targetView = e.detail && e.detail.view;
     const index = VIEWS.indexOf(targetView);
-    if (index === -1 || index === currentIndex) return;
+    if (index === -1 || index === currentIndex || !isViewAvailable(targetView)) return;
     if (!confirmLeave(currentIndex)) return;
     commitToIndex(index);
   });
@@ -197,7 +209,10 @@ function initSwipeNav() {
     if (Math.abs(dx) < THRESHOLD_PX) return;
     if (Math.abs(dx) < Math.abs(dy) * 1.3) return; // mostly-vertical, treat as scroll
 
-    const targetIndex = dx < 0 ? currentIndex + 1 : currentIndex - 1; // swipe left -> next, right -> previous
+    // swipe left -> next, right -> previous; hidden (advanced-only) views are skipped
+    const step = dx < 0 ? 1 : -1;
+    let targetIndex = currentIndex + step;
+    while (targetIndex >= 0 && targetIndex < VIEWS.length && !isViewAvailable(VIEWS[targetIndex])) targetIndex += step;
     if (targetIndex < 0 || targetIndex >= VIEWS.length) return;
     if (!confirmLeave(currentIndex)) return;
     commitToIndex(targetIndex);
@@ -257,6 +272,7 @@ applyStaticI18n();
 initViewportFix();
 initTabButtons();
 initMoreSheet();
+initModeListener();
 initDiagnose();
 initProgrammaticNav();
 initSwipeNav();
