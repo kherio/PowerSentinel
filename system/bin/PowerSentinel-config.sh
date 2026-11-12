@@ -126,7 +126,10 @@ config_get() {
     doze)
       case "$value" in false|light|deep) ;; *) value="$default" ;; esac
       ;;
-    handle_apps|handle_gms)
+    handle_apps)
+      case "$value" in false|kill|nice|suspend|bucket) ;; *) value="$default" ;; esac
+      ;;
+    handle_gms)
       case "$value" in false|kill|nice|suspend) ;; *) value="$default" ;; esac
       ;;
     charge_limit|adaptive_tier1_threshold|adaptive_tier2_threshold|adaptive_tier3_threshold)

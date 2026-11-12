@@ -40,6 +40,7 @@ var FIELD_DEFS = [
       { value: 'false', label: t('field.handleApps.optFalse') },
       { value: 'kill', label: t('field.handleApps.optKill') },
       { value: 'nice', label: t('field.handleApps.optNice') },
+      { value: 'bucket', label: t('field.handleApps.optBucket') },
       { value: 'suspend', label: t('field.handleApps.optSuspend') }
     ],
     help: t('field.handleApps.help')

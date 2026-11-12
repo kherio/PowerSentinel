@@ -504,7 +504,7 @@ async function toggleSafeMode() {
 // consigue", generados directamente desde los mismos datos reales
 // que se aplican (AGGRESSION_PRESETS), nunca escritos a mano aparte.
 const MECHANISM_INFO = {
-  handle_apps: { category: 'config.mechCategoryApps', treatments: { nice: 'config.mechTreatmentAppsNice' } },
+  handle_apps: { category: 'config.mechCategoryApps', treatments: { nice: 'config.mechTreatmentAppsNice', bucket: 'config.mechTreatmentAppsBucket' } },
   doze: { category: 'config.mechCategoryDoze', treatments: { light: 'config.mechTreatmentDozeLight', deep: 'config.mechTreatmentDozeDeep' } },
   handle_gms: { category: 'config.mechCategoryGms', treatments: { nice: 'config.mechTreatmentGmsNice' } },
   low_ram: { category: 'config.mechCategoryRam', treatments: { true: 'config.mechTreatmentRamOn' } }

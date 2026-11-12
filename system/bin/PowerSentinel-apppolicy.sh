@@ -15,6 +15,8 @@
 #       but set once, globally, rather than per event.
 #   1 - Gentle only: whatever the event's handle_apps asks for (kill or
 #       suspend), this app only ever gets "nice" - never fully stopped.
+#       ("bucket" passes through unchanged: it only lowers the app's
+#       standby bucket and stops or freezes nothing.)
 #       For an app the user wants left running but doesn't mind being
 #       deprioritized.
 #   2 - Default: follow the event's own handle_apps exactly as
@@ -98,7 +100,11 @@ apppolicy_effective_action() {
   level="$(apppolicy_get "$app")"
   case "$level" in
     0) echo "false" ;;
-    1) [ "$event_action" = "false" ] && echo "false" || echo "nice" ;;
+    1) case "$event_action" in
+         false) echo "false" ;;
+         bucket) echo "bucket" ;;  # kills/freezes nothing - already gentle
+         *) echo "nice" ;;
+       esac ;;
     3) echo "suspend" ;;
     *) echo "$event_action" ;;
   esac

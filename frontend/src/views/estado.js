@@ -1,5 +1,5 @@
 import { ICONS } from '../icons.js';
-import { readStatus, readCpuRanking, readJournal, readEnergyLog, restartDaemon, readConfig, writeConfig, readFlaggedApps, startManualTimed, stopEvent, readSuggestedNightWindow, readDrainComparison } from '../api.js';
+import { readStatus, readCpuRanking, startWakeupsMeasurement, readWakeupsReport, readJournal, readEnergyLog, restartDaemon, readConfig, writeConfig, readFlaggedApps, startManualTimed, stopEvent, readSuggestedNightWindow, readDrainComparison } from '../api.js';
 import { toast, escapeHtml } from '../helpers.js';
 import { t } from '../i18n.js';
 import { parseJournalLines, filterBootRestartNoise, renderTimelineEntry, parseEnergyLines, computeRecentRate } from './log.js';
@@ -1378,6 +1378,10 @@ export function initEstado() {
   document.getElementById('e-refresh-btn').addEventListener('click', refreshEstado);
   document.getElementById('e-cpurank-btn').textContent = t('estado.cpuRankButton');
   document.getElementById('e-cpurank-btn').addEventListener('click', loadCpuRanking);
+  document.getElementById('e-wakeups-start-btn').textContent = t('estado.wakeupsStartButton');
+  document.getElementById('e-wakeups-start-btn').addEventListener('click', startWakeups);
+  document.getElementById('e-wakeups-report-btn').textContent = t('estado.wakeupsReportButton');
+  document.getElementById('e-wakeups-report-btn').addEventListener('click', loadWakeupsReport);
   document.getElementById('e-recent-activity-more').textContent = t('estado.recentActivityMore');
   document.getElementById('e-recent-activity-more').addEventListener('click', () => {
     document.dispatchEvent(new CustomEvent('powersentinel:navigate', { detail: { view: 'log' } }));
@@ -1436,6 +1440,56 @@ async function loadCpuRanking() {
   } finally {
     btn.disabled = false;
     btn.textContent = t('estado.cpuRankButton');
+  }
+}
+
+// Wakeup measurement: both functions run only from their own button
+// click, never from the poll loop (same rule as loadCpuRanking above).
+// Nothing runs in the background between the two clicks - "Empezar"
+// just saves the kernel's counters, "Ver resultado" diffs against them.
+async function startWakeups() {
+  const btn = document.getElementById('e-wakeups-start-btn');
+  const list = document.getElementById('e-wakeups-list');
+  btn.disabled = true;
+  try {
+    const data = JSON.parse(await startWakeupsMeasurement());
+    if (!data.available) {
+      list.innerHTML = `<p class="hint">${escapeHtml(t('estado.wakeupsUnavailable'))}</p>`;
+    } else {
+      list.innerHTML = '';
+      toast(t('estado.wakeupsStarted'), 'success');
+    }
+  } catch (e) {
+    toast(t('estado.wakeupsError', { msg: e.message }), 'error');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function loadWakeupsReport() {
+  const btn = document.getElementById('e-wakeups-report-btn');
+  const list = document.getElementById('e-wakeups-list');
+  btn.disabled = true;
+  try {
+    const data = JSON.parse(await readWakeupsReport());
+    if (!data.available) {
+      list.innerHTML = `<p class="hint">${escapeHtml(t('estado.wakeupsUnavailable'))}</p>`;
+    } else if (data.error === 'no_snapshot') {
+      list.innerHTML = `<p class="hint">${escapeHtml(t('estado.wakeupsNoSnapshot'))}</p>`;
+    } else if (!Array.isArray(data.sources) || data.sources.length === 0) {
+      list.innerHTML = `<p class="hint">${escapeHtml(t('estado.wakeupsEmpty'))}</p>`;
+    } else {
+      const mins = Math.max(1, Math.round((data.elapsed_s || 0) / 60));
+      list.innerHTML = `<p class="hint">${escapeHtml(t('estado.wakeupsWindow', { min: mins }))}</p>` +
+        data.sources.slice(0, 10).map((s) =>
+          `<div class="cpurank-row"><span class="cpurank-name">${escapeHtml(s.name)}</span>` +
+          `<span class="cpurank-pct">${escapeHtml(String(s.wakeups))}×</span></div>`
+        ).join('');
+    }
+  } catch (e) {
+    toast(t('estado.wakeupsError', { msg: e.message }), 'error');
+  } finally {
+    btn.disabled = false;
   }
 }
 
