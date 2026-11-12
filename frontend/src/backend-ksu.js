@@ -192,6 +192,10 @@ export async function startWakeupsMeasurement() {
   return run(`PowerSentinel-wakeups snapshot 2>/dev/null || echo '{"available":false,"elapsed_s":0,"sources":[]}'`);
 }
 
+export async function readWakeupsStatus() {
+  return run(`PowerSentinel-wakeups status 2>/dev/null || echo '{"available":false,"measuring":false,"since":0,"elapsed_s":0}'`);
+}
+
 export async function readWakeupsReport() {
   return run(`PowerSentinel-wakeups report 2>/dev/null || echo '{"available":false,"elapsed_s":0,"sources":[]}'`);
 }

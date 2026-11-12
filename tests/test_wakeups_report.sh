@@ -70,6 +70,14 @@ run_tests() {
   run report | "$JQ" -e . >/dev/null 2>&1
   assert_true $? "report es JSON valido"
 
+  section "status: dice si hay una medicion en marcha y desde cuando"
+  rm -f "$state"
+  assert_eq "false" "$(run status | "$JQ" -r .measuring)" "sin snapshot: measuring=false"
+  run snapshot >/dev/null
+  assert_eq "true" "$(run status | "$JQ" -r .measuring)" "con snapshot: measuring=true"
+  assert_true $([ "$(run status | "$JQ" -r .since)" -gt 1600000000 ] && echo 0 || echo 1) "since es la hora real del snapshot"
+  assert_single_line "$(run status)" "status imprime una sola linea"
+
   section "argumento desconocido"
   assert_eq "usage" "$(run bogus | "$JQ" -r .error)" "un argumento desconocido da error de uso, no una espera"
 
