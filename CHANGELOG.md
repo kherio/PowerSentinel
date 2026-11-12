@@ -1,4 +1,5 @@
-### Unreleased
+### v4.20.0
+  - Also ships everything from v4.19.0 (global Simple/Advanced WebUI mode), which was never published as a release.
   - **Automatización: active events are obvious** - a banner above the event list ("● Activos ahora: Noche, Manual" / "Ningún evento activo"), an ACTIVO pill and an accent border on each active event, refreshed every 5 s while the tab is open.
   - **System Back no longer loses unsaved Automatización edits** - while there are unsaved edits, Back asks "Salir sin guardar?" first (staying keeps the edits). With nothing unsaved it behaves as before, with no extra press. (The tab-switch guard already existed.) Covered by `test_back_guard_and_active_ui.mjs`.
   - **Fix: `radio_lte` now speaks the real telephony command format** - checked on a real device: `get-allowed-network-types-for-users` prints type names, not a number, and `set-allowed-network-types-for-users` expects a binary mask string. The first implementation assumed a decimal number, which would have mis-detected the capability. Test rewritten around the literal output of a OnePlus 11, including that unknown names / numeric output make it refuse.
