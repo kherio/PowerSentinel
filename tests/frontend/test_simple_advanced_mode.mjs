@@ -35,5 +35,6 @@ export async function runTests() {
     assertEq(false, hasAdv(id), `${id} se ve en modo sencillo`);
   }
   const css = fs.readFileSync(new URL('../../frontend/src/style.css', import.meta.url), 'utf8');
+  assertEq(true, /body\.advanced #e-tech-details-body \{ display: block !important; \}/.test(css), 'modo avanzado: Detalles tecnicos siempre desplegado');
   assertEq(true, /body:not\(\.advanced\) \.adv-only \{ display: none !important; \}/.test(css), 'regla CSS que oculta .adv-only');
 }
