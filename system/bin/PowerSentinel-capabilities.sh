@@ -99,6 +99,13 @@ capabilities_detect() {
   CAPS[standby_bucket]="false"
   am help 2>&1 | grep -qi "set-standby-bucket" && CAPS[standby_bucket]="true"
 
+  # Kernel idle tunables (tune_system): at least one of the two sysctl
+  # files it writes must exist and be writable.
+  CAPS[kernel_tunables]="false"
+  if [ -w /proc/sys/vm/stat_interval ] || [ -w /proc/sys/vm/dirty_writeback_centisecs ]; then
+    CAPS[kernel_tunables]="true"
+  fi
+
   log_msg 2 "Capabilities: $(capabilities_summary)"
 }
 
@@ -108,7 +115,7 @@ capability_has() {
 
 capabilities_summary() {
   local out="" k
-  for k in cores_online cores_governor rfkill_wifi svc_wifi doze_force gms_installed pm_suspend netpolicy_restrict standby_bucket; do
+  for k in cores_online cores_governor rfkill_wifi svc_wifi doze_force gms_installed pm_suspend netpolicy_restrict standby_bucket kernel_tunables; do
     out+="$k=${CAPS[$k]:-false} "
   done
   echo "$out"
