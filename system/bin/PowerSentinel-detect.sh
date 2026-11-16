@@ -62,6 +62,26 @@ is_device() {
   # trims/validates before returning, and callers get "unknown"
   # instead of raw error text or garbage.
   local raw
+  # Fast path (screen only): a panel backlight at exactly 0 means the
+  # screen is off, and reading one sysfs file costs no process (builtin
+  # read), unlike dumpsys (binder call + fork + tr). Only the "0" case
+  # is trusted: a value above 0 can also be Always-On Display or a
+  # transition, so it falls through to dumpsys, which stays the
+  # authority. Files that do not exist/read back as a number are
+  # ignored, so devices without a backlight node behave as before.
+  if [ "$1" = "screen" ]; then
+    local bl_f bl_v
+    for bl_f in ${PS_BACKLIGHT_GLOB:-/sys/class/backlight/*/brightness}; do
+      [ -r "$bl_f" ] || continue
+      bl_v=""
+      read -r bl_v < "$bl_f" 2>/dev/null
+      if [ "$bl_v" = "0" ]; then
+        printf 'false'
+        return
+      fi
+      break
+    done
+  fi
   if [ "$1" != "low_power" ]; then
     raw="$(dumpsys deviceidle get "$1" 2>/dev/null | tr -d '[:space:]')"
     case "$raw" in

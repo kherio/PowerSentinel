@@ -1,4 +1,5 @@
 ### Unreleased
+  - **Screen check without `dumpsys` when the screen is off** - `is_device screen` first reads the panel backlight (`/sys/class/backlight/*/brightness`): a value of exactly 0 means the screen is off and costs no process. Any other value (could be Always-On Display or a transition), a missing node or garbage falls back to `dumpsys deviceidle get screen`, which stays the authority. Measured on a OnePlus 11: the daemon's own CPU was ~9 s but its child processes ~243 s, so the forks were the real cost. Covered by `test_screen_sysfs_fastpath.sh`.
   - **Lower screen polling while the screen is off** - the daemon used to check the screen state every 2 s even when the screen was off. It now uses a new global setting `screen_poll_off` (default 5 s, range 2-60) while the screen is off, and keeps the 2 s interval while it is on. Fewer wake-ups of the daemon overnight. Trade-off: a screen-on shorter than the interval can be missed by the night-wake counter, and reacting to a screen-on can be delayed by up to that interval; set it to 2 for the old behaviour. Advanced mode -> global settings. Covered by `test_screen_poll_interval.sh`.
 
 ### v4.21.0
