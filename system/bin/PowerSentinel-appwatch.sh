@@ -98,27 +98,73 @@ appwatch_unflag() {
   fi
 }
 
+# Third-party package list, cached: `pm list packages -3` starts a JVM
+# process and was being run every 60 s while the screen was off.
+APPWATCH_PKG_REFRESH_S="${APPWATCH_PKG_REFRESH_S:-3600}"
+declare -gA _appwatch_pkgs=()
+_appwatch_pkgs_ts=0
+
+_appwatch_refresh_pkgs() {
+  local now="$1" line
+  local -A fresh=()
+  while IFS= read -r line; do
+    line="${line#package:}"
+    [ -n "$line" ] && fresh[$line]=1
+  done < <(pm list packages -3 2>/dev/null)
+  # An empty answer (pm hiccup) keeps the previous list.
+  [ "${#fresh[@]}" -gt 0 ] || return 0
+  _appwatch_pkgs=()
+  for line in "${!fresh[@]}"; do _appwatch_pkgs[$line]=1; done
+  _appwatch_pkgs_ts="$now"
+}
+
 # Called freely every main-loop cycle, same pattern as
-# energylog_sample() - internally throttles to $APPWATCH_INTERVAL_S so
-# the (comparatively heavier: one pgrep + one /proc read per installed
-# third-party app) real check doesn't run on every 3-second poll.
+# energylog_sample() - internally throttles to $APPWATCH_INTERVAL_S.
+#
+# PERFORMANCE FIX: the real check used to fork several processes per
+# installed third-party app every 60 s (pgrep | head, cat, awk x2, plus
+# `pm list packages -3`), i.e. hundreds of forks a minute while the phone
+# was idle - measured on a OnePlus 11 as the daemon's child processes
+# using ~19% of one core overnight. It now does the same measurement with
+# shell builtins only: one pass over /proc (cmdline = package name for an
+# app's main process), the package list cached for
+# $APPWATCH_PKG_REFRESH_S, and no external command at all in the common
+# case.
 appwatch_check() {
   local now
-  now="$(date +%s)"
+  printf -v now '%(%s)T' -1
   [ $(( now - _appwatch_last_check_ts )) -ge "$APPWATCH_INTERVAL_S" ] || return 0
   _appwatch_last_check_ts="$now"
 
   [ "$(is_device screen)" = "false" ] || return 0
 
-  local pkg pid stat_line utime stime ticks elapsed_ticks elapsed_s pct
+  if [ "${#_appwatch_pkgs[@]}" -eq 0 ] || \
+     [ $(( now - _appwatch_pkgs_ts )) -ge "$APPWATCH_PKG_REFRESH_S" ]; then
+    _appwatch_refresh_pkgs "$now"
+  fi
 
-  while IFS= read -r pkg; do
-    [ -n "$pkg" ] || continue
-    pid="$(pgrep "$pkg" 2>/dev/null | head -1)"
+  local pkg pid stat_line utime stime ticks elapsed_ticks elapsed_s pct d cmd
+  local -A pid_of=()
+
+  # One pass over /proc: lowest PID whose argv[0] is a tracked package.
+  for d in "$PROC_ROOT"/[0-9]*; do
+    pid="${d##*/}"
+    cmd=""
+    IFS= read -r -d '' cmd < "$d/cmdline" 2>/dev/null
+    [ -n "$cmd" ] || continue
+    [ -n "${_appwatch_pkgs[$cmd]}" ] || continue
+    if [ -z "${pid_of[$cmd]}" ] || [ "$pid" -lt "${pid_of[$cmd]}" ]; then
+      pid_of[$cmd]="$pid"
+    fi
+  done
+
+  for pkg in "${!_appwatch_pkgs[@]}"; do
+    pid="${pid_of[$pkg]}"
     [ -n "$pid" ] || { _appwatch_high_count[$pkg]=0; continue; }
-    [ -r "$PROC_ROOT/$pid/stat" ] || continue
 
-    stat_line="$(cat "$PROC_ROOT/$pid/stat" 2>/dev/null)"
+    stat_line=""
+    read -r stat_line < "$PROC_ROOT/$pid/stat" 2>/dev/null
+    [ -n "$stat_line" ] || continue
     # Field 2 (the command name) is parenthesized and can itself
     # contain spaces, which would shift every subsequent
     # positionally-numbered field - `man proc` explicitly warns about
@@ -126,8 +172,9 @@ appwatch_check() {
     # then count fields from there: what was field 14/15 (utime/stime)
     # becomes field 12/13 relative to this trimmed remainder.
     stat_line="${stat_line##*) }"
-    utime="$(echo "$stat_line" | awk '{print $12}')"
-    stime="$(echo "$stat_line" | awk '{print $13}')"
+    set -- $stat_line
+    utime="${12}"
+    stime="${13}"
     case "$utime$stime" in
       *[!0-9]*|'') continue ;;
     esac
@@ -152,5 +199,5 @@ appwatch_check() {
 
     _appwatch_last_ticks[$pkg]="$ticks"
     _appwatch_last_ts[$pkg]="$now"
-  done < <(pm list packages -3 2>/dev/null | cut -d: -f2-)
+  done
 }
