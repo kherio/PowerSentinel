@@ -8,7 +8,13 @@ MODDIR=${0%/*}
 
 # This script will be executed in late_start service mode
 
-until [ "$(getprop sys.boot_completed)" = "1" ] && [ -d "/sdcard/Android" ]; do
+# Only wait for Android to finish booting. This used to also wait for
+# /sdcard/Android, which does not exist until the user's FIRST UNLOCK
+# after a reboot (file-based encryption), leaving the phone without any
+# PowerSentinel management for as long as it stayed locked. Nothing the
+# daemon needs lives there: its state is under /data/local/tmp, and the
+# log writer (PowerSentinel-log.sh) buffers until /sdcard appears.
+until [ "$(getprop sys.boot_completed)" = "1" ]; do
   sleep 3
 done
 
