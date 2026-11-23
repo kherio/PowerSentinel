@@ -6,6 +6,7 @@ conf="/data/local/tmp/PowerSentinel/PowerSentinel.conf"
 . "$(dirname "$0")/PowerSentinel-capabilities.sh"
 . "$(dirname "$0")/PowerSentinel-apppolicy.sh"
 . "$(dirname "$0")/PowerSentinel-actions.sh"
+. "$(dirname "$0")/PowerSentinel-log.sh"
 . "$(dirname "$0")/PowerSentinel-journal.sh"
 . "$(dirname "$0")/PowerSentinel-alertbridge.sh"
 . "$(dirname "$0")/PowerSentinel-energylog.sh"
@@ -184,20 +185,6 @@ check_manual_expiry() {
 # the full rationale. The base64-encoding security measure this
 # function used lives on in alert_dispatch(), which is now the only
 # place that actually calls `su -c ... cmd notification post`.
-
-log_msg() {
-  case $1 in
-    1)
-      log_lvl="[INFO]" ;;
-    2)
-      log_lvl="[VERBOSE]" ;;
-    3)
-      log_lvl="[DEBUG]" ;;
-  esac
-  if [ "$log_level" -ge "$1" ]; then
-    echo "$(date +"%m-%d-%Y %H:%M:%S") $log_lvl $2" >> "$log_file"
-  fi
-}
 
 migrate() {
   log_msg 2 "No event blocks found in the config - migrating to v2"
@@ -1149,8 +1136,10 @@ version="$(getconf version 1)"
 log_file=$(getconf log_file "/sdcard/PowerSentinel.log")
 log_level=$(getconf log_level 3) # set debug by default
 
-# this fixes the infinite growth issue
-[ -f "$log_file" ] && mv "$log_file" "$log_file.old"
+# this fixes the infinite growth issue: the previous log is rotated by
+# the first write (see PowerSentinel-log.sh), which also covers the case
+# where /sdcard is not mounted yet at daemon start.
+log_reset
 
 # set ctl_file
 #
