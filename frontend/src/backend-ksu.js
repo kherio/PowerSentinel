@@ -200,6 +200,19 @@ export async function readWakeupsReport() {
   return run(`PowerSentinel-wakeups report 2>/dev/null || echo '{"available":false,"elapsed_s":0,"sources":[]}'`);
 }
 
+// Per-app battery estimate (PowerSentinel-appdrain): "snapshot" saves
+// Android's per-app mAh totals as a baseline in our own file (the system
+// statistics are never reset), "report" gives each app's usage since that
+// baseline - or since the last full charge when there is none. One-shot,
+// never polled; prints one line of JSON.
+export async function startAppDrainMeasurement() {
+  return run(`PowerSentinel-appdrain snapshot 2>/dev/null || echo '{"available":false,"window":"charge","since":0,"elapsed_s":0,"apps":[]}'`);
+}
+
+export async function readAppDrain() {
+  return run(`PowerSentinel-appdrain report 2>/dev/null || echo '{"available":false,"window":"charge","since":0,"elapsed_s":0,"apps":[]}'`);
+}
+
 // Diagnostic panel (feature request): every check the standalone
 // script runs exists because of a real bug this project actually hit
 // and fixed - see the script's own header. One-shot/on-demand, same

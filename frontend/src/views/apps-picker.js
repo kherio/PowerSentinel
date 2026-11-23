@@ -1,5 +1,5 @@
 import { ICONS } from '../icons.js';
-import { listPackages, listRunningPackages, readAppListFile, writeAppListFile } from '../api.js';
+import { listPackages, listRunningPackages, readAppListFile, writeAppListFile, readAppDrain, startAppDrainMeasurement } from '../api.js';
 import { toast } from '../helpers.js';
 import { t } from '../i18n.js';
 
@@ -24,6 +24,57 @@ function getPackages(includeSystem) {
 // (unlike the package list, this genuinely changes moment to moment).
 function getRunningPackages() {
   return listRunningPackages().catch(() => new Set());
+}
+
+
+// Per-app battery estimate (Android's own numbers via PowerSentinel-
+// appdrain). Purely informational, like the "running now" dot: if it can't
+// be read the picker works exactly as before.
+export function parseDrain(text) {
+  let data;
+  try { data = JSON.parse(text); } catch (e) { return { available: false, map: {}, since: 0, elapsed: 0, window: 'charge' }; }
+  const map = {};
+  if (data && data.available && Array.isArray(data.apps)) {
+    data.apps.forEach((a) => { if (a && a.pkg) map[a.pkg] = a; });
+  }
+  return {
+    available: !!(data && data.available),
+    map,
+    since: (data && data.since) || 0,
+    elapsed: (data && data.elapsed_s) || 0,
+    window: (data && data.window) || 'charge'
+  };
+}
+
+// Stable sort: highest estimated usage first, apps with no figure last
+// (keeping their original alphabetical order).
+export function sortByDrain(pkgs, map) {
+  return pkgs
+    .map((p, i) => ({ p, i, m: map[p] ? map[p].mah : -1 }))
+    .sort((a, b) => (b.m - a.m) || (a.i - b.i))
+    .map((x) => x.p);
+}
+
+export function formatMah(mah) {
+  if (mah >= 100) return String(Math.round(mah));
+  if (mah >= 10) return mah.toFixed(0);
+  return mah.toFixed(1);
+}
+
+function formatAgo(seconds) {
+  const mins = Math.max(1, Math.round(seconds / 60));
+  if (mins < 120) return mins + ' min';
+  return Math.round(mins / 60) + ' h';
+}
+
+let drainState = { loaded: false, data: null, sort: false };
+function getDrain(force) {
+  if (!force && drainState.loaded) return Promise.resolve(drainState.data);
+  return readAppDrain().then(parseDrain).catch(() => parseDrain('')).then((d) => {
+    drainState.loaded = true;
+    drainState.data = d;
+    return d;
+  });
 }
 
 function parseListFile(text) {
@@ -66,7 +117,7 @@ export function mountAppsPicker(container, fields, onDirty) {
   }
 
   function renderList(filter) {
-    Promise.all([getPackages(state.includeSystem), getRunningPackages()]).then(([pkgs, running]) => {
+    Promise.all([getPackages(state.includeSystem), getRunningPackages(), getDrain(false)]).then(([pkgs, running, drain]) => {
       const list = document.createElement('div');
       list.style.maxHeight = '260px';
       list.style.overflowY = 'auto';
@@ -78,8 +129,12 @@ export function mountAppsPicker(container, fields, onDirty) {
       // toggling one doesn't require scrolling the whole list to see it
       // again - alphabetical order is preserved within each group, since
       // `pkgs` already comes pre-sorted from listPackages().
-      const selected = filtered.filter((p) => state.allow.has(p) || state.deny.has(p));
-      const rest = filtered.filter((p) => !state.allow.has(p) && !state.deny.has(p));
+      let selected = filtered.filter((p) => state.allow.has(p) || state.deny.has(p));
+      let rest = filtered.filter((p) => !state.allow.has(p) && !state.deny.has(p));
+      if (drainState.sort && drain.available) {
+        selected = sortByDrain(selected, drain.map);
+        rest = sortByDrain(rest, drain.map);
+      }
       const shown = selected.concat(rest);
 
       if (!shown.length) {
@@ -119,6 +174,16 @@ export function mountAppsPicker(container, fields, onDirty) {
             name.prepend(dot);
           }
           row.appendChild(name);
+
+          const used = drain.map[pkg];
+          if (used) {
+            const badge = document.createElement('span');
+            badge.textContent = formatMah(used.mah) + ' mAh' + (used.shared > 1 ? '*' : '');
+            badge.title = t('apps.drainTip', { mah: formatMah(used.mah), fg: formatMah(used.fg), bg: formatMah(used.bg), cached: formatMah(used.cached) })
+              + (used.shared > 1 ? ' - ' + t('apps.drainShared') : '');
+            badge.style.cssText = 'flex:none;font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums;';
+            row.appendChild(badge);
+          }
 
           const group = document.createElement('div');
           group.style.display = 'flex';
@@ -176,14 +241,52 @@ export function mountAppsPicker(container, fields, onDirty) {
       </div>
       <div style="font-size:11px;color:var(--muted);margin-bottom:4px;">
         ${t('apps.summary', { allow: state.allow.size, deny: state.deny.size })}
-      </div>`;
+      </div>
+      <div id="ap-drain" style="font-size:11px;color:var(--muted);margin-bottom:4px;"></div>`;
 
     box.querySelector('#ap-search').addEventListener('input', (e) => renderList(e.target.value));
     box.querySelector('#ap-system').addEventListener('change', (e) => {
       state.includeSystem = e.target.checked;
       renderList(box.querySelector('#ap-search').value);
     });
+    renderDrainStrip();
     renderList('');
+  }
+
+  function renderDrainStrip() {
+    const strip = box.querySelector('#ap-drain');
+    if (!strip) return;
+    getDrain(false).then((drain) => {
+      if (!drain.available) {
+        strip.textContent = t('apps.drainUnavailable');
+        return;
+      }
+      const label = drain.window === 'snapshot' && drain.since
+        ? t('apps.drainSince', {
+            time: new Date(drain.since * 1000).toTimeString().slice(0, 5),
+            ago: formatAgo(drain.elapsed)
+          })
+        : t('apps.drainSinceCharge');
+      strip.innerHTML = `<div style="margin-bottom:4px;">${label}</div>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+          <button class="btn ghost" id="ap-drain-start" style="padding:4px 8px;font-size:11px;">${t('apps.drainStart')}</button>
+          <button class="btn ghost" id="ap-drain-refresh" style="padding:4px 8px;font-size:11px;">${t('apps.drainRefresh')}</button>
+          <label class="switch" style="font-size:11px;"><input type="checkbox" id="ap-drain-sort"${drainState.sort ? ' checked' : ''}> ${t('apps.drainSort')}</label>
+        </div>`;
+      strip.querySelector('#ap-drain-start').addEventListener('click', () => {
+        startAppDrainMeasurement().then(() => {
+          toast(t('apps.drainStarted'), 'success');
+          return getDrain(true);
+        }).then(() => { renderDrainStrip(); renderList(box.querySelector('#ap-search').value); });
+      });
+      strip.querySelector('#ap-drain-refresh').addEventListener('click', () => {
+        getDrain(true).then(() => { renderDrainStrip(); renderList(box.querySelector('#ap-search').value); });
+      });
+      strip.querySelector('#ap-drain-sort').addEventListener('change', (e) => {
+        drainState.sort = e.target.checked;
+        renderList(box.querySelector('#ap-search').value);
+      });
+    });
   }
 
   if (state.loaded) {
