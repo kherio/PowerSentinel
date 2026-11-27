@@ -1225,6 +1225,96 @@ action_bt_recover() {
   _bt_restore_recorded
 }
 
+# ---------- Finer Google Play Services switches (gms_scan_off, gms_wakelock_off) ----------
+#
+# Narrower than handle_gms (which renices or disables the whole package):
+# these keep Google Play Services running and only deny it ONE app-op
+# while an event is active (`cmd appops set com.google.android.gms OP ignore`).
+#   gms_scan_off     -> WIFI_SCAN, BLUETOOTH_SCAN: GMS stops scanning for
+#                       Wi-Fi/Bluetooth (its network-location scanner is a
+#                       common night wakelock). Location accuracy can drop.
+#   gms_wakelock_off -> WAKE_LOCK: GMS cannot hold wakelocks. Stronger:
+#                       push notifications / syncs can be delayed.
+# Ownership contract as scan_off: only changes an op whose mode is
+# allow/default, records the original once in $gmsops_state_file ("OP mode"),
+# restores it when the last event that wants that switch ends, and only if
+# the op is still "ignore" (a mode you changed yourself is respected).
+# Startup recovery after a crash. Always reversible.
+: "${gmsops_state_file:=/data/local/tmp/PowerSentinel/PowerSentinel.gmsopsstate}"
+: "${gms_pkg:=com.google.android.gms}"
+
+# Prints the op's mode (allow|default|ignore|deny|foreground...) or fails.
+_appop_get() {
+  local line mode
+  line="$(cmd appops get "$gms_pkg" "$1" 2>/dev/null | head -n 1)"
+  case "$line" in "$1: "*) ;; *) return 1 ;; esac
+  mode="${line#"$1: "}"; mode="${mode%%[;, ]*}"
+  case "$mode" in allow|default|ignore|deny|foreground) echo "$mode" ;; *) return 1 ;; esac
+}
+
+_gmsops_apply() {   # $1 = switch variable name, rest = ops
+  local sw="$1" op cur; shift
+  [ "${!sw}" = "true" ] || return 0
+  if ! capability_has gms_appops; then
+    log_msg 1 "Cannot restrict Google Play Services ($sw): app-ops not available on this device"
+    emit capabilities warning "No se pudo restringir Google Play Services ($sw): no soportado en este dispositivo"
+    return 0
+  fi
+  mkdir -p "$(dirname "$gmsops_state_file")" 2>/dev/null
+  for op in "$@"; do
+    cur="$(_appop_get "$op")" || continue
+    case "$cur" in allow|default) ;; *) continue ;; esac
+    if ! awk -v k="$op" '$1 == k { f = 1 } END { exit !f }' "$gmsops_state_file" 2>/dev/null; then
+      echo "$op $cur" >> "$gmsops_state_file"
+      chmod 600 "$gmsops_state_file" 2>/dev/null
+    fi
+    log_msg 3 "Denying $op to $gms_pkg (was $cur)"
+    cmd appops set "$gms_pkg" "$op" ignore &>/dev/null
+  done
+}
+
+_gmsops_restore() {   # ops to restore (those recorded); no args = all recorded
+  [ -s "$gmsops_state_file" ] || return 0
+  local want=" $* " op orig now keep=""
+  while read -r op orig; do
+    [ -n "$op" ] || continue
+    if [ $# -gt 0 ] && [[ "$want" != *" $op "* ]]; then keep+="$op $orig"$'\n'; continue; fi
+    now="$(_appop_get "$op")" || continue
+    if [ "$now" = "ignore" ]; then
+      log_msg 3 "Restoring $op for $gms_pkg to $orig"
+      cmd appops set "$gms_pkg" "$op" "$orig" &>/dev/null
+    else
+      log_msg 3 "$op changed since ($now) - leaving it as-is"
+    fi
+  done < "$gmsops_state_file"
+  if [ -n "$keep" ]; then printf '%s' "$keep" > "$gmsops_state_file"; else rm -f "$gmsops_state_file"; fi
+}
+
+_gmsops_undo() {    # $1 = switch variable name, rest = ops
+  local sw="$1"; shift
+  [ "${!sw}" = "true" ] || return 0
+  capability_has gms_appops || return 0
+  _another_active_event_wants "$sw" && return 0
+  _gmsops_restore "$@"
+}
+
+action_gmsops_apply() {
+  _gmsops_apply gms_scan_off WIFI_SCAN BLUETOOTH_SCAN
+  _gmsops_apply gms_wakelock_off WAKE_LOCK
+}
+
+action_gmsops_undo() {
+  _gmsops_undo gms_scan_off WIFI_SCAN BLUETOOTH_SCAN
+  _gmsops_undo gms_wakelock_off WAKE_LOCK
+}
+
+action_gmsops_recover() {
+  capability_has gms_appops || return 0
+  [ -s "$gmsops_state_file" ] || return 0
+  log_msg 1 "Found Google Play Services restrictions left by a previous run - restoring them"
+  _gmsops_restore
+}
+
 # ---------- Doze ----------
 
 action_doze_apply() {

@@ -125,7 +125,8 @@ async function renderHardwareInfo() {
     radio_lte: t('acerca.capRadioLte'),
     scan_off: t('acerca.capScanOff'),
     aod_off: t('acerca.capAodOff'),
-    bluetooth_off: t('acerca.capBtOff')
+    bluetooth_off: t('acerca.capBtOff'),
+    gms_appops: t('acerca.capGmsOps')
   };
   try {
     const status = await readStatus();

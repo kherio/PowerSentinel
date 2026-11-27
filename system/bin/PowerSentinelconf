@@ -303,6 +303,8 @@ prompt_fields() {
   echo "scan_off=$(ask_yesno '¿Desactivar el escaneo Wi-Fi/Bluetooth en segundo plano mientras esté activo?' 'false')"
   echo "aod_off=$(ask_yesno '¿Apagar la pantalla siempre activa (AOD) mientras esté activo?' 'false')"
   echo "bluetooth_off=$(ask_yesno '¿Apagar Bluetooth mientras esté activo (solo si no hay nada conectado)?' 'false')"
+  echo "gms_scan_off=$(ask_yesno '¿Impedir que Google Play Services escanee Wi-Fi/Bluetooth mientras esté activo?' 'false')"
+  echo "gms_wakelock_off=$(ask_yesno '¿Impedir que Google Play Services mantenga el móvil despierto (puede retrasar notificaciones)?' 'false')"
   echo "keep_on_charge=$(ask_yesno '¿Mantener ajustes mientras carga?' 'true')"
 }
 

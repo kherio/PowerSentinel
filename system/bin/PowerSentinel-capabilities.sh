@@ -133,6 +133,12 @@ capabilities_detect() {
     CAPS[bluetooth_off]="true"
   fi
 
+  # Finer GMS switches: app-ops for WIFI_SCAN must read back as "OP: mode".
+  CAPS[gms_appops]="false"
+  if declare -F _appop_get >/dev/null && _appop_get WIFI_SCAN >/dev/null; then
+    CAPS[gms_appops]="true"
+  fi
+
   log_msg 2 "Capabilities: $(capabilities_summary)"
 }
 
@@ -142,7 +148,7 @@ capability_has() {
 
 capabilities_summary() {
   local out="" k
-  for k in cores_online cores_governor rfkill_wifi svc_wifi doze_force gms_installed pm_suspend netpolicy_restrict standby_bucket kernel_tunables radio_lte scan_off aod_off bluetooth_off; do
+  for k in cores_online cores_governor rfkill_wifi svc_wifi doze_force gms_installed pm_suspend netpolicy_restrict standby_bucket kernel_tunables radio_lte scan_off aod_off bluetooth_off gms_appops; do
     out+="$k=${CAPS[$k]:-false} "
   done
   echo "$out"
