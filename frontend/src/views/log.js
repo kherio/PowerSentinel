@@ -81,6 +81,8 @@ function timelineMechanismPhrases(detail) {
   if (detail.scan_off === 'true') phrases.push(t('journal.mechScanOff'));
   if (detail.aod_off === 'true') phrases.push(t('journal.mechAodOff'));
   if (detail.bluetooth_off === 'true') phrases.push(t('journal.mechBtOff'));
+  if (detail.gms_scan_off === 'true') phrases.push(t('journal.mechGmsScanOff'));
+  if (detail.gms_wakelock_off === 'true') phrases.push(t('journal.mechGmsWakeOff'));
   if (detail.low_ram === 'true') phrases.push(t('journal.mechLowRam'));
   return phrases;
 }

@@ -165,6 +165,8 @@ run_mechanism_checks() {
     "scan_off:scan_off:PowerSentinel.scanstate:Sin escaneo Wi-Fi/Bluetooth" \
     "aod_off:aod_off:PowerSentinel.aodstate:Sin pantalla siempre activa" \
     "bluetooth_off:bluetooth_off:PowerSentinel.btstate:Bluetooth apagado de noche" \
+    "gms_scan_off:gms_appops:PowerSentinel.gmsopsstate:Google Play Services sin escaneo" \
+    "gms_wakelock_off:gms_appops:PowerSentinel.gmsopsstate:Google Play Services sin wakelocks" \
     "handle_apps=bucket:standby_bucket:-:Cubos de espera de apps"; do
     local field cap sfile label key want="true" supported configured wanted_now sf age
     IFS=: read -r field cap sfile label <<<"$spec"

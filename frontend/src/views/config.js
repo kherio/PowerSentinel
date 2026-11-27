@@ -666,6 +666,8 @@ function summarizeFields(fields) {
   if (fields.scan_off === 'true') bits.push(t('config.summaryScanOffOn'));
   if (fields.aod_off === 'true') bits.push(t('config.summaryAodOffOn'));
   if (fields.bluetooth_off === 'true') bits.push(t('config.summaryBtOffOn'));
+  if (fields.gms_scan_off === 'true') bits.push(t('config.summaryGmsScanOn'));
+  if (fields.gms_wakelock_off === 'true') bits.push(t('config.summaryGmsWakeOn'));
   if (fields.low_ram === 'true') bits.push(t('config.summaryLowRam'));
   if (fields.handle_proc === 'true') bits.push(t('config.summaryProcesses'));
   if (fields.night_start) bits.push(`${fields.night_start}–${fields.night_end || ''}`);

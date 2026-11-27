@@ -46,7 +46,7 @@ _tr() {
       apps_suspend) echo "background apps suspended" ;; apps_bucket) echo "background apps restricted" ;;
       apps_other) echo "background apps managed" ;;
       doze) echo "Doze forced" ;; gms) echo "Play Services limited" ;; wifi) echo "WiFi off" ;;
-      data) echo "Data saver on" ;; tune) echo "kernel idle tuning" ;; radio) echo "5G off" ;; scan) echo "background scanning off" ;; aod) echo "always-on display off" ;; bt) echo "Bluetooth off" ;; lowram) echo "low-RAM mode" ;;
+      data) echo "Data saver on" ;; tune) echo "kernel idle tuning" ;; radio) echo "5G off" ;; scan) echo "background scanning off" ;; aod) echo "always-on display off" ;; bt) echo "Bluetooth off" ;; gscan) echo "Google Play Services scanning off" ;; gwake) echo "Google Play Services wakelocks off" ;; lowram) echo "low-RAM mode" ;;
       cpu_pct) echo "CPU at $2%" ;; refresh) echo "screen at ${2}Hz" ;;
       none) echo "no active changes" ;;
       selftest) echo "PowerSentinel: the startup self-test found a real problem - check the Diagnostics panel" ;;
@@ -64,7 +64,7 @@ _tr() {
       apps_suspend) echo "apps en 2º plano suspendidas" ;; apps_bucket) echo "apps en 2º plano restringidas" ;;
       apps_other) echo "apps en 2º plano gestionadas" ;;
       doze) echo "Doze forzado" ;; gms) echo "Play Services limitado" ;; wifi) echo "WiFi apagado" ;;
-      data) echo "Ahorro de datos activo" ;; tune) echo "ajustes de kernel en reposo" ;; radio) echo "sin 5G" ;; scan) echo "sin escaneo Wi-Fi/Bluetooth" ;; aod) echo "sin pantalla siempre activa" ;; bt) echo "Bluetooth apagado" ;; lowram) echo "modo RAM baja" ;;
+      data) echo "Ahorro de datos activo" ;; tune) echo "ajustes de kernel en reposo" ;; radio) echo "sin 5G" ;; scan) echo "sin escaneo Wi-Fi/Bluetooth" ;; aod) echo "sin pantalla siempre activa" ;; bt) echo "Bluetooth apagado" ;; gscan) echo "Google Play Services sin escaneo" ;; gwake) echo "Google Play Services sin wakelocks" ;; lowram) echo "modo RAM baja" ;;
       cpu_pct) echo "CPU al $2%" ;; refresh) echo "pantalla a ${2}Hz" ;;
       none) echo "sin cambios activos" ;;
       selftest) echo "PowerSentinel: autodiagnóstico encontró un problema real al arrancar - revisa el panel de Diagnóstico" ;;
@@ -152,7 +152,7 @@ _build_active_mode_text() {
     else title="$title, $(_event_display_name "$n")"; fi
   done <<< "$names"
 
-  local cores doze apps gms wifi restrictdata tune radio scan aod bt lowram maxfreq maxrefresh
+  local cores doze apps gms wifi restrictdata tune radio scan aod bt gscan gwake lowram maxfreq maxrefresh
   cores="$("$JQ" -r 'any(.[]; .handle_cores != "false")' <<<"$snapshot" 2>/dev/null)"
   doze="$("$JQ" -r 'any(.[]; .doze != "false")' <<<"$snapshot" 2>/dev/null)"
   apps="$("$JQ" -r '[.[] | select(.handle_apps != "false") | .handle_apps] | unique | join(",")' <<<"$snapshot" 2>/dev/null)"
@@ -164,6 +164,8 @@ _build_active_mode_text() {
   scan="$("$JQ" -r 'any(.[]; .scan_off == "true")' <<<"$snapshot" 2>/dev/null)"
   aod="$("$JQ" -r 'any(.[]; .aod_off == "true")' <<<"$snapshot" 2>/dev/null)"
   bt="$("$JQ" -r 'any(.[]; .bluetooth_off == "true")' <<<"$snapshot" 2>/dev/null)"
+  gscan="$("$JQ" -r 'any(.[]; .gms_scan_off == "true")' <<<"$snapshot" 2>/dev/null)"
+  gwake="$("$JQ" -r 'any(.[]; .gms_wakelock_off == "true")' <<<"$snapshot" 2>/dev/null)"
   lowram="$("$JQ" -r 'any(.[]; .low_ram == "true")' <<<"$snapshot" 2>/dev/null)"
   maxfreq="$("$JQ" -r '[.[] | select(.max_cpu_freq != "false" and .max_cpu_freq != null) | (.max_cpu_freq | tonumber)] | min' <<<"$snapshot" 2>/dev/null)"
   maxrefresh="$("$JQ" -r '[.[] | select(.max_refresh_rate != "false" and .max_refresh_rate != null) | (.max_refresh_rate | tonumber)] | min' <<<"$snapshot" 2>/dev/null)"
@@ -186,6 +188,8 @@ _build_active_mode_text() {
   [ "$scan" = "true" ] && phrases+=("$(_tr scan)")
   [ "$aod" = "true" ] && phrases+=("$(_tr aod)")
   [ "$bt" = "true" ] && phrases+=("$(_tr bt)")
+  [ "$gscan" = "true" ] && phrases+=("$(_tr gscan)")
+  [ "$gwake" = "true" ] && phrases+=("$(_tr gwake)")
   [ "$lowram" = "true" ] && phrases+=("$(_tr lowram)")
   case "$maxfreq" in
     ''|null) ;;
