@@ -1,5 +1,5 @@
 import { ICONS } from '../icons.js';
-import { readStatus, readCpuRanking, startWakeupsMeasurement, readWakeupsReport, readWakeupsStatus, readJournal, readEnergyLog, restartDaemon, readConfig, writeConfig, readFlaggedApps, startManualTimed, stopEvent, readSuggestedNightWindow, readDrainComparison } from '../api.js';
+import { readStatus, readCpuRanking, startWakeupsMeasurement, readWakeupsReport, readWakeupsStatus, readJournal, readEnergyLog, restartDaemon, readConfig, writeConfig, readFlaggedApps, startManualTimed, stopEvent, readSuggestedNightWindow, readDrainComparison, readDozeAudit, removeDozeExemption } from '../api.js';
 import { toast, escapeHtml } from '../helpers.js';
 import { t } from '../i18n.js';
 import { parseJournalLines, filterBootRestartNoise, renderTimelineEntry, parseEnergyLines, computeRecentRate } from './log.js';
@@ -1455,6 +1455,8 @@ export function initEstado() {
   document.getElementById('e-wakeups-start-btn').addEventListener('click', startWakeups);
   document.getElementById('e-wakeups-report-btn').textContent = t('estado.wakeupsReportButton');
   document.getElementById('e-wakeups-report-btn').addEventListener('click', loadWakeupsReport);
+  document.getElementById('e-dozeaudit-btn').textContent = t('estado.dozeauditButton');
+  document.getElementById('e-dozeaudit-btn').addEventListener('click', loadDozeAudit);
   document.getElementById('e-restart-daemon-btn').textContent = t('estado.restartDaemonButton');
   document.getElementById('e-restart-daemon-btn').addEventListener('click', onRestartDaemonClick);
   initTechDetailsToggle();
@@ -1576,6 +1578,44 @@ async function loadWakeupsReport() {
           `<span class="cpurank-pct">${escapeHtml(String(s.wakeups))}×</span></div>`
         ).join('');
     }
+  } catch (e) {
+    toast(t('estado.wakeupsError', { msg: e.message }), 'error');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// Lists the apps exempt from battery optimization. Removable ones (added by
+// the user/an app) get a "Quitar" button; system exemptions are only shown.
+export function renderDozeAudit(data) {
+  if (!data || !data.available) return `<p class="hint">${escapeHtml(t('estado.dozeauditUnavailable'))}</p>`;
+  const apps = (data.apps || []).slice().sort((a, b) => (b.removable - a.removable) || a.pkg.localeCompare(b.pkg));
+  if (!apps.length) return `<p class="hint">${escapeHtml(t('estado.dozeauditEmpty'))}</p>`;
+  return apps.map((a) => {
+    const btn = a.removable
+      ? `<button class="btn" data-doze-remove="${escapeHtml(a.pkg)}">${escapeHtml(t('estado.dozeauditRemove'))}</button>`
+      : `<span class="hint">${escapeHtml(t('estado.dozeauditSystem'))}</span>`;
+    return `<div class="cpurank-row"><span class="cpurank-name">${escapeHtml(a.pkg)}</span>${btn}</div>`;
+  }).join('');
+}
+
+async function loadDozeAudit() {
+  const btn = document.getElementById('e-dozeaudit-btn');
+  const list = document.getElementById('e-dozeaudit-list');
+  btn.disabled = true;
+  try {
+    list.innerHTML = renderDozeAudit(JSON.parse(await readDozeAudit()));
+    list.querySelectorAll('[data-doze-remove]').forEach((b) => b.addEventListener('click', async () => {
+      const pkg = b.getAttribute('data-doze-remove');
+      b.disabled = true;
+      try {
+        const r = JSON.parse(await removeDozeExemption(pkg));
+        if (r.ok) { toast(t('estado.dozeauditRemoved', { pkg }), 'success'); loadDozeAudit(); }
+        else { toast(t('estado.dozeauditFailed', { pkg }), 'error'); b.disabled = false; }
+      } catch (e) {
+        toast(t('estado.dozeauditFailed', { pkg }), 'error'); b.disabled = false;
+      }
+    }));
   } catch (e) {
     toast(t('estado.wakeupsError', { msg: e.message }), 'error');
   } finally {
