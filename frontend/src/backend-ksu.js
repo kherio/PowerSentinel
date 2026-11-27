@@ -200,6 +200,11 @@ export async function readWakeupsReport() {
   return run(`PowerSentinel-wakeups report 2>/dev/null || echo '{"available":false,"elapsed_s":0,"sources":[]}'`);
 }
 
+// Last night's report written by the daemon (PowerSentinel-nightreport.sh).
+export async function readNightReport() {
+  return run(`cat /data/local/tmp/PowerSentinel/PowerSentinel.nightreport.json 2>/dev/null || echo '{}'`);
+}
+
 // Apps exempt from Android's battery optimization (PowerSentinel-dozeaudit).
 // "list" is read-only; "remove" only runs from an explicit button press and
 // the script itself refuses system exemptions and malformed names.

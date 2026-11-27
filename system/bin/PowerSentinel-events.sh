@@ -290,8 +290,11 @@ handle_event() {
       active_events+=( "$event" )
       active_event_start_ts["$event"]="$(date +%s)"
       state_save
+      declare -F nightreport_start >/dev/null && nightreport_start "$event"
     fi
   fi
+  # Night report: close it when the event ends (observation only).
+  if [ "$flag" = 0 ] && declare -F nightreport_end >/dev/null; then nightreport_end "$event"; fi
 
   # set everything to false
   quit=false

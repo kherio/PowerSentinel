@@ -1,5 +1,5 @@
 import { ICONS } from '../icons.js';
-import { readStatus, readCpuRanking, startWakeupsMeasurement, readWakeupsReport, readWakeupsStatus, readJournal, readEnergyLog, restartDaemon, readConfig, writeConfig, readFlaggedApps, startManualTimed, stopEvent, readSuggestedNightWindow, readDrainComparison, readDozeAudit, removeDozeExemption } from '../api.js';
+import { readStatus, readCpuRanking, startWakeupsMeasurement, readWakeupsReport, readWakeupsStatus, readJournal, readEnergyLog, restartDaemon, readConfig, writeConfig, readFlaggedApps, startManualTimed, stopEvent, readSuggestedNightWindow, readDrainComparison, readDozeAudit, removeDozeExemption, readNightReport, readAppListFile, writeAppListFile } from '../api.js';
 import { toast, escapeHtml } from '../helpers.js';
 import { t } from '../i18n.js';
 import { parseJournalLines, filterBootRestartNoise, renderTimelineEntry, parseEnergyLines, computeRecentRate } from './log.js';
@@ -1588,6 +1588,70 @@ async function loadWakeupsReport() {
   }
 }
 
+// ---- Night report (card on Inicio) ----
+// Pure: text for the summary line (duration, battery used, drain per hour).
+export function nightReportSummary(r) {
+  if (!r || !r.available || !(r.duration_s > 0)) return '';
+  const hours = r.duration_s / 3600;
+  const used = Math.max(0, (r.level_start || 0) - (r.level_end || 0));
+  const h = Math.floor(r.duration_s / 3600), m = Math.round((r.duration_s % 3600) / 60);
+  const rate = (used / hours).toFixed(1);
+  return t('estado.nightReportSummary', { dur: `${h} h ${m} min`, from: r.level_start, to: r.level_end, rate });
+}
+
+// Pure: top apps with a "Restringir" button each.
+export function renderNightReportApps(r, limit = 6) {
+  if (!r || !r.available || !Array.isArray(r.apps) || !r.apps.length) return '';
+  return r.apps.slice(0, limit).map((a) =>
+    `<div class="cpurank-row"><span class="cpurank-name">${escapeHtml(a.pkg)}</span>` +
+    `<span class="cpurank-pct">${escapeHtml(String(Math.round(a.mah * 10) / 10))} mAh</span>` +
+    `<button class="btn" data-night-restrict="${escapeHtml(a.pkg)}">${escapeHtml(t('estado.nightReportRestrict'))}</button></div>`
+  ).join('');
+}
+
+// Adds pkg to the Night event's restricted list. Never automatic: only
+// from the button. Refuses (with a message) when Night does not manage
+// apps at all or the app is on its allow list.
+async function restrictInNight(pkg) {
+  const model = parseConfig(await readConfig());
+  const block = model.blocks.find((b) => b.name === 'night');
+  if (!block) { toast(t('estado.nightReportNoNight'), 'error'); return false; }
+  const f = block.fields || {};
+  if (!f.handle_apps || f.handle_apps === 'false') { toast(t('estado.nightReportNoApps'), 'error'); return false; }
+  const allowPath = f.allowlist || '/data/local/tmp/PowerSentinel/apps.allow';
+  const denyPath = f.denylist || '/data/local/tmp/PowerSentinel/apps.deny';
+  const allow = (await readAppListFile(allowPath)).split('\n').map((s) => s.trim()).filter(Boolean);
+  if (allow.includes(pkg)) { toast(t('estado.nightReportInAllow', { pkg }), 'error'); return false; }
+  const deny = (await readAppListFile(denyPath)).split('\n').map((s) => s.trim()).filter(Boolean);
+  if (!deny.includes(pkg)) deny.push(pkg);
+  await writeAppListFile(denyPath, deny.sort());
+  return true;
+}
+
+async function loadNightReport() {
+  const card = document.getElementById('e-nightreport-card');
+  if (!card) return;
+  try {
+    const r = JSON.parse(await readNightReport());
+    const summary = nightReportSummary(r);
+    if (!summary) { card.style.display = 'none'; return; }
+    document.getElementById('e-nightreport-summary').textContent = summary;
+    const list = document.getElementById('e-nightreport-list');
+    list.innerHTML = renderNightReportApps(r);
+    list.querySelectorAll('[data-night-restrict]').forEach((b) => b.addEventListener('click', async () => {
+      const pkg = b.getAttribute('data-night-restrict');
+      b.disabled = true;
+      try {
+        if (await restrictInNight(pkg)) { toast(t('estado.nightReportRestricted', { pkg }), 'success'); b.textContent = '✓'; }
+        else b.disabled = false;
+      } catch (e) { toast(t('estado.wakeupsError', { msg: e.message }), 'error'); b.disabled = false; }
+    }));
+    card.style.display = '';
+  } catch (e) {
+    card.style.display = 'none';
+  }
+}
+
 // Lists the apps exempt from battery optimization. Removable ones (added by
 // the user/an app) get a "Quitar" button; system exemptions are only shown.
 export function renderDozeAudit(data) {
@@ -1636,6 +1700,7 @@ async function loadDozeAudit() {
 export function activateEstado() {
   loadStatus(true);
   refreshWakeupsStatus();
+  loadNightReport();
   renderRecentActivity();
   renderSavingsBar();
   renderTodayInterventions();
