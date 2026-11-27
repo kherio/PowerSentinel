@@ -121,6 +121,12 @@ capabilities_detect() {
     CAPS[scan_off]="true"
   fi
 
+  # Always-on display (aod_off): doze_always_on must read back as 0/1.
+  CAPS[aod_off]="false"
+  if declare -F _aod_get >/dev/null && _aod_get doze_always_on >/dev/null; then
+    CAPS[aod_off]="true"
+  fi
+
   log_msg 2 "Capabilities: $(capabilities_summary)"
 }
 
@@ -130,7 +136,7 @@ capability_has() {
 
 capabilities_summary() {
   local out="" k
-  for k in cores_online cores_governor rfkill_wifi svc_wifi doze_force gms_installed pm_suspend netpolicy_restrict standby_bucket kernel_tunables radio_lte scan_off; do
+  for k in cores_online cores_governor rfkill_wifi svc_wifi doze_force gms_installed pm_suspend netpolicy_restrict standby_bucket kernel_tunables radio_lte scan_off aod_off; do
     out+="$k=${CAPS[$k]:-false} "
   done
   echo "$out"

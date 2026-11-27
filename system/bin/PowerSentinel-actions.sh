@@ -1063,6 +1063,76 @@ action_scan_recover() {
   _scan_restore_recorded
 }
 
+# ---------- Always-on display off (aod_off) ----------
+#
+# The ambient / always-on display keeps the panel partly lit all night.
+# It is the secure setting doze_always_on (plain 0/1). While an event that
+# asks for aod_off is active it is set to 0 - it only ever LOWERS it (a
+# value already 0 is never touched or recorded). The real original is
+# recorded once in $aod_state_file ("key orig") and restored when the last
+# event that wants aod_off ends - same ownership contract as scan_off: if
+# the user changed it meanwhile it is left alone.
+: "${aod_state_file:=/data/local/tmp/PowerSentinel/PowerSentinel.aodstate}"
+: "${aod_keys:=doze_always_on}"
+
+_aod_get() {
+  local v
+  v="$(settings get secure "$1" 2>/dev/null | head -n 1)"
+  case "$v" in 0|1) echo "$v" ;; *) return 1 ;; esac
+}
+
+action_aod_apply() {
+  [ "$aod_off" = "true" ] || return
+  if ! capability_has aod_off; then
+    log_msg 1 "Cannot turn off the always-on display: setting not available on this device"
+    emit capabilities warning "No se pudo apagar la pantalla siempre activa: no soportado en este dispositivo"
+    return
+  fi
+  mkdir -p "$(dirname "$aod_state_file")" 2>/dev/null
+  local key cur
+  for key in $aod_keys; do
+    cur="$(_aod_get "$key")" || continue
+    [ "$cur" = "1" ] || continue
+    if ! awk -v k="$key" '$1 == k { found = 1 } END { exit !found }' "$aod_state_file" 2>/dev/null; then
+      echo "$key $cur" >> "$aod_state_file"
+      chmod 600 "$aod_state_file" 2>/dev/null
+    fi
+    log_msg 3 "Turning off $key (was $cur)"
+    settings put secure "$key" 0 &>/dev/null
+  done
+}
+
+_aod_restore_recorded() {
+  [ -s "$aod_state_file" ] || return 0
+  local key orig now
+  while read -r key orig; do
+    [ -n "$key" ] || continue
+    case "$orig" in 0|1) ;; *) continue ;; esac
+    now="$(_aod_get "$key")" || continue
+    if [ "$now" = "0" ]; then
+      log_msg 3 "Restoring $key to $orig"
+      settings put secure "$key" "$orig" &>/dev/null
+    else
+      log_msg 3 "$key changed since ($now) - leaving it as-is"
+    fi
+  done < "$aod_state_file"
+  rm -f "$aod_state_file"
+}
+
+action_aod_undo() {
+  [ "$aod_off" = "true" ] || return
+  capability_has aod_off || return
+  _another_active_event_wants aod_off && return
+  _aod_restore_recorded
+}
+
+action_aod_recover() {
+  capability_has aod_off || return 0
+  [ -s "$aod_state_file" ] || return 0
+  log_msg 1 "Found the always-on display left off by a previous run - restoring it"
+  _aod_restore_recorded
+}
+
 # ---------- Doze ----------
 
 action_doze_apply() {

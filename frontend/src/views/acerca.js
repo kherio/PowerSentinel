@@ -123,7 +123,8 @@ async function renderHardwareInfo() {
     standby_bucket: t('acerca.capStandbyBucket'),
     kernel_tunables: t('acerca.capKernelTunables'),
     radio_lte: t('acerca.capRadioLte'),
-    scan_off: t('acerca.capScanOff')
+    scan_off: t('acerca.capScanOff'),
+    aod_off: t('acerca.capAodOff')
   };
   try {
     const status = await readStatus();

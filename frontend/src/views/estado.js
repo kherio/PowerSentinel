@@ -838,6 +838,7 @@ function mechanismRows(mech) {
   if (mech.tune_system === 'true') rows.push({ label: t('dashboard.mechTuneSystem'), value: '✓' });
   if (mech.radio_lte === 'true') rows.push({ label: t('dashboard.mechRadioLte'), value: '✓' });
   if (mech.scan_off === 'true') rows.push({ label: t('dashboard.mechScanOff'), value: '✓' });
+  if (mech.aod_off === 'true') rows.push({ label: t('dashboard.mechAodOff'), value: '✓' });
   // BUG FIX (found while building the status-notification feature,
   // which reuses this same resolved-mechanism data): max_cpu_freq/
   // max_refresh_rate (v4.1.0) were never added here, so the "active
