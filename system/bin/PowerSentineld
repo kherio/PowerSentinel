@@ -671,9 +671,14 @@ while true; do
   appwatch_check
 
   # Check for command
-  cmd="$(cat $ctl_file)"
-  cmd_event=$(echo "$cmd" | cut -d' ' -f2)
-  cmd=$(echo "$cmd" | cut -d' ' -f1)
+  # Builtins only (was cat + two cut per cycle). Same fields as
+  # `cut -d' ' -f1/-f2` on the first line; like cut, a line with no space
+  # gives the whole line as the second field.
+  cmd=""
+  IFS= read -r cmd < "$ctl_file" 2>/dev/null
+  cmd_event="${cmd#* }"
+  cmd_event="${cmd_event%% *}"
+  cmd="${cmd%% *}"
   echo > "$ctl_file"
   case $cmd in
     reload)

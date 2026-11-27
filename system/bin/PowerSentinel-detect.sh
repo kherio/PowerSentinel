@@ -113,26 +113,31 @@ is_valid_bool_reading() { case "$1" in true|false) return 0 ;; *) return 1 ;; es
 # same reason: several callers need the same values within one cycle,
 # and dumpsys/reading /proc are not free.
 detect_refresh() {
-  local batt_dump load
+  local batt_dump load line lv="" tp="" vt="" ch="false"
 
   batt_dump="$(dumpsys battery 2>/dev/null)"
 
-  DETECT_BATTERY_LEVEL="$(echo "$batt_dump" | grep -m1 -oE '^[[:space:]]*level:[[:space:]]*[0-9]+' | grep -oE '[0-9]+$')"
-  DETECT_BATTERY_LEVEL="${DETECT_BATTERY_LEVEL:-100}"
+  # One pass over the dump with bash builtins only (this runs every 3 s;
+  # the old echo|grep|grep chains forked ~20 processes per cycle). Same
+  # rule as before: the FIRST "level:", "temperature:" and "voltage:" line
+  # that starts (after indentation) with the key, and charging = any
+  # "AC|USB|Wireless powered: true" line.
+  while IFS= read -r line; do
+    if [[ -z "$lv" && "$line" =~ ^[[:space:]]*level:[[:space:]]*([0-9]+) ]]; then lv="${BASH_REMATCH[1]}"
+    elif [[ -z "$tp" && "$line" =~ ^[[:space:]]*temperature:[[:space:]]*([0-9]+) ]]; then tp="${BASH_REMATCH[1]}"
+    elif [[ -z "$vt" && "$line" =~ ^[[:space:]]*voltage:[[:space:]]*([0-9]+) ]]; then vt="${BASH_REMATCH[1]}"
+    elif [[ "$ch" = "false" && "$line" =~ ^[[:space:]]*(AC|USB|Wireless)[[:space:]]powered:[[:space:]]*true ]]; then ch="true"
+    fi
+  done <<< "$batt_dump"
 
-  DETECT_BATTERY_TEMP_RAW="$(echo "$batt_dump" | grep -m1 -oE '^[[:space:]]*temperature:[[:space:]]*[0-9]+' | grep -oE '[0-9]+$')"
-  DETECT_BATTERY_TEMP_RAW="${DETECT_BATTERY_TEMP_RAW:-250}"
+  DETECT_BATTERY_LEVEL="${lv:-100}"
+  DETECT_BATTERY_TEMP_RAW="${tp:-250}"
+  DETECT_BATTERY_VOLTAGE="${vt:-0}"
+  DETECT_BATTERY_CHARGING="$ch"
 
-  DETECT_BATTERY_VOLTAGE="$(echo "$batt_dump" | grep -m1 -oE '^[[:space:]]*voltage:[[:space:]]*[0-9]+' | grep -oE '[0-9]+$')"
-  DETECT_BATTERY_VOLTAGE="${DETECT_BATTERY_VOLTAGE:-0}"
-
-  DETECT_BATTERY_CHARGING="false"
-  echo "$batt_dump" | grep -qE '^[[:space:]]*(AC|USB|Wireless) powered:[[:space:]]*true' && DETECT_BATTERY_CHARGING="true"
-
-  load="$(cat /proc/loadavg 2>/dev/null)"
-  DETECT_LOAD1="$(echo "$load" | cut -d' ' -f1)"; DETECT_LOAD1="${DETECT_LOAD1:-0}"
-  DETECT_LOAD5="$(echo "$load" | cut -d' ' -f2)"; DETECT_LOAD5="${DETECT_LOAD5:-0}"
-  DETECT_LOAD15="$(echo "$load" | cut -d' ' -f3)"; DETECT_LOAD15="${DETECT_LOAD15:-0}"
+  local l1="" l5="" l15=""
+  read -r l1 l5 l15 _ < /proc/loadavg 2>/dev/null
+  DETECT_LOAD1="${l1:-0}"; DETECT_LOAD5="${l5:-0}"; DETECT_LOAD15="${l15:-0}"
 }
 
 detect_battery_temp_c() {

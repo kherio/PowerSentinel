@@ -33,8 +33,9 @@ _energylog_last_level=""
 _energylog_last_temp=""
 
 energylog_sample() {
-  local level="$DETECT_BATTERY_LEVEL" temp
-  temp="$(detect_battery_temp_c)"
+  # Arithmetic in place: this runs every cycle and a $(function) would
+  # fork a subshell each time (same value as detect_battery_temp_c).
+  local level="$DETECT_BATTERY_LEVEL" temp=$(( ${DETECT_BATTERY_TEMP_RAW:-250} / 10 ))
 
   [ "$level" = "$_energylog_last_level" ] && [ "$temp" = "$_energylog_last_temp" ] && return 0
   _energylog_last_level="$level"
