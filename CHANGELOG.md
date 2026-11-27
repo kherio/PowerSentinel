@@ -1,4 +1,4 @@
-### Unreleased
+### v4.22.2
   - **Apps picker: running apps come right after the selected ones** - in the allow/restrict lists of every event, the apps with a live process (the green dot) are now listed right after the already-allowed/restricted ones and before the rest, with a divider between the groups. Alphabetical order (or "Sort by usage") is kept inside each group. Covered by `test_app_drain_picker.mjs`.
 
 ### v4.22.1
