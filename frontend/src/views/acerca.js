@@ -124,7 +124,8 @@ async function renderHardwareInfo() {
     kernel_tunables: t('acerca.capKernelTunables'),
     radio_lte: t('acerca.capRadioLte'),
     scan_off: t('acerca.capScanOff'),
-    aod_off: t('acerca.capAodOff')
+    aod_off: t('acerca.capAodOff'),
+    bluetooth_off: t('acerca.capBtOff')
   };
   try {
     const status = await readStatus();

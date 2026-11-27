@@ -1133,6 +1133,98 @@ action_aod_recover() {
   _aod_restore_recorded
 }
 
+# ---------- Bluetooth off at night (bluetooth_off) ----------
+#
+# Opt-in per event (a checkbox in the WebUI). While an event that asks for
+# bluetooth_off is active, Bluetooth is switched off - but ONLY when it is
+# on and nothing is connected. If a connected device is detected, or the
+# connection state cannot be determined, it is left alone (never cuts your
+# headphones/watch/car). Same ownership contract as scan_off: the original
+# is recorded once in $bt_state_file and Bluetooth is switched back on when
+# the last event that wants it ends - and only if it is still off (a value
+# you changed yourself is respected). Startup recovery after a crash.
+: "${bt_state_file:=/data/local/tmp/PowerSentinel/PowerSentinel.btstate}"
+
+_bt_get() {
+  local v
+  v="$(settings get global bluetooth_on 2>/dev/null | head -n 1)"
+  case "$v" in 0|1) echo "$v" ;; *) return 1 ;; esac
+}
+
+# 0 = a device is connected OR we cannot tell (do not touch Bluetooth);
+# 1 = the dump was recognised and shows nothing connected.
+# BT_DUMP_FILE (tests) replaces `dumpsys bluetooth_manager`.
+_bt_maybe_connected() {
+  local dump
+  if [ -n "$BT_DUMP_FILE" ]; then dump="$(cat "$BT_DUMP_FILE" 2>/dev/null)"
+  else dump="$(dumpsys bluetooth_manager 2>/dev/null)"; fi
+  [ -n "$dump" ] || return 0
+  # Format recognised? (a known key must be present)
+  case "$dump" in *"enabled:"*|*"state: ON"*|*"Bluetooth Status"*) ;; *) return 0 ;; esac
+  local line
+  while IFS= read -r line; do
+    case "$line" in
+      *[Dd]isconnect*|*"not connected"*|*"connected: false"*|*"Connected devices: 0"*) continue ;;
+      *onnected*|*"mCurrentDevice:"*|*"mConnectionState: 2"*) return 0 ;;
+    esac
+  done <<< "$dump"
+  return 1
+}
+
+action_bt_apply() {
+  [ "$bluetooth_off" = "true" ] || return
+  if ! capability_has bluetooth_off; then
+    log_msg 1 "Cannot turn Bluetooth off: not supported on this device"
+    emit capabilities warning "No se pudo apagar Bluetooth: no soportado en este dispositivo"
+    return
+  fi
+  local cur
+  cur="$(_bt_get)" || return
+  [ "$cur" = "1" ] || return
+  if _bt_maybe_connected; then
+    log_msg 3 "Bluetooth is on and a device is connected (or unknown) - leaving it on"
+    return
+  fi
+  mkdir -p "$(dirname "$bt_state_file")" 2>/dev/null
+  if ! [ -s "$bt_state_file" ]; then
+    echo "bluetooth_on 1" > "$bt_state_file"
+    chmod 600 "$bt_state_file" 2>/dev/null
+  fi
+  log_msg 3 "Turning Bluetooth off (nothing connected)"
+  svc bluetooth disable &>/dev/null
+}
+
+_bt_restore_recorded() {
+  [ -s "$bt_state_file" ] || return 0
+  local key orig now
+  while read -r key orig; do
+    [ "$key" = "bluetooth_on" ] || continue
+    [ "$orig" = "1" ] || continue
+    now="$(_bt_get)" || continue
+    if [ "$now" = "0" ]; then
+      log_msg 3 "Turning Bluetooth back on"
+      svc bluetooth enable &>/dev/null
+    else
+      log_msg 3 "Bluetooth changed since ($now) - leaving it as-is"
+    fi
+  done < "$bt_state_file"
+  rm -f "$bt_state_file"
+}
+
+action_bt_undo() {
+  [ "$bluetooth_off" = "true" ] || return
+  capability_has bluetooth_off || return
+  _another_active_event_wants bluetooth_off && return
+  _bt_restore_recorded
+}
+
+action_bt_recover() {
+  capability_has bluetooth_off || return 0
+  [ -s "$bt_state_file" ] || return 0
+  log_msg 1 "Found Bluetooth left off by a previous run - turning it back on"
+  _bt_restore_recorded
+}
+
 # ---------- Doze ----------
 
 action_doze_apply() {

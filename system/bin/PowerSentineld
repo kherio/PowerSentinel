@@ -488,6 +488,7 @@ enable_pwr_save() {
   action_radio_apply
   action_scan_apply
   action_aod_apply
+  action_bt_apply
   action_doze_apply
   action_cores_apply
   action_cpufreq_apply
@@ -501,6 +502,7 @@ disable_pwr_save() {
   action_cpufreq_undo
   action_cores_undo
   action_doze_undo
+  action_bt_undo
   action_aod_undo
   action_scan_undo
   action_radio_undo
@@ -1206,6 +1208,7 @@ capabilities_detect
 action_radio_recover
 action_scan_recover
 action_aod_recover
+action_bt_recover
 
 # By this point, every install has been migrated to v2 (see the
 # widened migrate() trigger above) - v1 no longer has a code path at

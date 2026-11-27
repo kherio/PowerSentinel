@@ -27,13 +27,13 @@ run_tests() {
     ' _ "$root" 2>/dev/null)
   }
   st() { printf '%s' "$1" | "$JQ" -r --arg id "$2" '.[] | select(.id==$id) | .status'; }
-  ALLCAPS="standby_bucket=true kernel_tunables=true radio_lte=true scan_off=true aod_off=true"
+  ALLCAPS="standby_bucket=true kernel_tunables=true radio_lte=true scan_off=true aod_off=true bluetooth_off=true"
   NOCONF='{"global":{},"events":{"night":{}}}'
 
   section "sistema sano: todo soportado, nada configurado, nada pendiente"
   out="$(run "$ALLCAPS" '[]' "$NOCONF")"
   assert_valid_json "$out" "devuelve JSON valido"
-  assert_eq "5" "$(printf '%s' "$out" | "$JQ" 'length')" "una fila por mecanismo"
+  assert_eq "6" "$(printf '%s' "$out" | "$JQ" 'length')" "una fila por mecanismo"
   assert_eq "0" "$(printf '%s' "$out" | "$JQ" '[.[]|select(.status!="pass")]|length')" "todas en pass"
 
   section "configurado pero no soportado: aviso"
