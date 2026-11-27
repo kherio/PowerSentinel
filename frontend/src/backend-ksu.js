@@ -200,6 +200,18 @@ export async function readWakeupsReport() {
   return run(`PowerSentinel-wakeups report 2>/dev/null || echo '{"available":false,"elapsed_s":0,"sources":[]}'`);
 }
 
+// Apps exempt from Android's battery optimization (PowerSentinel-dozeaudit).
+// "list" is read-only; "remove" only runs from an explicit button press and
+// the script itself refuses system exemptions and malformed names.
+export async function readDozeAudit() {
+  return run(`PowerSentinel-dozeaudit list 2>/dev/null || echo '{"available":false,"apps":[]}'`);
+}
+
+export async function removeDozeExemption(pkg) {
+  if (!/^[A-Za-z0-9._]+$/.test(pkg)) throw new PowerSentinelApiError('bad package name');
+  return run(`PowerSentinel-dozeaudit remove ${pkg} 2>/dev/null || true`);
+}
+
 // Per-app battery estimate (PowerSentinel-appdrain): "snapshot" saves
 // Android's per-app mAh totals as a baseline in our own file (the system
 // statistics are never reset), "report" gives each app's usage since that

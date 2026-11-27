@@ -8,6 +8,7 @@
 # on a path that exists behaves like before.
 
 run_tests() {
+  assert_contains() { case "$1" in *"$2"*) assert_true 0 "$3" ;; *) assert_true 1 "$3 (obtenido: $1)" ;; esac; }
   local tmp; tmp="$(mktemp -d)"
   # shellcheck disable=SC1090
   source "$REPO_ROOT/system/bin/PowerSentinel-log.sh"

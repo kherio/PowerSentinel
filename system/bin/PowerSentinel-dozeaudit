@@ -1,0 +1,71 @@
+#!/system/bin/bash
+# PowerSentinel-dozeaudit - which apps are exempt from Android's battery
+# optimization (the Doze / App Standby "whitelist": Settings > Apps >
+# Special access > Battery optimization > "Not optimized"). An exempt app
+# can keep waking the phone and holding the network while Doze is active.
+#
+# Usage:
+#   PowerSentinel-dozeaudit list           read-only listing, one line of JSON
+#   PowerSentinel-dozeaudit remove <pkg>   remove the exemption of ONE app
+#
+# Only exemptions the user (or an app) added - kind "user" - can be
+# listed as removable. System exemptions ("system", "system-excidle") are
+# part of the ROM and are reported with removable=false; `remove` refuses
+# them. Nothing is ever removed automatically: this only runs when the
+# user presses the button in the WebUI. Removing an exemption does not
+# uninstall or stop the app; it just stops being treated as "never
+# optimize" (the user can allow it again in Android's own settings).
+#
+# Output of list:
+#   {"available":true,"apps":[{"pkg":"...","kind":"user|system|system-excidle","removable":true|false}]}
+# Output of remove: {"ok":true|false,"pkg":"...","error":"..."}
+#
+# DOZEAUDIT_FILE (tests): read the whitelist dump from a file instead of
+# running dumpsys, and never call `cmd`.
+
+_dump() {
+  if [ -n "$DOZEAUDIT_FILE" ]; then cat "$DOZEAUDIT_FILE" 2>/dev/null
+  else dumpsys deviceidle whitelist 2>/dev/null; fi
+}
+
+# kind<TAB>pkg, one per line. Lines look like "user,com.foo.bar,10234".
+_parse() {
+  awk -F, 'NF >= 3 && ($1 == "user" || $1 == "system" || $1 == "system-excidle") && $2 ~ /^[A-Za-z0-9._]+$/ { print $1 "\t" $2 }'
+}
+
+cmd_list() {
+  local raw
+  raw="$(_dump)"
+  if [ -z "$raw" ]; then
+    echo '{"available":false,"apps":[]}'
+    return 0
+  fi
+  printf '%s\n' "$raw" | _parse | sort -u | awk -F'\t' '
+    BEGIN { printf "{\"available\":true,\"apps\":[" }
+    { printf "%s{\"pkg\":\"%s\",\"kind\":\"%s\",\"removable\":%s}", (n++ ? "," : ""), $2, $1, ($1 == "user" ? "true" : "false") }
+    END { print "]}" }'
+}
+
+cmd_remove() {
+  local pkg="$1" kind
+  case "$pkg" in
+    ''|*[!A-Za-z0-9._]*) printf '{"ok":false,"pkg":"","error":"bad_package"}\n'; return 1 ;;
+  esac
+  kind="$(_dump | _parse | awk -F'\t' -v p="$pkg" '$2 == p { print $1; exit }')"
+  if [ -z "$kind" ]; then printf '{"ok":false,"pkg":"%s","error":"not_exempt"}\n' "$pkg"; return 1; fi
+  if [ "$kind" != "user" ]; then printf '{"ok":false,"pkg":"%s","error":"system_exemption"}\n' "$pkg"; return 1; fi
+  if [ -z "$DOZEAUDIT_FILE" ]; then
+    cmd deviceidle whitelist "-$pkg" >/dev/null 2>&1
+    # Verify instead of trusting the exit code.
+    if _dump | _parse | awk -F'\t' -v p="$pkg" '$1 == "user" && $2 == p { f = 1 } END { exit !f }'; then
+      printf '{"ok":false,"pkg":"%s","error":"still_exempt"}\n' "$pkg"; return 1
+    fi
+  fi
+  printf '{"ok":true,"pkg":"%s"}\n' "$pkg"
+}
+
+case "$1" in
+  list) cmd_list ;;
+  remove) cmd_remove "$2" ;;
+  *) echo "usage: $0 list | remove <package>" >&2; exit 2 ;;
+esac
