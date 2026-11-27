@@ -1,3 +1,6 @@
+### Unreleased
+  - **Optional: turn the always-on display off while an event is active** - new per-event switch `aod_off` (Advanced -> System). While the event is active the secure setting `doze_always_on` is set to 0; the real original is recorded once in `PowerSentinel.aodstate` and restored when the last event that wants it ends, same ownership contract as background scanning (never touches a value that was already 0, never overwrites a value you changed, startup recovery after a crash, capability-gated: ROMs where the setting does not read back as 0/1 are left alone). Off by default. Covered by `test_aod_off_ownership.sh`.
+
 ### v4.22.2
   - **Apps picker: running apps come right after the selected ones** - in the allow/restrict lists of every event, the apps with a live process (the green dot) are now listed right after the already-allowed/restricted ones and before the rest, with a divider between the groups. Alphabetical order (or "Sort by usage") is kept inside each group. Covered by `test_app_drain_picker.mjs`.
 

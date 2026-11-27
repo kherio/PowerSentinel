@@ -664,6 +664,7 @@ function summarizeFields(fields) {
   if (fields.tune_system === 'true') bits.push(t('config.summaryTuneSystemOn'));
   if (fields.radio_lte === 'true') bits.push(t('config.summaryRadioLteOn'));
   if (fields.scan_off === 'true') bits.push(t('config.summaryScanOffOn'));
+  if (fields.aod_off === 'true') bits.push(t('config.summaryAodOffOn'));
   if (fields.low_ram === 'true') bits.push(t('config.summaryLowRam'));
   if (fields.handle_proc === 'true') bits.push(t('config.summaryProcesses'));
   if (fields.night_start) bits.push(`${fields.night_start}–${fields.night_end || ''}`);

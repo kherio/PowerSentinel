@@ -79,6 +79,7 @@ function timelineMechanismPhrases(detail) {
   if (detail.tune_system === 'true') phrases.push(t('journal.mechTuneSystem'));
   if (detail.radio_lte === 'true') phrases.push(t('journal.mechRadioLte'));
   if (detail.scan_off === 'true') phrases.push(t('journal.mechScanOff'));
+  if (detail.aod_off === 'true') phrases.push(t('journal.mechAodOff'));
   if (detail.low_ram === 'true') phrases.push(t('journal.mechLowRam'));
   return phrases;
 }
