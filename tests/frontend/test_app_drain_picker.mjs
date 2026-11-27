@@ -17,7 +17,7 @@ export async function runTests() {
       [/import \{ t \} from '\.\.\/i18n\.js';/, 'const t = (k) => k;']
     ]
   });
-  const { parseDrain, sortByDrain, formatMah } = mod;
+  const { parseDrain, sortByDrain, formatMah, groupPackages } = mod;
 
   const good = JSON.stringify({ available: true, window: 'snapshot', since: 1000, elapsed_s: 1200,
     apps: [{ pkg: 'com.b', mah: 12.5, fg: 0, bg: 12, cached: 0.5, shared: 1 }, { pkg: 'com.a', mah: 40, fg: 1, bg: 39, cached: 0, shared: 2 }] });
@@ -40,4 +40,17 @@ export async function runTests() {
   assertEq('334', formatMah(334.2), '>=100: entero');
   assertEq('12', formatMah(12.4), '10-100: entero');
   assertEq('1.5', formatMah(1.46), '<10: un decimal');
+
+  // Order: selected, then running (green dot), then the rest; alphabetical
+  // inside each group.
+  const all = ['a.one', 'b.two', 'c.three', 'd.four', 'e.five', 'f.six'];
+  const g = groupPackages(all, new Set(['e.five']), new Set(['a.one']), new Set(['b.two', 'd.four', 'a.one']), null);
+  assertEq('a.one,e.five', g.selected.join(','), 'seleccionadas primero (aunque esten en ejecucion)');
+  assertEq('b.two,d.four', g.live.join(','), 'luego las que tienen proceso, sin repetir las seleccionadas');
+  assertEq('c.three,f.six', g.rest.join(','), 'el resto al final');
+  const g2 = groupPackages(all, new Set(), new Set(), new Set(), null);
+  assertEq('', g2.live.join(','), 'sin procesos: grupo vacio');
+  assertEq(all.join(','), g2.rest.join(','), 'sin seleccion ni procesos: orden original');
+  const g3 = groupPackages(all, new Set(), new Set(), new Set(['b.two', 'd.four']), (x) => sortByDrain(x, { 'd.four': { mah: 9 }, 'b.two': { mah: 1 } }));
+  assertEq('d.four,b.two', g3.live.join(','), 'ordenar por consumo se aplica dentro de cada grupo');
 }

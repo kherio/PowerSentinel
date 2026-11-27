@@ -46,6 +46,24 @@ export function parseDrain(text) {
   };
 }
 
+// Order of the list: already-selected apps (allowed or restricted) first,
+// then the ones with a live process (the green dot), then everything else.
+// Alphabetical order is preserved inside each group, since the input comes
+// pre-sorted from listPackages(); `sortGroup` (optional) re-sorts a group,
+// used by "Sort by usage".
+export function groupPackages(pkgs, allow, deny, running, sortGroup) {
+  const isSel = (p) => allow.has(p) || deny.has(p);
+  let selected = pkgs.filter((p) => isSel(p));
+  let live = pkgs.filter((p) => !isSel(p) && running.has(p));
+  let rest = pkgs.filter((p) => !isSel(p) && !running.has(p));
+  if (sortGroup) {
+    selected = sortGroup(selected);
+    live = sortGroup(live);
+    rest = sortGroup(rest);
+  }
+  return { selected, live, rest };
+}
+
 // Stable sort: highest estimated usage first, apps with no figure last
 // (keeping their original alphabetical order).
 export function sortByDrain(pkgs, map) {
@@ -127,15 +145,13 @@ export function mountAppsPicker(container, fields, onDirty) {
 
       // Pin already-selected apps (allowed or restricted) to the top, so
       // toggling one doesn't require scrolling the whole list to see it
-      // again - alphabetical order is preserved within each group, since
-      // `pkgs` already comes pre-sorted from listPackages().
-      let selected = filtered.filter((p) => state.allow.has(p) || state.deny.has(p));
-      let rest = filtered.filter((p) => !state.allow.has(p) && !state.deny.has(p));
-      if (drainState.sort && drain.available) {
-        selected = sortByDrain(selected, drain.map);
-        rest = sortByDrain(rest, drain.map);
-      }
-      const shown = selected.concat(rest);
+      // again; right after them come the apps with a live process (green
+      // dot) - the ones where restricting actually has an effect.
+      const grouped = groupPackages(filtered, state.allow, state.deny, running,
+        drainState.sort && drain.available ? (g) => sortByDrain(g, drain.map) : null);
+      const selected = grouped.selected;
+      const live = grouped.live;
+      const shown = selected.concat(live, grouped.rest);
 
       if (!shown.length) {
         list.innerHTML = `<div class="log-empty">${t('apps.noResults')}</div>`;
@@ -150,7 +166,8 @@ export function mountAppsPicker(container, fields, onDirty) {
           // A subtle divider between the pinned (selected) apps and the
           // rest, so the pinning itself is visually obvious rather than
           // looking like an arbitrary reorder.
-          if (selected.length && i === selected.length) {
+          if ((selected.length && i === selected.length) ||
+              (live.length && i === selected.length + live.length && (selected.length || live.length))) {
             row.style.borderTop = '1px dashed var(--border)';
             row.style.marginTop = '4px';
             row.style.paddingTop = '10px';

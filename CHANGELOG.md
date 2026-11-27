@@ -1,3 +1,6 @@
+### Unreleased
+  - **Apps picker: running apps come right after the selected ones** - in the allow/restrict lists of every event, the apps with a live process (the green dot) are now listed right after the already-allowed/restricted ones and before the rest, with a divider between the groups. Alphabetical order (or "Sort by usage") is kept inside each group. Covered by `test_app_drain_picker.mjs`.
+
 ### v4.22.1
   - **The daemon now starts right after boot, not after the first unlock** - `service.sh` used to wait for `/sdcard/Android`, which does not exist until the first unlock after a reboot (file-based encryption), so a rebooted phone ran with no profiles and no battery rules until someone unlocked it. It now waits only for `sys.boot_completed`. The log writer (new `PowerSentinel-log.sh`) buffers lines in a small capped early-log file under `/data/local/tmp/PowerSentinel/` while `/sdcard` is missing, then rotates the previous log, appends the early lines in order and removes the file on the first write after unlock. A log on a path that already exists behaves as before. `log_msg` also stopped forking `date` for every line. Side effect: the Boot event now fires before unlock instead of minutes later. Covered by `test_log_before_unlock.sh`.
 
