@@ -164,6 +164,7 @@ run_mechanism_checks() {
     "radio_lte:radio_lte:PowerSentinel.radiostate:Sin 5G" \
     "scan_off:scan_off:PowerSentinel.scanstate:Sin escaneo Wi-Fi/Bluetooth" \
     "aod_off:aod_off:PowerSentinel.aodstate:Sin pantalla siempre activa" \
+    "bluetooth_off:bluetooth_off:PowerSentinel.btstate:Bluetooth apagado de noche" \
     "handle_apps=bucket:standby_bucket:-:Cubos de espera de apps"; do
     local field cap sfile label key want="true" supported configured wanted_now sf age
     IFS=: read -r field cap sfile label <<<"$spec"

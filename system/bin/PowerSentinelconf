@@ -302,6 +302,7 @@ prompt_fields() {
   echo "radio_lte=$(ask_yesno '¿Limitar la red a 4G (sin 5G) mientras esté activo?' 'false')"
   echo "scan_off=$(ask_yesno '¿Desactivar el escaneo Wi-Fi/Bluetooth en segundo plano mientras esté activo?' 'false')"
   echo "aod_off=$(ask_yesno '¿Apagar la pantalla siempre activa (AOD) mientras esté activo?' 'false')"
+  echo "bluetooth_off=$(ask_yesno '¿Apagar Bluetooth mientras esté activo (solo si no hay nada conectado)?' 'false')"
   echo "keep_on_charge=$(ask_yesno '¿Mantener ajustes mientras carga?' 'true')"
 }
 

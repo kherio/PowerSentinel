@@ -127,6 +127,12 @@ capabilities_detect() {
     CAPS[aod_off]="true"
   fi
 
+  # Bluetooth off: global bluetooth_on must read back as 0/1 and `svc` exist.
+  CAPS[bluetooth_off]="false"
+  if declare -F _bt_get >/dev/null && command -v svc >/dev/null 2>&1 && _bt_get >/dev/null; then
+    CAPS[bluetooth_off]="true"
+  fi
+
   log_msg 2 "Capabilities: $(capabilities_summary)"
 }
 
@@ -136,7 +142,7 @@ capability_has() {
 
 capabilities_summary() {
   local out="" k
-  for k in cores_online cores_governor rfkill_wifi svc_wifi doze_force gms_installed pm_suspend netpolicy_restrict standby_bucket kernel_tunables radio_lte scan_off aod_off; do
+  for k in cores_online cores_governor rfkill_wifi svc_wifi doze_force gms_installed pm_suspend netpolicy_restrict standby_bucket kernel_tunables radio_lte scan_off aod_off bluetooth_off; do
     out+="$k=${CAPS[$k]:-false} "
   done
   echo "$out"
